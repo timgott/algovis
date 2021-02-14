@@ -17,11 +17,12 @@ const LIMB_DAMPENING = 0.01;
 
 const PHYSICS_STEP = 5
 const PLAN_EVERY = 1
-const PLAN_STEP = PHYSICS_STEP * 20
-const PLAN_ITERATIONS = 1
+const PLAN_STEP = 1000
+const PLAN_ITERATIONS = 5
 const TWO_STEP_PLANNING = true
-const PREFER_RELAXING = true
+const PREFER_RELAXING = false
 const PROPAGATE_GROUND_CONSTRAINTS = false
+const LOOKAHEAD_EVALUATION = false
 
 
 function createStickman(x, y) {
@@ -104,7 +105,8 @@ function draw() {
   while (globalTimeRemainder >= PHYSICS_STEP) {
     globalPlanningCounter = (globalPlanningCounter + 1) % PLAN_EVERY
     if (globalPlanningCounter == 0) {
-      planMotors(globalStickman, PLAN_STEP, PHYSICS_STEP, evaluate)
+      const evaluationFunction = LOOKAHEAD_EVALUATION ? evaluateLookahead : evaluate
+      planMotorsSampling(globalStickman, PLAN_STEP, PHYSICS_STEP, evaluationFunction)
     }
     let dt = PHYSICS_STEP
     simulateStep(globalStickman, dt, dt)
@@ -138,7 +140,7 @@ function evaluate(stickman) {
 
 function evaluateLookahead(stickman) {
   const copiedStickman = stickman;
-  planMotors(copiedStickman, PLAN_STEP, PLAN_STEP, evaluate)
+  planMotorsSampling(copiedStickman, PLAN_STEP, PLAN_STEP, evaluate)
   simulateStep(stickman, PLAN_STEP, PLAN_STEP)
   //diffStickman(stickman, copiedStickman)
   let score = evaluate(copiedStickman)
@@ -192,7 +194,7 @@ function evaluateControlSequence(stickman, evaluationFunction, limbIndex, contro
   return evaluationFunction(copiedStickman)
 }
 
-function planMotors(stickman, dt, lastDt, evaluationFunction) {
+function planMotorsIndividual(stickman, dt, lastDt, evaluationFunction) {
   const controlTypes = TWO_STEP_PLANNING ? [
     [0],
     [1],
@@ -216,11 +218,8 @@ function planMotors(stickman, dt, lastDt, evaluationFunction) {
         const controlSequence = controlTypes[controlIndex]
         const firstControl = controlSequence[0]
         if (firstControl != bestMotorAssignment[index]) {
-          score = evaluateControlSequence(stickman, evaluationFunction, index, controlSequence, dt / controlSequence.length, lastDt)
+          const score = evaluateControlSequence(stickman, evaluationFunction, index, controlSequence, dt / controlSequence.length, lastDt)
           if (score > bestScore) {
-            if (firstControl != 0) {
-              print(firstControl, score, bestScore)
-            }
             bestScore = score
             bestMotorAssignment[index] = firstControl
           }
@@ -231,6 +230,29 @@ function planMotors(stickman, dt, lastDt, evaluationFunction) {
     for (let index = 0; index < stickman.limbs.length; index++) {
       stickman.limbs[index].motor = bestMotorAssignment[index]
     }
+  }
+}
+
+function planMotorsSampling(stickman, dt, lastDt, evaluationFunction) {
+  const bestMotorAssignment = stickman.limbs.map(limb => limb.motor)
+  let bestScore = evaluateAfterStep(copyStickman(stickman), evaluationFunction, dt, lastDt)
+
+  for (let i = 0; i < 50; i++) {
+    const copiedStickman = copyStickman(stickman)
+    for (let index = 0; index < stickman.limbs.length; index++) {
+      copiedStickman.limbs[index].motor = random([0, -1, 1])
+    }
+
+    const score = evaluateAfterStep(copiedStickman, evaluationFunction, dt, lastDt)
+    if (score > bestScore) {
+      bestScore = score
+      for (let index = 0; index < stickman.limbs.length; index++) {
+        bestMotorAssignment[index] = copiedStickman.limbs[index].motor
+      }
+    }
+  }
+  for (let index = 0; index < stickman.limbs.length; index++) {
+    stickman.limbs[index].motor = bestMotorAssignment[index]
   }
 }
 
