@@ -13,13 +13,14 @@ let globalLastDeltaTime = Infinity
 
 const GRAVITY = 0.001;
 const MOTOR_FORCE = 0.01;
-const LIMB_DAMPENING = 0.02;
+const LIMB_DAMPENING = 0.01;
 
 const PHYSICS_STEP = 5
-const PLAN_EVERY = 10
-const PLAN_STEP = 50
+const PLAN_EVERY = 1
+const PLAN_STEP = PHYSICS_STEP * 20
 const PLAN_ITERATIONS = 1
-
+const TWO_STEP_PLANNING = true
+const PREFER_RELAXING = true
 const PROPAGATE_GROUND_CONSTRAINTS = false
 
 
@@ -27,13 +28,12 @@ function createStickman(x, y) {
   const head = headNode(0, -body_height - head_radius)
   const shoulders = limbNode(0, -body_height)
   const hips = limbNode(0, 0)
-  const leftHip = limbNode(-leg_spread, 0)
   const leftKnee = limbNode(-leg_spread, leg_length / 2)
   const leftFoot = gripNode(-leg_spread, leg_length)
   const rightKnee = mirrorNode(leftKnee)
   const rightFoot = mirrorNode(leftFoot)
   const leftElbow = limbNode(-arm_spread, -body_height + arm_length / 2)
-  const leftHand = limbNode(-arm_spread, -body_height + arm_length)
+  const leftHand = gripNode(-arm_spread, -body_height + arm_length)
   const rightElbow = mirrorNode(leftElbow)
   const rightHand = mirrorNode(leftHand)
 
@@ -59,17 +59,15 @@ function createStickman(x, y) {
   const limbs = [
     limb(shoulders, head, 0.5),
     limb(shoulders, hips, 1),
-    limb(hips, leftKnee, 2),
-    limb(leftKnee, leftFoot, 1),
-    limb(hips, rightKnee, 2),
-    limb(rightKnee, rightFoot, 1),
+    limb(hips, leftKnee, 4),
+    limb(leftKnee, leftFoot, 2),
+    limb(hips, rightKnee, 4),
+    limb(rightKnee, rightFoot, 2),
     limb(shoulders, leftElbow, 2, "leftUpperArm"),
     limb(leftElbow, leftHand, 1, "leftLowerArm"),
     limb(shoulders, rightElbow, 2, "rightUpperArm"),
     limb(rightElbow, rightHand, 1, "rightLowerArm")
   ]
-
-  limbs[3].motor = 1
 
   return {
     nodes: nodes,
@@ -122,7 +120,6 @@ function simulateStep(stickman, dt, lastDt) {
   applyPhysics(stickman, dt, lastDt)
   //forceConstraints(stickman)
 
-
   for (let index = 0; index < 10; index++) {
     groundConstraints(stickman)
     satisfyConstraints(stickman)
@@ -131,9 +128,11 @@ function simulateStep(stickman, dt, lastDt) {
 }
 
 function evaluate(stickman) {
+  let headMouseDistSqr = sq(mouseX - stickman.nodes[0].x) + sq(mouseY - stickman.nodes[0].y)
+  let handMouseDistSqr = sq(mouseX - stickman.nodes[8].x) + sq(mouseY - stickman.nodes[8].y)
   return (
-    sq(mouseX - stickman.nodes[0].y) - sq(mouseY - stickman.nodes[0].y)
-    + stickman.nodes[10].x - stickman.nodes[8].x
+    -headMouseDistSqr
+    //stickman.nodes[10].x - stickman.nodes[8].x
   )
 }
 
@@ -176,9 +175,35 @@ function evaluateAfterStep(stickman, evaluationFunction, deltaTime, lastDeltaTim
   return evaluationFunction(stickman)
 }
 
+function simulateWithMotor(stickman, limbIndex, control, dt, lastDt) {
+  stickman.limbs[limbIndex].motor = control
+  simulateStep(stickman, dt, lastDt)
+}
+
+function evaluateControlSequence(stickman, evaluationFunction, limbIndex, controlSequence, dt, lastDt) {
+  const copiedStickman = copyStickman(stickman);
+
+  for (let index = 0; index < controlSequence.length; index++) {
+    const control = controlSequence[index];
+    simulateWithMotor(copiedStickman, limbIndex, control, dt, lastDt)
+    lastDt = dt
+  }
+
+  return evaluationFunction(copiedStickman)
+}
 
 function planMotors(stickman, dt, lastDt, evaluationFunction) {
-  const controlTypes = [0, -1, 1]
+  const controlTypes = TWO_STEP_PLANNING ? [
+    [0],
+    [1],
+    [-1],
+    [1, -1],
+    [-1, 1]
+  ] : [[0], [1], [-1]]
+
+  if (PREFER_RELAXING) {
+    stickman.limbs.forEach(limb => limb.motor = 0)
+  }
 
   const bestMotorAssignment = stickman.limbs.map(limb => limb.motor)
   let bestScore = evaluateAfterStep(copyStickman(stickman), evaluationFunction, dt, lastDt)
@@ -187,21 +212,20 @@ function planMotors(stickman, dt, lastDt, evaluationFunction) {
     for (let index = 0; index < stickman.limbs.length; index++) {
       const limb = stickman.limbs[index];
 
-      let bestControl
       for (let controlIndex = 0; controlIndex < controlTypes.length; controlIndex++) {
-        const control = controlTypes[controlIndex]
-        if (control != bestMotorAssignment[index]) {
-          const copiedStickman = copyStickman(stickman);
-          copiedStickman.limbs[index].motor = control
-          score = evaluateAfterStep(copiedStickman, evaluationFunction, dt, lastDt)
+        const controlSequence = controlTypes[controlIndex]
+        const firstControl = controlSequence[0]
+        if (firstControl != bestMotorAssignment[index]) {
+          score = evaluateControlSequence(stickman, evaluationFunction, index, controlSequence, dt / controlSequence.length, lastDt)
           if (score > bestScore) {
+            if (firstControl != 0) {
+              print(firstControl, score, bestScore)
+            }
             bestScore = score
-            bestMotorAssignment[index] = control
+            bestMotorAssignment[index] = firstControl
           }
         }
       }
-
-      //limb.motor = bestMotorAssignment[index]
     }
 
     for (let index = 0; index < stickman.limbs.length; index++) {
@@ -448,7 +472,7 @@ function drawStickman(x, y, stickman) {
   }
   for (node of stickman.nodes) {
     stroke(255, 100, 0, 100)
-    line(node.x, node.y, node.x + node.forceX * 10000, node.y + node.forceY * 10000)
+    //line(node.x, node.y, node.x + node.forceX * 10000, node.y + node.forceY * 10000)
     stroke("black")
     if (node.nodeType == "head") {
       circle(node.x + x, node.y + y, head_radius * 2)
