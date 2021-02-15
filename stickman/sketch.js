@@ -16,8 +16,8 @@ const MOTOR_FORCE = 0.01;
 const LIMB_DAMPENING = 0.01;
 
 const PHYSICS_STEP = 5
-const PLAN_EVERY = 1
-const PLAN_STEP = 1000
+const PLAN_EVERY = 5
+const PLAN_STEP = PHYSICS_STEP
 const PLAN_ITERATIONS = 5
 const TWO_STEP_PLANNING = true
 const PREFER_RELAXING = false
@@ -132,8 +132,10 @@ function simulateStep(stickman, dt, lastDt) {
 function evaluate(stickman) {
   let headMouseDistSqr = sq(mouseX - stickman.nodes[0].x) + sq(mouseY - stickman.nodes[0].y)
   let handMouseDistSqr = sq(mouseX - stickman.nodes[8].x) + sq(mouseY - stickman.nodes[8].y)
+  let headUp = -stickman.nodes[0].y
+  let headRight = stickman.nodes[0].x
   return (
-    -headMouseDistSqr
+    headUp + headRight
     //stickman.nodes[10].x - stickman.nodes[8].x
   )
 }
@@ -361,10 +363,11 @@ function applyPhysics(stickman, dt, lastDt) {
 function groundConstraints(stickman) {
   for (node of stickman.nodes) {
     if (node.y > height) {
-      if (node.grip)
-        node.x = node.lastX
       offset = node.y - height
       propagateOffset(stickman, node, 0, -1, offset)
+    }
+    if (node.y >= height && node.grip) {
+      node.x = node.lastX
     }
     if (node.y < 0) {
       if (node.grip)
