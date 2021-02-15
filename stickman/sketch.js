@@ -223,7 +223,6 @@ function evaluateControlWithContinuation(copiedStickman, evaluationFunction, lim
     return bestScore
   }
   else {
-    simulateWithMotor(copiedStickman, limbIndex, firstControl, dt, lastDt)
     return evaluationFunction(copiedStickman)
   }
 }
