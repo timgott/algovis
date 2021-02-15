@@ -12,19 +12,19 @@ let globalStickman
 let globalLastDeltaTime = Infinity
 
 const GRAVITY = 0.001;
-const MOTOR_FORCE = 0.005;
-const LIMB_DAMPENING = 0.01;
+const MOTOR_FORCE = 0.002;
+const LIMB_DAMPENING = 0.0005;
 
-const PHYSICS_STEP = 5
+const PHYSICS_STEP = 10
 const PLAN_EVERY = 1
-const PLAN_STEP = 50
-const PLAN_ITERATIONS = 2
-const TWO_STEP_PLANNING = true
+const PLAN_STEP = 40
+const PLAN_ITERATIONS = 4
+const TWO_STEP_PLANNING = false
 const PREFER_RELAXING = false
 const PROPAGATE_GROUND_CONSTRAINTS = false
 const LOOKAHEAD_EVALUATION = false
-const GRIP_SURFACE_HEIGHT = 1
-const RANDOM_SAMPLED_PLANNING = false
+const GRIP_SURFACE_HEIGHT = 0
+const RANDOM_SAMPLED_PLANNING = true
 
 
 function createStickman(x, y) {
@@ -61,7 +61,7 @@ function createStickman(x, y) {
 
   const limbs = [
     limb(shoulders, head, 0.5),
-    limb(shoulders, hips, 1),
+    limb(shoulders, hips, 3),
     limb(hips, leftKnee, 4),
     limb(leftKnee, leftFoot, 2),
     limb(hips, rightKnee, 4),
@@ -99,7 +99,7 @@ let globalPlanningCounter = 0
 
 function draw() {
   globalTimeRemainder += deltaTime
-  globalTimeRemainder = min(globalTimeRemainder, PHYSICS_STEP * 5)
+  globalTimeRemainder = min(globalTimeRemainder, PHYSICS_STEP * 20)
 
   background(220);
   drawStickman(0, 0, globalStickman)
@@ -135,13 +135,17 @@ function simulateStep(stickman, dt, lastDt) {
 function evaluate(stickman) {
   let headMouseDistSqr = sq(mouseX - stickman.nodes[0].x) + sq(mouseY - stickman.nodes[0].y)
   let handMouseDistSqr = sq(mouseX - stickman.nodes[8].x) + sq(mouseY - stickman.nodes[8].y)
+  let hipsMouseDistSqr = sq(mouseX - stickman.nodes[2].x) + sq(mouseY - stickman.nodes[2].y)
+  let shouldersMouseDistSqr = sq(mouseX - stickman.nodes[1].x) + sq(mouseY - stickman.nodes[1].y)
   let headUp = -sq(stickman.nodes[0].y)
+  let feetUp = -sq(stickman.nodes[4].y) - sq(stickman.nodes[6].y)
   let headRight = sq(stickman.nodes[0].x)
   let headCenter = -sq(width / 2 - stickman.nodes[0].x)
-  let spreadArms = stickman.nodes[10].x - stickman.nodes[8].x
+  let spreadArms = sq(stickman.nodes[10].x - stickman.nodes[8].x)
+  let spreadLegs = sq(stickman.nodes[4].x - stickman.nodes[6].x)
+  let stability = -stickman.nodes.reduce((sum, node) => sum + sq(node.velX) + sq(node.velY), 0)
   return (
-    headUp //+ headCenter
-    //
+    headUp - shouldersMouseDistSqr
   )
 }
 
@@ -226,9 +230,9 @@ function evaluateControlWithContinuation(copiedStickman, evaluationFunction, lim
 
 function planMotorsIndividual(stickman, dt, lastDt, evaluationFunction) {
   const controlTypes = TWO_STEP_PLANNING ? [
-    [0],
-    [1, [1, -1]],
-    [-1, [-1, 1]]
+    [0, [1, 0, -1]],
+    [1, [1, 0, -1]],
+    [-1, [-1, 0, 1]]
   ] : [[0], [1], [-1]]
 
   if (PREFER_RELAXING) {
