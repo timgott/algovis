@@ -12,17 +12,19 @@ let globalStickman
 let globalLastDeltaTime = Infinity
 
 const GRAVITY = 0.001;
-const MOTOR_FORCE = 0.01;
+const MOTOR_FORCE = 0.005;
 const LIMB_DAMPENING = 0.01;
 
 const PHYSICS_STEP = 5
-const PLAN_EVERY = 5
-const PLAN_STEP = PHYSICS_STEP
-const PLAN_ITERATIONS = 5
+const PLAN_EVERY = 1
+const PLAN_STEP = 50
+const PLAN_ITERATIONS = 1
 const TWO_STEP_PLANNING = true
 const PREFER_RELAXING = false
 const PROPAGATE_GROUND_CONSTRAINTS = false
 const LOOKAHEAD_EVALUATION = false
+const GRIP_SURFACE_HEIGHT = 1
+const RANDOM_SAMPLED_PLANNING = false
 
 
 function createStickman(x, y) {
@@ -106,7 +108,8 @@ function draw() {
     globalPlanningCounter = (globalPlanningCounter + 1) % PLAN_EVERY
     if (globalPlanningCounter == 0) {
       const evaluationFunction = LOOKAHEAD_EVALUATION ? evaluateLookahead : evaluate
-      planMotorsSampling(globalStickman, PLAN_STEP, PHYSICS_STEP, evaluationFunction)
+      const planningFunction = RANDOM_SAMPLED_PLANNING ? planMotorsSampling : planMotorsIndividual
+      planningFunction(globalStickman, PLAN_STEP, PHYSICS_STEP, evaluationFunction)
     }
     let dt = PHYSICS_STEP
     simulateStep(globalStickman, dt, dt)
@@ -134,8 +137,9 @@ function evaluate(stickman) {
   let handMouseDistSqr = sq(mouseX - stickman.nodes[8].x) + sq(mouseY - stickman.nodes[8].y)
   let headUp = -stickman.nodes[0].y
   let headRight = stickman.nodes[0].x
+  let headCenter = -abs(width / 2 - stickman.nodes[0].x)
   return (
-    headUp + headRight
+    headUp + headCenter
     //stickman.nodes[10].x - stickman.nodes[8].x
   )
 }
@@ -366,7 +370,7 @@ function groundConstraints(stickman) {
       offset = node.y - height
       propagateOffset(stickman, node, 0, -1, offset)
     }
-    if (node.y >= height && node.grip) {
+    if (node.y >= height - GRIP_SURFACE_HEIGHT && node.grip) {
       node.x = node.lastX
     }
     if (node.y < 0) {
