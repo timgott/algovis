@@ -11,20 +11,20 @@ const arm_spread = 20;
 let globalStickman
 let globalLastDeltaTime = Infinity
 
-const GRAVITY = 0.001;
-const MOTOR_FORCE = 0.002;
+const GRAVITY = 0.0001;
+const MOTOR_FORCE = 0.0002;
 const LIMB_DAMPENING = 0.0005;
 
-const PHYSICS_STEP = 10
+const PHYSICS_STEP = 30
 const PLAN_EVERY = 1
-const PLAN_STEP = 40
-const PLAN_ITERATIONS = 4
-const TWO_STEP_PLANNING = false
+const PLAN_STEP = PHYSICS_STEP
+const PLAN_ITERATIONS = 1
+const TWO_STEP_PLANNING = true
 const PREFER_RELAXING = false
 const PROPAGATE_GROUND_CONSTRAINTS = false
 const LOOKAHEAD_EVALUATION = false
 const GRIP_SURFACE_HEIGHT = 0
-const RANDOM_SAMPLED_PLANNING = true
+const RANDOM_SAMPLED_PLANNING = false
 
 
 function createStickman(x, y) {
