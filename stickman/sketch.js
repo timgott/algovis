@@ -23,7 +23,7 @@ const TWO_STEP_PLANNING = true
 const PREFER_RELAXING = false
 const PROPAGATE_GROUND_CONSTRAINTS = false
 const LOOKAHEAD_EVALUATION = false
-const GRIP_SURFACE_HEIGHT = 1
+const GRIP_SURFACE_HEIGHT = 0
 const RANDOM_SAMPLED_PLANNING = false
 
 
@@ -124,11 +124,11 @@ function simulateStep(stickman, dt, lastDt) {
   applyJointForces(stickman)
   applyPhysics(stickman, dt, lastDt)
   //forceConstraints(stickman)
-  groundConstraints(stickman)
 
   for (let index = 0; index < 5; index++) {
     satisfyConstraints(stickman)
   }
+  groundConstraints(stickman)
 
 }
 
@@ -145,7 +145,7 @@ function evaluate(stickman) {
   let spreadLegs = sq(stickman.nodes[4].x - stickman.nodes[6].x)
   let stability = -stickman.nodes.reduce((sum, node) => sum + sq(node.velX) + sq(node.velY), 0)
   return (
-    headUp + stability + headCenter
+    headUp
   )
 }
 
@@ -394,12 +394,12 @@ function applyPhysics(stickman, dt, lastDt) {
 
 function groundConstraints(stickman) {
   for (node of stickman.nodes) {
+    if (node.y >= height - GRIP_SURFACE_HEIGHT && node.grip) {
+      node.x = node.lastX
+    }
     if (node.y > height) {
       offset = node.y - height
       propagateOffset(stickman, node, 0, -1, offset)
-    }
-    if (node.y >= height - GRIP_SURFACE_HEIGHT && node.grip) {
-      node.x = node.lastX
     }
     if (node.y < 0) {
       if (node.grip)
