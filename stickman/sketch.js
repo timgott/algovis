@@ -18,7 +18,7 @@ const LIMB_DAMPENING = 0.01;
 const PHYSICS_STEP = 5
 const PLAN_EVERY = 1
 const PLAN_STEP = 50
-const PLAN_ITERATIONS = 1
+const PLAN_ITERATIONS = 2
 const TWO_STEP_PLANNING = true
 const PREFER_RELAXING = false
 const PROPAGATE_GROUND_CONSTRAINTS = false
@@ -135,12 +135,13 @@ function simulateStep(stickman, dt, lastDt) {
 function evaluate(stickman) {
   let headMouseDistSqr = sq(mouseX - stickman.nodes[0].x) + sq(mouseY - stickman.nodes[0].y)
   let handMouseDistSqr = sq(mouseX - stickman.nodes[8].x) + sq(mouseY - stickman.nodes[8].y)
-  let headUp = -stickman.nodes[0].y
-  let headRight = stickman.nodes[0].x
-  let headCenter = -abs(width / 2 - stickman.nodes[0].x)
+  let headUp = -sq(stickman.nodes[0].y)
+  let headRight = sq(stickman.nodes[0].x)
+  let headCenter = -sq(width / 2 - stickman.nodes[0].x)
+  let spreadArms = stickman.nodes[10].x - stickman.nodes[8].x
   return (
-    headUp + headCenter
-    //stickman.nodes[10].x - stickman.nodes[8].x
+    headUp //+ headCenter
+    //
   )
 }
 
@@ -200,13 +201,34 @@ function evaluateControlSequence(stickman, evaluationFunction, limbIndex, contro
   return evaluationFunction(copiedStickman)
 }
 
+function evaluateControlWithContinuation(copiedStickman, evaluationFunction, limbIndex, firstControl, continuations, dt, lastDt) {
+  simulateWithMotor(copiedStickman, limbIndex, firstControl, dt, lastDt)
+  if (continuations) {
+    let bestScore = -Infinity
+
+    for (let continuationIndex = 0; continuationIndex < continuations.length; continuationIndex++) {
+      const continuedStickman = copyStickman(copiedStickman)
+      const nextSequence = continuations[continuationIndex]
+      const score = evaluateControlWithContinuation(continuedStickman, evaluationFunction, limbIndex, nextSequence[0], nextSequence[1], dt, dt)
+
+      if (score > bestScore) {
+        bestScore = score
+      }
+    }
+
+    return bestScore
+  }
+  else {
+    simulateWithMotor(copiedStickman, limbIndex, firstControl, dt, lastDt)
+    return evaluationFunction(copiedStickman)
+  }
+}
+
 function planMotorsIndividual(stickman, dt, lastDt, evaluationFunction) {
   const controlTypes = TWO_STEP_PLANNING ? [
     [0],
-    [1],
-    [-1],
-    [1, -1],
-    [-1, 1]
+    [1, [1, -1]],
+    [-1, [-1, 1]]
   ] : [[0], [1], [-1]]
 
   if (PREFER_RELAXING) {
@@ -222,9 +244,12 @@ function planMotorsIndividual(stickman, dt, lastDt, evaluationFunction) {
 
       for (let controlIndex = 0; controlIndex < controlTypes.length; controlIndex++) {
         const controlSequence = controlTypes[controlIndex]
+        const nextSequence = controlSequence[controlIndex + 1]
+
         const firstControl = controlSequence[0]
+        const continuations = controlSequence[1]
         if (firstControl != bestMotorAssignment[index]) {
-          const score = evaluateControlSequence(stickman, evaluationFunction, index, controlSequence, dt / controlSequence.length, lastDt)
+          let score = evaluateControlWithContinuation(copyStickman(stickman), evaluationFunction, index, firstControl, continuations, dt, lastDt)
           if (score > bestScore) {
             bestScore = score
             bestMotorAssignment[index] = firstControl
