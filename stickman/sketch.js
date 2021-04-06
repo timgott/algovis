@@ -3,9 +3,9 @@ let t = 0
 const head_radius = 30;
 const body_height = 80;
 const leg_length = 100;
-const leg_spread = 20;
+const leg_spread = 10;
 const arm_length = 100;
-const arm_spread = 20;
+const arm_spread = 10;
 
 
 let globalStickman
@@ -16,15 +16,17 @@ const MOTOR_FORCE = 0.0005;
 const LIMB_DAMPENING = 0.0005;
 
 const PHYSICS_STEP = 20
-const PLAN_EVERY = 4
-const PLAN_STEP = PHYSICS_STEP * PLAN_EVERY
+const PLAN_EVERY = 2
+const PLAN_STEP = 50
 const PLAN_ITERATIONS = 4
 const TWO_STEP_PLANNING = true
 const PREFER_RELAXING = false
 const PROPAGATE_GROUND_CONSTRAINTS = false
 const LOOKAHEAD_EVALUATION = false
 const GRIP_SURFACE_HEIGHT = 0
-const RANDOM_SAMPLED_PLANNING = false
+const RANDOM_SAMPLED_PREPLANNING = false
+const RANDOM_SAMPLES = 200
+const RANDOM_SAMPLING_STEPS = 1
 
 
 function createStickman(x, y) {
@@ -91,7 +93,7 @@ function copyStickman(stickman) {
 
 function setup() {
   createCanvas(1000, 400);
-  globalStickman = createStickman(100, 100)
+  globalStickman = createStickman(100, 200)
 }
 
 let globalTimeRemainder = PHYSICS_STEP
@@ -104,14 +106,17 @@ function draw() {
   background(220);
   drawStickman(0, 0, globalStickman)
 
+  let scoreToBeat = -Infinity
   while (globalTimeRemainder >= PHYSICS_STEP) {
     globalPlanningCounter = (globalPlanningCounter + 1) % PLAN_EVERY
     if (globalPlanningCounter == 0) {
       const evaluationFunction = LOOKAHEAD_EVALUATION ? evaluateLookahead : evaluate
-      const planningFunction = RANDOM_SAMPLED_PLANNING ? planMotorsSampling : planMotorsIndividual
-      planningFunction(globalStickman, PLAN_STEP, PHYSICS_STEP, evaluationFunction)
+      if (RANDOM_SAMPLED_PREPLANNING)
+        planMotorsSampling(globalStickman, PLAN_STEP, PHYSICS_STEP, evaluationFunction, scoreToBeat)
+      scoreToBeat = planMotorsIndividual(globalStickman, PLAN_STEP, PHYSICS_STEP, evaluationFunction)
     }
     let dt = PHYSICS_STEP
+    reorderLimbsRandomly(globalStickman)
     simulateStep(globalStickman, dt, dt)
     globalTimeRemainder -= dt
   }
@@ -119,7 +124,6 @@ function draw() {
 }
 
 function simulateStep(stickman, dt, lastDt) {
-  //reorderLimbsRandomly(stickman)
   resetForces(stickman)
   applyJointForces(stickman)
   applyPhysics(stickman, dt, lastDt)
@@ -127,8 +131,8 @@ function simulateStep(stickman, dt, lastDt) {
 
   for (let index = 0; index < 5; index++) {
     satisfyConstraints(stickman)
+    groundConstraints(stickman)
   }
-  groundConstraints(stickman)
 
 }
 
@@ -145,7 +149,7 @@ function evaluate(stickman) {
   let spreadLegs = sq(stickman.nodes[4].x - stickman.nodes[6].x)
   let stability = -stickman.nodes.reduce((sum, node) => sum + sq(node.velX) + sq(node.velY), 0)
   return (
-    headUp
+    headUp + stability + spreadArms - headMouseDistSqr
   )
 }
 
@@ -183,8 +187,10 @@ function diffStickman(a, b) {
   diffObject(a.limbs, b.limbs, "")
 }
 
-function evaluateAfterStep(stickman, evaluationFunction, deltaTime, lastDeltaTime) {
-  simulateStep(stickman, deltaTime, lastDeltaTime)
+function evaluateAfterSteps(stickman, evaluationFunction, deltaTime, lastDeltaTime, steps) {
+  for (let i = 0; i < steps; i++) {
+    simulateStep(stickman, deltaTime, lastDeltaTime)
+  }
   return evaluationFunction(stickman)
 }
 
@@ -238,8 +244,8 @@ function planMotorsIndividual(stickman, dt, lastDt, evaluationFunction) {
     stickman.limbs.forEach(limb => limb.motor = 0)
   }
 
-  const bestMotorAssignment = stickman.limbs.map(limb => limb.motor)
-  let bestScore = evaluateAfterStep(copyStickman(stickman), evaluationFunction, dt, lastDt)
+  const bestMotorAssignment = []
+  let bestScore = -Infinity
 
   for (let i = 0; i < PLAN_ITERATIONS; i++) {
     for (let index = 0; index < stickman.limbs.length; index++) {
@@ -251,7 +257,7 @@ function planMotorsIndividual(stickman, dt, lastDt, evaluationFunction) {
 
         const firstControl = controlSequence[0]
         const continuations = controlSequence[1]
-        if (firstControl != bestMotorAssignment[index]) {
+        if (continuations || firstControl != bestMotorAssignment[index]) {
           let score = evaluateControlWithContinuation(copyStickman(stickman), evaluationFunction, index, firstControl, continuations, dt, lastDt)
           if (score > bestScore) {
             bestScore = score
@@ -265,19 +271,21 @@ function planMotorsIndividual(stickman, dt, lastDt, evaluationFunction) {
       stickman.limbs[index].motor = bestMotorAssignment[index]
     }
   }
+
+  return bestScore
 }
 
-function planMotorsSampling(stickman, dt, lastDt, evaluationFunction) {
+function planMotorsSampling(stickman, dt, lastDt, evaluationFunction, scoreToBeat) {
   const bestMotorAssignment = stickman.limbs.map(limb => limb.motor)
-  let bestScore = evaluateAfterStep(copyStickman(stickman), evaluationFunction, dt, lastDt)
+  let bestScore = scoreToBeat || evaluateAfterSteps(copyStickman(stickman), evaluationFunction, dt, lastDt, RANDOM_SAMPLING_STEPS)
 
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < RANDOM_SAMPLES; i++) {
     const copiedStickman = copyStickman(stickman)
     for (let index = 0; index < stickman.limbs.length; index++) {
       copiedStickman.limbs[index].motor = random([0, -1, 1])
     }
 
-    const score = evaluateAfterStep(copiedStickman, evaluationFunction, dt, lastDt)
+    const score = evaluateAfterSteps(copiedStickman, evaluationFunction, dt, lastDt, RANDOM_SAMPLING_STEPS)
     if (score > bestScore) {
       bestScore = score
       for (let index = 0; index < stickman.limbs.length; index++) {
