@@ -1,29 +1,31 @@
 let t = 0
 
 const head_radius = 30;
-const body_height = 80;
+const body_height = 70;
 const leg_length = 100;
 const leg_spread = 10;
+const knee_ratio = 3/7;
 const arm_length = 100;
 const arm_spread = 10;
+const elbow_ratio = 2/5;
 
 
 let globalStickman
 let globalLastDeltaTime = Infinity
 
-const GRAVITY = 0.0001;
-const MOTOR_FORCE = 0.0005;
-const LIMB_DAMPENING = 0.0005;
+const GRAVITY = 0.001;
+const MOTOR_FORCE = 0.001;
+const LIMB_DAMPENING = 0.004;
 
-const PHYSICS_STEP = 20
-const PLAN_EVERY = 2
-const PLAN_STEP = 50
-const PLAN_ITERATIONS = 4
-const TWO_STEP_PLANNING = true
-const PREFER_RELAXING = false
-const PROPAGATE_GROUND_CONSTRAINTS = false
-const LOOKAHEAD_EVALUATION = false
-const GRIP_SURFACE_HEIGHT = 0
+const PHYSICS_STEP = 5
+const PLAN_EVERY = 1
+const PLAN_STEP = 5
+const PLAN_ITERATIONS = 1 // how often to iterate over all limbs
+const TWO_STEP_PLANNING = false // consider second step in planning
+const PREFER_RELAXING = true // relax all limbs before planning
+const PROPAGATE_GROUND_CONSTRAINTS = true // more realistic energy transfer? better jumping?
+const LOOKAHEAD_EVALUATION = false // don't enable
+const GRIP_SURFACE_HEIGHT = -0.04 // surface friction, can be negative
 const RANDOM_SAMPLED_PREPLANNING = false
 const RANDOM_SAMPLES = 200
 const RANDOM_SAMPLING_STEPS = 1
@@ -33,11 +35,11 @@ function createStickman(x, y) {
   const head = headNode(0, -body_height - head_radius)
   const shoulders = limbNode(0, -body_height)
   const hips = limbNode(0, 0)
-  const leftKnee = limbNode(-leg_spread, leg_length / 2)
+  const leftKnee = limbNode(-leg_spread, leg_length * knee_ratio)
   const leftFoot = gripNode(-leg_spread, leg_length)
   const rightKnee = mirrorNode(leftKnee)
   const rightFoot = mirrorNode(leftFoot)
-  const leftElbow = limbNode(-arm_spread, -body_height + arm_length / 2)
+  const leftElbow = limbNode(-arm_spread, -body_height + arm_length * elbow_ratio)
   const leftHand = gripNode(-arm_spread, -body_height + arm_length)
   const rightElbow = mirrorNode(leftElbow)
   const rightHand = mirrorNode(leftHand)
@@ -63,15 +65,15 @@ function createStickman(x, y) {
 
   const limbs = [
     limb(shoulders, head, 0.5),
-    limb(shoulders, hips, 3),
-    limb(hips, leftKnee, 4),
+    limb(shoulders, hips, 2),
+    limb(hips, leftKnee, 8),
     limb(leftKnee, leftFoot, 2),
-    limb(hips, rightKnee, 4),
+    limb(hips, rightKnee, 8),
     limb(rightKnee, rightFoot, 2),
-    limb(shoulders, leftElbow, 2, "leftUpperArm"),
+    limb(shoulders, leftElbow, 5, "leftUpperArm"),
     limb(leftElbow, leftHand, 1, "leftLowerArm"),
-    limb(shoulders, rightElbow, 2, "rightUpperArm"),
-    limb(rightElbow, rightHand, 1, "rightLowerArm")
+    limb(shoulders, rightElbow, 5, "rightUpperArm"),
+    limb(rightElbow, rightHand, 1, "rightLowerArm"),
   ]
 
   return {
@@ -127,7 +129,7 @@ function simulateStep(stickman, dt, lastDt) {
   resetForces(stickman)
   applyJointForces(stickman)
   applyPhysics(stickman, dt, lastDt)
-  //forceConstraints(stickman)
+  forceConstraints(stickman)
 
   for (let index = 0; index < 5; index++) {
     satisfyConstraints(stickman)
@@ -143,13 +145,16 @@ function evaluate(stickman) {
   let shouldersMouseDistSqr = sq(mouseX - stickman.nodes[1].x) + sq(mouseY - stickman.nodes[1].y)
   let headUp = -sq(stickman.nodes[0].y)
   let feetUp = -sq(stickman.nodes[4].y) - sq(stickman.nodes[6].y)
+  let handsUp = -sq(stickman.nodes[8].y) - sq(stickman.nodes[10].y)
+  let bodyUp = -sq(stickman.nodes[0].y)-sq(stickman.nodes[1].y)
   let headRight = sq(stickman.nodes[0].x)
   let headCenter = -sq(width / 2 - stickman.nodes[0].x)
   let spreadArms = sq(stickman.nodes[10].x - stickman.nodes[8].x)
   let spreadLegs = sq(stickman.nodes[4].x - stickman.nodes[6].x)
-  let stability = -stickman.nodes.reduce((sum, node) => sum + sq(node.velX) + sq(node.velY), 0)
+  let movement = stickman.nodes.reduce((sum, node) => sum + sq(node.velX) + sq(node.velY), 0)
+  let stability = -stickman.limbs.reduce((sum, limb) => sum + sq(limb.start.velX - limb.end.velX) + sq(limb.start.velY - limb.end.velY), 0)
   return (
-    headUp + stability + spreadArms - headMouseDistSqr
+    -headMouseDistSqr - handMouseDistSqr
   )
 }
 
