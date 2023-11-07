@@ -1,17 +1,10 @@
 import { createNode, attach, SplayNode, Side, splay, splaySteps, CommandType, rotateToTopSteps } from "./tree.js";
+import { initFullscreenCanvas } from "../shared/canvas.js"
 
 const canvas = document.getElementById('splay_canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
 
-function setCanvasSize(width: number, height: number) {
-  const dpiRatio = window.devicePixelRatio;
-  canvas.width = width * dpiRatio;
-  canvas.height = height * dpiRatio;
-  canvas.style.width = width + "px";
-  canvas.style.height = height + "px";
-  ctx.scale(dpiRatio, dpiRatio);
-}
-setCanvasSize(window.innerWidth, window.innerHeight)
+initFullscreenCanvas(canvas)
 
 const radius = 10
 const targetOffsetY = 30
