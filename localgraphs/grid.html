@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Graph Algorithm Visualization</title>
+    <title>Grud Coloring</title>
     <style>
         body {
             margin: 0;
             padding: 0;
             overflow: hidden;
         }
-        canvas {
+        #grid_root {
             display: block;
             background-color: #f0f0f0;
             width: 100%;
@@ -19,9 +19,10 @@
     </style>
 </head>
 <body>
-    <canvas id="graph_canvas"></canvas>
+    <button id="adversary">Random adversary</button>
+    <div id="grid_root"></div>
 
     <!-- Include the compiled JavaScript file -->
-    <script type="module" src="src/graphvis.js"></script>
+    <script type="module" src="src/gridmain.js"></script>
 </body>
 </html>
