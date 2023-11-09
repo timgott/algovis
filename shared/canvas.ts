@@ -17,3 +17,11 @@ export function initFullscreenCanvas(canvas: HTMLCanvasElement) {
     window.addEventListener('resize', resize);
     resize()
 }
+
+export function getCursorPosition(canvas: HTMLCanvasElement, event: MouseEvent): [number, number] {
+    // https://stackoverflow.com/a/18053642/8853490
+    const rect = canvas.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const y = event.clientY - rect.top
+    return [x, y]
+}

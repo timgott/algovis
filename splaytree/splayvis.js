@@ -225,6 +225,7 @@ function animate(timeStamp) {
             lastCommandExecution = timeStamp + delay;
         }
     }
+    previousTimeStamp = timeStamp;
     requestAnimationFrame(animate);
 }
 function clicked(x, y) {

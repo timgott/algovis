@@ -1,5 +1,5 @@
 import { createNode, attach, SplayNode, Side, splay, splaySteps, CommandType, rotateToTopSteps } from "./tree.js";
-import { initFullscreenCanvas } from "../shared/canvas.js"
+import { getCursorPosition, initFullscreenCanvas } from "../shared/canvas.js"
 
 const canvas = document.getElementById('splay_canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -244,6 +244,8 @@ function animate(timeStamp: number) {
       lastCommandExecution = timeStamp + delay
     }
   }
+
+  previousTimeStamp = timeStamp
   requestAnimationFrame(animate);
 }
 
@@ -255,14 +257,6 @@ function clicked(x: number, y: number) {
     cmd()
   }
   commands = splaySteps(node.node)
-}
-
-function getCursorPosition(canvas: HTMLCanvasElement, event: MouseEvent): [number, number] {
-  // https://stackoverflow.com/a/18053642/8853490
-  const rect = canvas.getBoundingClientRect()
-  const x = event.clientX - rect.left
-  const y = event.clientY - rect.top
-  return [x, y]
 }
 
 canvas.addEventListener("click", (ev) => { 
