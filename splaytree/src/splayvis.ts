@@ -1,5 +1,5 @@
 import { createNode, attach, SplayNode, Side, splay, splaySteps, CommandType, rotateToTopSteps } from "./tree.js";
-import { getCursorPosition, initFullscreenCanvas } from "../shared/canvas.js"
+import { getCursorPosition, initFullscreenCanvas } from "../../shared/canvas.js"
 
 const canvas = document.getElementById('splay_canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;

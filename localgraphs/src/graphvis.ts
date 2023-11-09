@@ -1,5 +1,5 @@
-import { Graph, PhysGraphNode, LayoutConfig, applyLayoutPhysics, createGridGraph, createRandomGraph, drawGraph, findClosestNode, shuffleGraphPositions } from "./graphlayout.js";
-import { getCursorPosition, initFullscreenCanvas } from "../shared/canvas.js"
+import { Graph, GraphNode, LayoutConfig, applyLayoutPhysics, createGridGraph, createRandomGraph, drawGraph, findClosestNode, shuffleGraphPositions } from "./graphlayout.js";
+import { getCursorPosition, initFullscreenCanvas } from "../../shared/canvas.js"
 
 const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -20,7 +20,7 @@ shuffleGraphPositions(graph, canvas.width, canvas.height)
 
 graph = createGridGraph(11, layoutStyle)
 
-let draggedNode: PhysGraphNode<unknown> | null = null
+let draggedNode: GraphNode<unknown> | null = null
 let mouseX: number = 0
 let mouseY: number = 0
 
