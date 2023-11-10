@@ -10,15 +10,15 @@ const layoutStyle: LayoutConfig = {
     targetDistance: 40,
     edgeLength: 200,
     pushForce: 1,
-    edgeForce: 5,
+    edgeForce: 16,
     centeringForce: 1.0,
-    dampening: 3.0,
+    dampening: 1.0,
 }
 
 let graph = createRandomGraph(20, 3)
 shuffleGraphPositions(graph, canvas.width, canvas.height)
 
-graph = createGridGraph(11, layoutStyle)
+graph = createGridGraph(10, layoutStyle)
 
 let draggedNode: GraphNode<unknown> | null = null
 let mouseX: number = 0

@@ -1,5 +1,7 @@
 {
   "devDependencies": {
+    "parcel": "^2.10.2",
     "typescript": "^5.2.2"
-  }
+  },
+  "type": "module"
 }

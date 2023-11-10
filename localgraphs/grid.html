@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grud Coloring</title>
+    <title>Grid Coloring</title>
     <style>
         body {
             margin: 0;
@@ -11,18 +11,25 @@
             overflow: hidden;
         }
         #grid_root {
-            display: block;
-            background-color: #f0f0f0;
-            width: 100%;
-            height: 100%;
+            margin-bottom: 40px;
+        }
+        .container {
+            padding: 50px;
+            background-color: #eee;
         }
     </style>
 </head>
 <body>
-    <button id="adversary">Random adversary</button>
-    <div id="grid_root"></div>
-
+    <div class="container">
+        <div id="grid_root"></div>
+        <button id="manual">Manual</button>
+        <button id="adversary">Random adversary</button>
+        <select id="algorithm">
+            <option value="greedy">Greedy</option>
+            <option value="neighborhood">Dynamic 1-greedy</option>
+        </select>
+    </div>
     <!-- Include the compiled JavaScript file -->
-    <script type="module" src="src/gridmain.js"></script>
+    <script type="module" src="src/gridmain.ts"></script>
 </body>
 </html>
