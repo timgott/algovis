@@ -10,8 +10,12 @@
             padding: 0;
             overflow: hidden;
         }
-        #grid_root {
+        .grid_root {
             margin-bottom: 40px;
+        }
+        .grid_root svg text {
+            pointer-events: none;
+            user-select: none;
         }
         .container {
             padding: 50px;
@@ -21,13 +25,17 @@
 </head>
 <body>
     <div class="container">
-        <div id="grid_root"></div>
-        <button id="manual">Manual</button>
-        <button id="adversary">Random adversary</button>
+        <div id="grid_root" class="grid_root"></div>
         <select id="algorithm">
             <option value="greedy">Greedy</option>
-            <option value="neighborhood">Dynamic 1-greedy</option>
+            <option value="neighborhood1">Dynamic 1-neighborhood</option>
+            <option value="neighborhood2">Dynamic 2-neighborhood</option>
+            <option value="neighborhood3">Dynamic 3-neighborhood</option>
         </select>
+        <button id="reset">Reset</button>
+        <button id="adversary">Random adversary</button>
+        <input type="checkbox" id="animate" unchecked>
+        <label for="animate">Animate</label>
     </div>
     <!-- Include the compiled JavaScript file -->
     <script type="module" src="src/gridmain.ts"></script>

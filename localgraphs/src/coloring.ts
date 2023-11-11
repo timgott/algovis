@@ -32,6 +32,25 @@ function neighborColorSet(node: Node) {
     return result
 }
 
+// set of all nodes within radius distance of node
+function collectNeighborhood(node: Node, distance: number): Set<Node> {
+    let nodes = new Set<Node>([node])
+    while (distance > 0) {
+        // has to be a copy, otherwise we modify the set while iterating
+        let newNodes = new Set<Node>()
+        for (let node of nodes) {
+            for (let neighbor of node.neighbors) {
+                newNodes.add(neighbor)
+            }
+        }
+        for (let node of newNodes) {
+            nodes.add(node)
+        }
+        distance--
+    }
+    return nodes
+}
+
 // chooses the smallest color that is not used by any neighbor
 export let greedyColoring: OnlineAlgorithm<NodeColor> = (graph, pointOfChange) => {
     // iterate through colors until valid
@@ -73,20 +92,22 @@ function tryColorPermutations(nodes: Node[], colorLimit: number): boolean {
 }
 
 // chooses the color permutation with the smallest max value in the neighborhood
-export let neighborhoodRecoloring: DynamicLocal<NodeColor> = {
-    locality(nodeCount) {
-        return 1
-    },
-    step(graph, pointOfChange) {
-        let result = new Map<Node, NodeColor>()
-        let nodes = [...pointOfChange.neighbors, pointOfChange]
-        let colorLimit = 2
-        while(!tryColorPermutations([...nodes], colorLimit)) {
-            colorLimit++
-        }
-        for (let node of nodes) {
-            result.set(node, node.data)
-        }
-        return result
-    },
+export function neighborhoodRecoloring(distance: number): DynamicLocal<NodeColor> {
+    return  {
+        locality(nodeCount) {
+            return distance
+        },
+        step(graph, pointOfChange) {
+            let result = new Map<Node, NodeColor>()
+            let nodes = [...collectNeighborhood(pointOfChange, distance)]
+            let colorLimit = 2
+            while(!tryColorPermutations(nodes, colorLimit)) {
+                colorLimit++
+            }
+            for (let node of nodes) {
+                result.set(node, node.data)
+            }
+            return result
+        },
+    }
 }

@@ -6,7 +6,7 @@ import { createSvgNode } from "../../shared/svg.js"
 export class ColoredGridSvg {
     neutralColor = "#dddddd"
     rectPadding = 0
-    backPadding = 4
+    backPadding = 2
     borderPadding = -4
 
     svg: SVGSVGElement

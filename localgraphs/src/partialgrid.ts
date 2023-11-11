@@ -110,7 +110,7 @@ export class PartialGrid<T> {
                 if (distance <= locality) {
                     this.put(i2, j2, value)
                 } else {
-                    console.error(`Dynamic algorithm violates locality ${algo.locality} around ${i}, ${j}, touching ${i2}, ${j2}`)
+                    console.error(`Dynamic algorithm violates locality ${locality} around ${i}, ${j}, touching ${i2}, ${j2}`)
                 }
             }
         })
