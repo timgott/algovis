@@ -1,11 +1,12 @@
 export function createSvgNode<T extends keyof SVGElementTagNameMap>(
-    parent: Element, tag: T,
+    parent: Element | null,
+    tag: T,
     attrs: { [x: string]: any; } = {})
     : SVGElementTagNameMap[T]
 {
     let element = document.createElementNS("http://www.w3.org/2000/svg", tag);
     setSvgAttributes(element, attrs);
-    parent.appendChild(element);
+    parent?.appendChild(element);
     return element
 }
 

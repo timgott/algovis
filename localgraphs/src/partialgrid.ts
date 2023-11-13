@@ -13,10 +13,20 @@ export class PartialGrid<T> {
     rows: number;
     columns: number;
 
+    insertionOrder: [number, number][] = []
+
     constructor(rows: number, columns: number) {
         this.rows = rows
         this.columns = columns
         this.cells = createEmptyGrid(this.rows, this.columns)
+    }
+
+    copy(): PartialGrid<T> {
+        let result = new PartialGrid<T>(this.rows, this.columns)
+        this.insertionOrder.forEach(([i, j]) => {
+            result.put(i, j, this.get(i, j)!)
+        })
+        return result
     }
 
     get(x: number, y: number): T | null {
@@ -24,6 +34,10 @@ export class PartialGrid<T> {
     }
 
     put(x: number, y: number, value: T) {
+        if (this.cells[x][y] == null) {
+            // only first time, dynamic algorithms overwrite values multiple times
+            this.insertionOrder.push([x, y])
+        }
         this.cells[x][y] = value
     }
 
@@ -60,12 +74,23 @@ export class PartialGrid<T> {
         return result
     }
 
-    getGraph(): [Graph<T>, PartialGrid<GraphNode<T>>] {
+    getGraph(insertPoint: [number, number]): [Graph<T>, PartialGrid<GraphNode<T>>] {
         let graph = createEmptyGraph<T>()
         let nodeGrid = new PartialGrid<GraphNode<T>>(this.rows, this.columns)
-        this.forNonEmpty((i, j, cell) => {
-            let node = createNode(graph, cell)
+
+        // insert nodes for all non-empty cells
+        function insertNode(i: number, j: number, value: T) {
+            let node = createNode(graph, value)
             nodeGrid.put(i, j, node)
+            return node
+        }
+        this.forNonEmpty(insertNode)
+
+        // insert a new node such that algo can use it to traverse the graph
+        let newNode = insertNode(...insertPoint, undefined as any)
+
+        // create edges
+        function connectNode(i: number, j: number, node: GraphNode<T>) {
             if (i > 0) {
                 let otherNode = nodeGrid.get(i - 1, j)
                 if (otherNode) {
@@ -78,14 +103,20 @@ export class PartialGrid<T> {
                     createEdge(graph, node, otherNode)
                 }
             }
-        })
+        }
+        nodeGrid.forNonEmpty(connectNode)
+
+        // reorder according to insertion order
+        console.assert(graph.nodes.length === this.insertionOrder.length + 1, graph.nodes.length, this.insertionOrder.length)
+        graph.nodes = this.insertionOrder.map(([i, j]) => nodeGrid.get(i, j)!)
+        graph.nodes.push(newNode)
+
         return [graph, nodeGrid]
     }
 
     onlineAlgorithmStep(i: number, j: number, algo: OnlineAlgorithm<T>) {
         // insert a new node such that algo can use it to traverse the graph
-        this.put(i, j, undefined as any)
-        let [graph, nodeGrid] = this.getGraph()
+        let [graph, nodeGrid] = this.getGraph([i, j])
         let pointOfChange = nodeGrid.get(i, j)!
 
         let newValue = algo(graph, pointOfChange)
@@ -95,9 +126,7 @@ export class PartialGrid<T> {
     }
 
     dynamicAlgorithmStep(i: number, j: number, algo: DynamicLocal<T>) {
-        // insert a new node such that algo can use it to traverse the graph
-        this.put(i, j, undefined as any)
-        let [graph, nodeGrid] = this.getGraph()
+        let [graph, nodeGrid] = this.getGraph([i, j])
         let pointOfChange = nodeGrid.get(i, j)!
 
         let changes = algo.step(graph, pointOfChange)

@@ -12,3 +12,18 @@ export function createGrid<T>(rows: number, columns: number, init: (i: number, j
     }
     return arr
 }
+
+export function randInt(limit: number): number {
+    return Math.floor(Math.random() * limit)
+}
+
+// in place shuffle
+export function shuffle<T>(arr: T[]): T[] {
+    for (let i = arr.length - 1; i >= 0; i--) {
+        let j = randInt(i + 1)
+        let temp = arr[i]
+        arr[i] = arr[j]
+        arr[j] = temp
+    }
+    return arr
+}

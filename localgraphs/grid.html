@@ -27,15 +27,27 @@
     <div class="container">
         <div id="grid_root" class="grid_root"></div>
         <select id="algorithm">
+            <option value="minimal">Minimal change</option>
             <option value="greedy">Greedy</option>
-            <option value="neighborhood1">Dynamic 1-neighborhood</option>
-            <option value="neighborhood2">Dynamic 2-neighborhood</option>
-            <option value="neighborhood3">Dynamic 3-neighborhood</option>
+            <option value="random">Random</option>
+            <option value="parityaware">Parity aware</option>
         </select>
+        <label for="locality">Locality</label>
+        <input type="number" id="locality" min="0" max="10" value="0">
+
         <button id="reset">Reset</button>
         <button id="adversary">Random adversary</button>
-        <input type="checkbox" id="animate" unchecked>
+
+        <input type="checkbox" id="animate" checked>
         <label for="animate">Animate</label>
+
+        <input type="checkbox" id="show_parities" checked>
+        <label for="show_parities">Show parities</label>
+
+        <input type="checkbox" id="show_radius" checked>
+        <label for="show_radius">Show radius</label>
+
+        <button id="undo">Undo</button>
     </div>
     <!-- Include the compiled JavaScript file -->
     <script type="module" src="src/gridmain.ts"></script>

@@ -1,36 +1,73 @@
-import { NodeColor, greedyColoring, neighborhoodRecoloring } from "./coloring.js";
+import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, randomColoring } from "./coloring.js";
 import { PartialGrid, randomAdversary } from "./partialgrid.js";
 import { ColoredGridSvg, renderColoredGrid } from "./svggrid.js";
 
 let root = document.getElementById("grid_root")!
 let algorithmSelect = document.getElementById("algorithm") as HTMLSelectElement
+let localityInput = document.getElementById("locality") as HTMLInputElement
 let animateCheckbox = document.getElementById("animate") as HTMLInputElement
-let rows = 30
-let columns = 15
+let paritiesCheckbox = document.getElementById("show_parities") as HTMLInputElement
+let radiusCheckbox = document.getElementById("show_radius") as HTMLInputElement
+
+let undoButton = document.getElementById("undo") as HTMLButtonElement
+
+let rows = 20
+let columns = 20
 let svgGrid = new ColoredGridSvg(root, rows, columns, 30)
+
+// locality path around cursor
+localityInput.addEventListener("input", () => {
+    svgGrid.setBallRadius(localityInput.valueAsNumber)
+})
+svgGrid.setBallRadius(localityInput.valueAsNumber)
+radiusCheckbox.addEventListener("input", (ev) => {
+    svgGrid.setBallVisible(radiusCheckbox.checked)
+})
+svgGrid.setBallVisible(radiusCheckbox.checked)
+
 
 let adversary = randomAdversary
 
 function step(grid: PartialGrid<NodeColor>, i: number, j: number) {
+    let algo
     if (algorithmSelect.value == "greedy") {
-        grid.onlineAlgorithmStep(i, j, greedyColoring)
-    } else if (algorithmSelect.value == "neighborhood1") {
-        grid.dynamicAlgorithmStep(i, j, neighborhoodRecoloring(1))
-    } else if (algorithmSelect.value == "neighborhood2") {
-        grid.dynamicAlgorithmStep(i, j, neighborhoodRecoloring(2))
-    } else if (algorithmSelect.value == "neighborhood3") {
-        grid.dynamicAlgorithmStep(i, j, neighborhoodRecoloring(3))
+        algo = neighborhoodGreedy(localityInput.valueAsNumber)
+    } else if (algorithmSelect.value == "minimal") {
+        algo = minimalGreedy(localityInput.valueAsNumber)
+    } else if (algorithmSelect.value == "random") {
+        algo = randomColoring(localityInput.valueAsNumber)
+    } else if (algorithmSelect.value == "parityaware") {
+        algo = parityBorderColoring(localityInput.valueAsNumber)
     } else {
         throw "Unknown algorithm"
     }
+    grid.dynamicAlgorithmStep(i, j, algo)
+}
+
+function render(grid: PartialGrid<NodeColor>) {
+    renderColoredGrid(grid, svgGrid, paritiesCheckbox.checked)
 }
 
 function run() {
     let grid = new PartialGrid<NodeColor>(rows, columns)
-    renderColoredGrid(grid, svgGrid)
+    let undoHistory: PartialGrid<NodeColor>[] = []
+    render(grid)
     svgGrid.onClick = (i, j) => {
-        step(grid, i, j)
-        renderColoredGrid(grid, svgGrid)
+        if (grid.get(i, j) == null) {
+            undoHistory.push(grid.copy())
+            step(grid, i, j)
+            render(grid)
+        }
+    }
+    undoButton.onclick = () => {
+        let last = undoHistory.pop()
+        if (last) {
+            grid = last
+            render(grid)
+        }
+    }
+    paritiesCheckbox.onchange = () => {
+        render(grid)
     }
     return grid
 }
@@ -47,10 +84,10 @@ async function runAutoAdversary() {
         step(grid, i, j)
         if (animateCheckbox.checked) {
             await sleep(10)
-            renderColoredGrid(grid, svgGrid)
+            render(grid)
         }
     }
-    renderColoredGrid(grid, svgGrid)
+    render(grid)
 }
 
 run()
