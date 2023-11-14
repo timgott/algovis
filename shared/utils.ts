@@ -27,3 +27,15 @@ export function shuffle<T>(arr: T[]): T[] {
     }
     return arr
 }
+
+export function assert(condition: boolean, message: string): asserts condition {
+    if (!condition) {
+        throw message
+    }
+}
+
+export function assertExists<T>(value: T | undefined, message: string = "value should not be undefined"): asserts value is T {
+    if (value === undefined) {
+        throw message
+    }
+}

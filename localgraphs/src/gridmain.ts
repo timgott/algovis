@@ -1,4 +1,4 @@
-import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, randomColoring } from "./coloring.js";
+import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, principledParityBorderColoring, randomColoring } from "./coloring.js";
 import { PartialGrid, randomAdversary } from "./partialgrid.js";
 import { ColoredGridSvg, renderColoredGrid } from "./svggrid.js";
 
@@ -38,6 +38,8 @@ function step(grid: PartialGrid<NodeColor>, i: number, j: number) {
         algo = randomColoring(localityInput.valueAsNumber)
     } else if (algorithmSelect.value == "parityaware") {
         algo = parityBorderColoring(localityInput.valueAsNumber)
+    } else if (algorithmSelect.value == "tunneling") {
+        algo = principledParityBorderColoring(localityInput.valueAsNumber)
     } else {
         throw "Unknown algorithm"
     }
@@ -83,7 +85,7 @@ async function runAutoAdversary() {
         let [i, j] = adversary(grid)
         step(grid, i, j)
         if (animateCheckbox.checked) {
-            await sleep(10)
+            await sleep(1)
             render(grid)
         }
     }

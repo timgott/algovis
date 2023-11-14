@@ -80,7 +80,7 @@ export class PartialGrid<T> {
 
         // insert nodes for all non-empty cells
         function insertNode(i: number, j: number, value: T) {
-            let node = createNode(graph, value)
+            let node = createNode(graph, value, i, j)
             nodeGrid.put(i, j, node)
             return node
         }

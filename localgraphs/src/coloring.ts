@@ -1,4 +1,4 @@
-import { randInt } from "../../shared/utils.js"
+import { assert, assertExists, existsCast, randInt } from "../../shared/utils.js"
 import { Graph, GraphNode } from "./graphlayout.js"
 import { DynamicLocal, OnlineAlgorithm, PartialGrid } from "./partialgrid.js"
 
@@ -27,6 +27,15 @@ export function isLocalColoring(
     return true
 }
 
+function isLocalColoringAll(nodes: readonly Node[], overrides: Map<Node, NodeColor>) {
+    for (let node of nodes) {
+        if (!isLocalColoring(node, overrides)) {
+            return false
+        }
+    }
+    return true
+}
+
 export function isGlobalColoring(graph: Graph<NodeColor>) {
     for (let node of graph.nodes) {
         if (!isLocalColoring(node)) {
@@ -36,12 +45,25 @@ export function isGlobalColoring(graph: Graph<NodeColor>) {
     return true
 }
 
-function neighborColorSet(node: Node) {
+function neighborColorSet(node: Node, ignoreNodes?: Set<Node>, overrides: Map<Node, NodeColor> = new Map()) {
     let result = new Set<NodeColor>()
     for (let neighbor of node.neighbors) {
-        result.add(neighbor.data)
+        if (ignoreNodes === undefined || !ignoreNodes.has(neighbor)) {
+            let color = overrides.get(neighbor) ?? neighbor.data
+            result.add(color)
+        }
     }
     return result
+}
+
+// chooses the smallest color that is not used by any neighbor
+function greedyColoring(node: Node, ignoreNodes?: Set<Node>, overrides: Map<Node, NodeColor> = new Map()): number {
+    let neighborColors = neighborColorSet(node, ignoreNodes, overrides)
+    let color = 0
+    while (neighborColors.has(color)) {
+        color++
+    }
+    return color
 }
 
 enum SearchState {
@@ -51,8 +73,11 @@ enum SearchState {
 }
 
 // runs bfs until callback returns false
-function bfs(center: Node, callback: (node: Node, distance: number) => SearchState) {
-    let frontier = new Set<Node>([center])
+function bfs(start: Node | Node[], callback: (node: Node, distance: number) => SearchState) {
+    if (!Array.isArray(start)) {
+        start = [start]
+    }
+    let frontier = new Set<Node>(start)
     let closed = new Set<Node>()
     let distance = 0
     while (frontier.size > 0) {
@@ -91,7 +116,7 @@ function collectNeighborhood(node: Node, radius: number): Set<Node> {
 }
 
 // compute the distance of the nodes from center by BFS
-function computeDistances(center: Node, nodes: readonly Node[]): Map<Node, number> {
+function computeDistances(center: Node, nodes: Iterable<Node>): Map<Node, number> {
     let remaining = new Set<Node>(nodes)
     let distances = new Map<Node, number>()
     bfs(center, (node, distance) => {
@@ -102,17 +127,6 @@ function computeDistances(center: Node, nodes: readonly Node[]): Map<Node, numbe
         return (remaining.size > 0) ? SearchState.Continue : SearchState.Terminate
     })
     return distances
-}
-
-// chooses the smallest color that is not used by any neighbor
-export let greedyColoring: OnlineAlgorithm<NodeColor> = (graph, pointOfChange) => {
-    // iterate through colors until valid
-    let neighborColors = neighborColorSet(pointOfChange)
-    pointOfChange.data = 0
-    while (neighborColors.has(pointOfChange.data)) {
-        pointOfChange.data++
-    }
-    return pointOfChange.data
 }
 
 // tries all possible colorings of the given nodes, returns null if none is valid
@@ -182,7 +196,6 @@ export function neighborhoodGreedy(distance: number): DynamicLocal<NodeColor> {
             if (coloring == null) {
                 throw "color limit reached, probably bug?"
             }
-            console.log(coloring)
             return coloring
         },
     }
@@ -261,10 +274,10 @@ export function randomColoring(distance: number): DynamicLocal<NodeColor> {
 }
 
 // searches for closest node with given value and returns distance
-function findDistanceToValue(node: Node, ignoreDistance: number, targetValue: number): number | null {
+function findDistanceTo(node: Node, predicate: (node: Node, distance: number) => boolean): number | null {
     let result: number | null = null
     bfs(node, (node, distance) => {
-        if (distance > ignoreDistance && node.data == targetValue) {
+        if (predicate(node, distance)) {
             result = distance
             return SearchState.Terminate
         }
@@ -273,32 +286,222 @@ function findDistanceToValue(node: Node, ignoreDistance: number, targetValue: nu
     return result
 }
 
+type Component = number
+function findConnectedComponents(seeds: Iterable<Node>, skip: (node: Node) => boolean): [number, Map<Node, Component>] {
+    let components = new Map<Node, Component>()
+    let componentIndex = 0
+    for (let seed of seeds) {
+        if (!components.has(seed) && !skip(seed)) {
+            bfs(seed, (node, distance) => {
+                if (skip(node)) {
+                    return SearchState.Skip
+                }
+                components.set(node, componentIndex)
+                return SearchState.Continue
+            })
+            componentIndex++
+        }
+    }
+    return [componentIndex, components]
+}
+
+function findComponentBorderNodes(components: Map<Node, Component>): Map<Node, Set<Component>> {
+    let borders = new Map<Node, Set<number>>()
+    for (let [node, componentIndex] of components) {
+        for (let neighbor of node.neighbors) {
+            if (!borders.has(neighbor)) {
+                borders.set(neighbor, new Set<number>())
+            }
+            borders.get(neighbor)!.add(componentIndex)
+        }
+    }
+    return borders
+}
+
+function getNeighboringComponents(componentBorders: Map<Node, Set<Component>>): Map<Component, Component> {
+    let neighboringComponents = new Map<Component, Component>()
+    for (let [node, components] of componentBorders) {
+        if (components.size > 1) {
+            for (let i = 0; i < components.size; i++) {
+                for (let j = i + 1; j < components.size; j++) {
+                    neighboringComponents.set(i, j)
+                    neighboringComponents.set(j, i)
+                }
+            }
+        }
+    }
+    return neighboringComponents
+}
+
+function findSharedBorders(components: Map<Node, Component>): Set<Node> {
+    let borders = findComponentBorderNodes(components)
+    return new Set([...borders.keys()].filter((node) => borders.get(node)!.size > 1))
+}
+
+// walks through the component from source, considering wallPredicate as borders, counting border parities
+function countBorderParities(source: Node, offset: number, wallPredicate: (node: Node) => boolean, countOnlyPredicate: (borderNode: Node) => boolean): number[] {
+    let borderDistances = new Map<Node, number>()
+    let innerComponent = new Set<Node>()
+    bfs(source, (node, distance) => {
+        if (wallPredicate(node)) {
+            if (countOnlyPredicate(node)) {
+                borderDistances.set(node, distance)
+            }
+            return SearchState.Skip
+        } else {
+            innerComponent.add(node)
+            return SearchState.Continue
+        }
+    })
+    let parityCount = [0, 0]
+    for (let [borderNode, distance] of borderDistances) {
+        // check whether it is an outer border
+        let outerBorder = borderNode.neighbors.size < 4
+            || [...borderNode.neighbors].filter((node) => !innerComponent.has(node)).length > 0
+
+        if (outerBorder) {
+            parityCount[(distance + offset) % 2]++
+        }
+    }
+    return parityCount
+}
+
+function findMajorityBorderParity(source: Node, offset: number, wallPredicate: (node: Node) => boolean, countOnlyPredicate: (borderNode: Node) => boolean): 0 | 1 | null {
+    let parityCount = countBorderParities(source, offset, wallPredicate, countOnlyPredicate)
+    if (parityCount[0] == 0 && parityCount[1] == 0) {
+        // no border
+        return null
+    }
+    return parityCount[0] > parityCount[1] ? 0 : 1
+}
+
+function getNodesByComponent(components: Map<Node, Component>, nodes: Iterable<Node>): Map<Component, Node[]> {
+    let result = new Map<Component, Node[]>()
+
+    for (let node of nodes) {
+        let c = components.get(node)
+        if (c === undefined) {
+            throw "node not found in components"
+        }
+        result.set(c, [...(result.get(c) ?? []), node])
+    }
+    return result
+}
+
+function tryResolveBorderConflicts(
+    pointOfChange: Node,
+    borderColor: number,
+): Map<Node, NodeColor> | null {
+    let neighbors = [...pointOfChange.neighbors]
+    const [componentCount, components] = findConnectedComponents(
+        // start component search from neighbors
+        neighbors,
+        // traverse only 2-colored components, do not cross borders
+        (node) => node.data == pointOfChange.data || node.data == borderColor
+    )
+
+    // conflicts can exist only with more than 2 components
+    if (componentCount < 2) {
+        return null
+    }
+
+    const sharedBorders = findSharedBorders(components)
+    const nodesByComponent = getNodesByComponent(components, neighbors)
+
+    // get border parities
+    let parities = new Set<number>()
+    let parityNeighbors: Node[][] = [[], []]
+    for (let i = 0; i < componentCount; i++) {
+        // distance to border from first representative of component i
+        const reps = nodesByComponent.get(i)
+        if (reps === undefined || reps.length == 0) {
+            throw "no neighbor nodes in component"
+        }
+        const rep = reps[0]
+        const parity = findMajorityBorderParity(
+            rep,
+            0,
+            (node) => node.data == borderColor || node == pointOfChange, // walls
+            (node) => node != pointOfChange && !sharedBorders.has(node) // ignored for parity
+        )
+        if (parity != null) {
+            parities.add(parity)
+            parityNeighbors[parity].push(...reps)
+        }
+    }
+
+    // conflict if multiple different parities exist
+    if (parities.size <= 1) {
+        return null // no border conflict
+    }
+
+    console.log("Detected border conflict")
+
+    // try insert border
+    let neighborColors = neighborColorSet(pointOfChange)
+    if (!neighborColors.has(borderColor)) {
+        return new Map([[pointOfChange, borderColor]])
+    } else {
+        // try giving one neighbor a border color
+        // Because at least one neighbor has borderColor, there are at most 3 neighbors
+        for (let parity of [0, 1]) {
+            let coloring = new Map<Node, NodeColor>()
+            for (let node of parityNeighbors[parity]) {
+                coloring.set(node, borderColor)
+            }
+            coloring.set(pointOfChange, 1 - parity) // is available if the others get border color
+            if (isLocalColoringAll(neighbors, coloring)) {
+                console.log("Successfully resolved border conflict")
+                return coloring
+            }
+        }
+        console.log("Could not resolve border conflict")
+        return null
+    }
+
+}
+
 // tries to keep borders on same parity
-export function parityBorderColoring(distance: number): DynamicLocal<NodeColor> {
+export function parityBorderColoring(radius: number): DynamicLocal<NodeColor> {
     return {
         locality(nodeCount) {
-            return distance
+            return radius
         },
         step(graph, pointOfChange) {
-            const nodes = [...collectNeighborhood(pointOfChange, distance)] as const
+            const borderColor = 2
+            let neighborhood = collectNeighborhood(pointOfChange, radius)
+            const nodes = [...neighborhood] as const
+            const distances = computeDistances(pointOfChange, nodes)
+
+            if (radius >= 1) {
+                // build borders between components with different border parities
+                let borderConflictColoring = tryResolveBorderConflicts(pointOfChange, borderColor)
+                if (borderConflictColoring !== null) {
+                    return borderConflictColoring
+                }
+            }
+
             // try to color with 2 colors
             const twoColoring = findRecoloringMinimal(nodes, 2)
             if (twoColoring !== null) {
                 return twoColoring
             }
 
-            const distances = computeDistances(pointOfChange, nodes)
-            const borderDistance = findDistanceToValue(pointOfChange, distance, 2)
-
+            const borderParity = findMajorityBorderParity(
+                pointOfChange,
+                0,
+                (node) => node.data == borderColor,
+                (node) => !neighborhood.has(node)
+            )
 
             // try to color with parity safe coloring
             let colorLimit: number | ((node: Node) => number)
-            if (borderDistance == null) {
+            if (borderParity == null) {
                 // no border found, no 2-coloring => normal 3 coloring
                 colorLimit = 3
             } else {
                 colorLimit = (node: Node) => {
-                    if ((distances.get(node)! - borderDistance) % 2 == 0) {
+                    if ((distances.get(node)! - borderParity) % 2 == 0) {
                         return 3
                     }
                     return 2
@@ -311,11 +514,245 @@ export function parityBorderColoring(distance: number): DynamicLocal<NodeColor> 
             }
 
             // give up
-            let coloring = findRecoloringMinimal(nodes, 20)
+            let coloring = incrementalRetry(3, 20, (colorLimit) => findRecoloringMinimal(nodes, colorLimit))
             if (coloring == null) {
                 throw "color limit reached, giving up"
             }
             return coloring
+        },
+    }
+}
+
+// nodes outside the set that have neighbors inside the set
+function getOuterMargin(nodes: Set<Node>): Node[] {
+    let result = new Set<Node>()
+    for (let node of nodes) {
+        for (let neighbor of node.neighbors) {
+            if (!nodes.has(neighbor)) {
+                result.add(neighbor)
+            }
+        }
+    }
+    return [...result]
+}
+
+// nodes in the set that have neighbors outside of the set
+function getInnerMargin(nodes: Set<Node>): Node[] {
+    let result: Node[] = []
+    for (let node of nodes) {
+        for (let neighbor of node.neighbors) {
+            if (!nodes.has(neighbor)) {
+                result.push(node)
+                break
+            }
+        }
+    }
+    return result
+}
+
+class PartiallyColoredNeighborhood {
+    center: Node
+    nodes: Set<Node>
+    coloring: Map<Node, NodeColor> = new Map()
+
+    outerMargin!: Node[]
+    innerMargin!: Node[]
+
+    innerDistances!: Map<Node, number>
+
+    componentCount!: number
+
+    borderColor!: number
+
+    componentsByParity!: [Set<Component>, Set<Component>]
+    tunnelComponents!: Set<Component> 
+
+    neighborsByComponent!: Map<Component, Node[]>
+    componentParities!: Map<Component, number | null>
+
+    constructor(center: Node, nodes: Iterable<Node>, borderColor: number) {
+        this.center = center
+        this.nodes = new Set(nodes)
+        this.borderColor = borderColor
+        this.innerDistances = computeDistances(this.center, this.nodes)
+        this.update()
+    }
+
+    update() {
+        this.outerMargin = getOuterMargin(this.nodes).filter((node) => node.data != this.borderColor)
+        this.innerMargin = getInnerMargin(this.nodes)
+
+        const [componentCount, components] = findConnectedComponents(
+            // start component search from outer margin of neighborhood
+            this.outerMargin,
+            // we will change the nodes in neighborhood so skip it
+            (node) => this.nodes.has(node) || node.data == this.borderColor
+        )
+        this.componentCount = componentCount
+        this.neighborsByComponent = getNodesByComponent(components, this.outerMargin)
+
+        // classify components by parity
+        let outerDistances = computeDistances(this.center, this.outerMargin)
+        this.componentParities = new Map<Component, number | null>()
+        this.tunnelComponents = new Set<Component>()
+        this.componentsByParity = [new Set(), new Set()]
+        for (let c = 0; c < componentCount; c++) {
+            let rep = this.neighborsByComponent.get(c)?.[0]
+            assertExists(rep, "component without representative")
+            let offset = outerDistances.get(rep)
+            assertExists(offset)
+
+            let parities = countBorderParities(
+                rep,
+                offset,
+                (node) => node.data == this.borderColor || this.nodes.has(node), // stop on borders and on ball
+                (node) => !this.nodes.has(node) // but do not count the ball
+            )
+            if (parities[0] == 0 && parities[1] == 0) {
+                // free component
+                this.componentParities.set(c, null)
+            } else if (parities[0] > 0 && parities[1] > 0) {
+                // tunnel component
+                this.componentParities.set(c, null)
+                this.tunnelComponents.add(c)
+            } else {
+                let parity = parities[0] > parities[1] ? 0 : 1
+                this.componentParities.set(c, parity)
+                this.componentsByParity[parity].add(c)
+            }
+        }
+    }
+
+    fixAndRemoveNode(node: Node, value: NodeColor) {
+        this.coloring.set(node, value)
+        this.nodes.delete(node)
+        this.update()
+    }
+
+    propagateConstraints() {
+        // fix nodes with only one possible color
+        let changed = true
+        while (changed) {
+            changed = false
+            for (let node of this.nodes) {
+                let neighborColors = neighborColorSet(node, this.nodes, this.coloring)
+                if (neighborColors.size >= 2) {
+                    if (neighborColors.size >= 3) {
+                        console.log("Failed at 3-coloring")
+                    }
+                    let color = 0
+                    while (neighborColors.has(color)) {
+                        color++
+                    }
+                    this.fixAndRemoveNode(node, color)
+                    changed = true
+                }
+            }
+        }
+    }
+
+    hasBorderConflict(): boolean {
+        return this.componentsByParity[0].size > 0 && this.componentsByParity[1].size > 0
+    }
+
+    hasTunnel(): boolean {
+        return this.tunnelComponents.size > 0
+    }
+
+    sealComponent(component: Component) {
+        const outerNodes = this.neighborsByComponent.get(component)
+        assert(outerNodes !== undefined, "component without nodes")
+
+        // search inside the neighborhood for the closest borders of the right parity
+        let parity = this.componentParities.get(component)
+        assertExists(parity, "can only seal component with known parity")
+
+        let border: Node[] = []
+        let fillNodes: Node[] = []
+        const outerNodesSet = new Set(outerNodes)
+        bfs(outerNodes, (node, distance) => {
+            if (outerNodesSet.has(node)) {
+                return SearchState.Continue
+            }
+            if (!this.nodes.has(node)) {
+                return SearchState.Skip
+            }
+            if (this.innerDistances.get(node)! % 2 == parity) {
+                border.push(node)
+                return SearchState.Skip
+            } else {
+                fillNodes.push(node)
+                return SearchState.Continue
+            }
+        })
+
+        assert(border.length > 0, "no place for border found")
+
+        // build border
+        for (let node of border) {
+            this.fixAndRemoveNode(node, this.borderColor)
+            assert(isLocalColoring(node, this.coloring), "broke the coloring by sealing")
+        }
+
+        // expand the component to the border
+        for (let node of fillNodes) {
+            let color = greedyColoring(node, this.nodes, this.coloring)
+            this.fixAndRemoveNode(node, color)
+            assert(color < 3, "broke the coloring by filling seal")
+            assert(isLocalColoring(node, this.coloring), "broke the coloring by filling seal")
+        }
+
+        this.propagateConstraints()
+    }
+
+    sealAllNonTunnelComponents() {
+        for (let component of this.componentsByParity[0]) {
+            this.sealComponent(component)
+        }
+        for (let component of this.componentsByParity[1]) {
+            this.sealComponent(component)
+        }
+    }
+
+    finishColoring(): Map<Node, NodeColor> {
+        let nodes = [...this.nodes]
+        if (nodes.length > 0) {
+            let coloring = incrementalRetry(2, 20, (colorLimit) => findColoring(nodes, colorLimit))
+            if (coloring == null) {
+                throw "color limit reached, giving up"
+            }
+            for (let [node, color] of coloring) {
+                this.coloring.set(node, color)
+            }
+        }
+        return this.coloring
+    }
+}
+
+export function principledParityBorderColoring(radius: number): DynamicLocal<NodeColor> {
+    return {
+        locality(nodeCount) {
+            return radius
+        },
+        step(graph, pointOfChange) {
+            const borderColor = 2
+            let nodes = collectNeighborhood(pointOfChange, radius)
+
+            let coloring = new PartiallyColoredNeighborhood(pointOfChange, nodes, borderColor)
+            coloring.propagateConstraints()
+            while (coloring.hasBorderConflict()) {
+                coloring.sealAllNonTunnelComponents()
+            }
+            if (coloring.hasTunnel()) {
+                coloring.sealAllNonTunnelComponents()
+            }
+
+            // two+ components:
+            // same parity and border parity => join them
+            // same border parity, different parity => build border of this parity between
+            // different border parity => build tunnel between them
+
+            return coloring.finishColoring()
         },
     }
 }
