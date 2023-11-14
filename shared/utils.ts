@@ -34,8 +34,25 @@ export function assert(condition: boolean, message: string): asserts condition {
     }
 }
 
-export function assertExists<T>(value: T | undefined, message: string = "value should not be undefined"): asserts value is T {
-    if (value === undefined) {
+export function assertExists<T>(value: T | null | undefined, message: string = "value should not be undefined"): asserts value is T {
+    if (value === undefined || value === null) {
         throw message
     }
+}
+
+export function min<T>(items: Iterable<T>, key: (item: T) => number): T | undefined {
+    let minItem: T | undefined = undefined
+    let minValue = Infinity
+    for (let item of items) {
+        let value = key(item)
+        if (value < minValue) {
+            minValue = value
+            minItem = item
+        }
+    }
+    return minItem
+}
+
+export function range(limit: number): Iterable<number> {
+    return Array(limit).keys()
 }
