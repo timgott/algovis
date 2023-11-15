@@ -74,7 +74,28 @@ export class PartialGrid<T> {
         return result
     }
 
-    getGraph(insertPoint: [number, number]): [Graph<T>, PartialGrid<GraphNode<T>>] {
+    neighborValues(i: number, j: number): T[] {
+        let result: (T|null)[] = []
+        if (i > 0) {
+            let value = this.get(i - 1, j)
+            result.push(value)
+        }
+        if (j > 0) {
+            let value = this.get(i, j - 1)
+            result.push(value)
+        }
+        if (i < this.rows - 1) {
+            let value = this.get(i + 1, j)
+            result.push(value)
+        }
+        if (j < this.columns - 1) {
+            let value = this.get(i, j + 1)
+            result.push(value)
+        }
+        return result.filter(v => v !== null) as T[]
+    }
+
+    getGraph(insertPoint?: [number, number]): [Graph<T>, PartialGrid<GraphNode<T>>] {
         let graph = createEmptyGraph<T>()
         let nodeGrid = new PartialGrid<GraphNode<T>>(this.rows, this.columns)
 
@@ -87,7 +108,10 @@ export class PartialGrid<T> {
         this.forNonEmpty(insertNode)
 
         // insert a new node such that algo can use it to traverse the graph
-        let newNode = insertNode(...insertPoint, undefined as any)
+        let newNode = undefined
+        if (insertPoint !== undefined) {
+            newNode = insertNode(...insertPoint, undefined as any)
+        }
 
         // create edges
         function connectNode(i: number, j: number, node: GraphNode<T>) {
@@ -107,9 +131,11 @@ export class PartialGrid<T> {
         nodeGrid.forNonEmpty(connectNode)
 
         // reorder according to insertion order
-        console.assert(graph.nodes.length === this.insertionOrder.length + 1, graph.nodes.length, this.insertionOrder.length)
+        console.assert(graph.nodes.length === this.insertionOrder.length + (newNode !== undefined ? 1 : 0), graph.nodes.length, this.insertionOrder.length)
         graph.nodes = this.insertionOrder.map(([i, j]) => nodeGrid.get(i, j)!)
-        graph.nodes.push(newNode)
+        if (newNode !== undefined) {
+            graph.nodes.push(newNode)
+        }
 
         return [graph, nodeGrid]
     }

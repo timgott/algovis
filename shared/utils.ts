@@ -56,3 +56,27 @@ export function min<T>(items: Iterable<T>, key: (item: T) => number): T | undefi
 export function range(limit: number): Iterable<number> {
     return Array(limit).keys()
 }
+
+declare global {
+    interface Set<T> {
+        map<U>(f: (item: T) => U): Set<U>
+        find(predicate: (item: T) => boolean): T | undefined
+    }
+}
+
+Set.prototype.map = function<T, U>(this: Set<T>, f: (item: T) => U): Set<U> {
+    let result = new Set<U>()
+    for (let item of this) {
+        result.add(f(item))
+    }
+    return result
+}
+
+Set.prototype.find = function<T>(this: Set<T>, predicate: (item: T) => boolean): T | undefined {
+    for (let item of this) {
+        if (predicate(item)) {
+            return item
+        }
+    }
+    return undefined
+}

@@ -1,4 +1,4 @@
-import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, tunnellingColoring, randomColoring } from "./coloring.js";
+import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring } from "./coloring.js";
 import { DynamicLocal, PartialGrid, randomAdversary } from "./partialgrid.js";
 import { ColoredGridSvg, renderColoredGrid } from "./svggrid.js";
 
@@ -75,12 +75,15 @@ function step(grid: PartialGrid<NodeColor>, i: number, j: number, delay: number 
     } else if (algorithmSelect.value == "parityaware") {
         algo = parityBorderColoring(localityInput.valueAsNumber)
     } else if (algorithmSelect.value == "tunneling") {
-        algo = tunnellingColoring(localityInput.valueAsNumber)
+        algo = borderComponentColoring(localityInput.valueAsNumber)
+    } else if (algorithmSelect.value == "walls") {
+        algo = antiCollisionColoring(localityInput.valueAsNumber)
     } else {
         throw "Unknown algorithm"
     }
     if (delay == 0) {
         grid.dynamicAlgorithmStep(i, j, algo)
+        console.assert(isGlobalColoring(grid.getGraph()[0]), "correctness check failed")
     } else {
         dynamicAlgorithmStepAnimated(grid, i, j, algo, delay)
     }

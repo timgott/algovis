@@ -191,11 +191,30 @@ export function renderColoredGrid(grid: PartialGrid<NodeColor>, svg: ColoredGrid
         "#BF91FB",
     ]
 
+    let wallOutsideColor = "white"
+    let outsideColor = 1
+    let wallColor = 2
+
+    let errorColor = "red"
+
     grid.forEach((i, j, nodeColor) => {
         if (nodeColor !== null) {
-            let c = colors[nodeColor]
+            let c = colors[nodeColor] ?? "white"
             if (parities && (i+j+nodeColor) % 2 == 1) {
                 c = alternativeColors[nodeColor] ?? c
+            }
+            let neighborValues = grid.neighborValues(i, j)
+            if (nodeColor == outsideColor) {
+                if (neighborValues.includes(wallColor)) {
+                    c = wallOutsideColor
+                }
+            }
+            if (neighborValues.includes(nodeColor)) {
+                // conflict
+                c = errorColor
+            }
+            if (nodeColor == -1) {
+                c = "gray"
             }
             let text = (nodeColor + 1).toString()
             svg.cellColor(i, j, c)
