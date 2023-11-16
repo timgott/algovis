@@ -57,11 +57,11 @@ function bfs(start: Node | Node[], callback: (node: Node, distance: number) => S
         () => 0,
         node => node.neighbors,
         (node, distance) => {
-        return [callback(node, distance), distance + 1]
-    })
+            return [callback(node, distance), distance + 1]
+        })
 }
 
-function bfsFold<S,T>(start: S | S[], initial: (node: S) => T, children: (node: S) => Iterable<S>, callback: (node: S, value: T) => [SearchState, T]) {
+function bfsFold<S, T>(start: S | S[], initial: (node: S) => T, children: (node: S) => Iterable<S>, callback: (node: S, value: T) => [SearchState, T]) {
     if (!Array.isArray(start)) {
         start = [start]
     }
@@ -70,18 +70,19 @@ function bfsFold<S,T>(start: S | S[], initial: (node: S) => T, children: (node: 
     while (frontier.size > 0) {
         let newFrontier = new Map<S, T>()
         for (let [node, value] of frontier) {
-            assert(!closed.has(node), "node already visited")
-            closed.add(node)
+            if (!closed.has(node)) { // initial node could be added to frontier again
+                closed.add(node)
 
-            let [searchState, newValue] = callback(node, value)
+                let [searchState, newValue] = callback(node, value)
 
-            if (searchState == SearchState.Terminate) {
-                return
-            }
-            if (searchState != SearchState.Skip) {
-                for (let neighbor of children(node)) {
-                    if (!closed.has(neighbor)) {
-                        newFrontier.set(neighbor, newValue)
+                if (searchState == SearchState.Terminate) {
+                    return
+                }
+                if (searchState != SearchState.Skip) {
+                    for (let neighbor of children(node)) {
+                        if (!closed.has(neighbor)) {
+                            newFrontier.set(neighbor, newValue)
+                        }
                     }
                 }
             }
@@ -385,10 +386,9 @@ function getNodesByComponent(components: Map<Node, Component>, nodes: Iterable<N
 
     for (let node of nodes) {
         let c = components.get(node)
-        if (c === undefined) {
-            throw "node not found in components"
+        if (c !== undefined) {
+            result.set(c, [...(result.get(c) ?? []), node])
         }
-        result.set(c, [...(result.get(c) ?? []), node])
     }
     return result
 }
@@ -874,8 +874,78 @@ function getDirectedComponentBorders(components: Map<Node, Component>, insideCol
     return neighboringComponents
 }
 
-function computeDagDepth<T>(adjacency: Map<T, Set<T>>): Map<T, number> {
-    // TODO
+function findDagRoots<T>(adjacency: Map<T, Set<T>>): T[] {
+    let roots: Set<T> = new Set(adjacency.keys())
+    adjacency.forEach((neighbors, node) => {
+        for (let neighbor of neighbors) {
+            roots.delete(neighbor)
+        }
+    })
+    return [...roots]
+}
+
+function findDagLeaves<T>(adjacency: Map<T, Set<T>>): T[] {
+    let roots: T[] = []
+    adjacency.forEach((neighbors, node) => {
+        if (neighbors.size == 0) {
+            roots.push(node)
+        }
+    })
+    return roots
+}
+
+function computeDagDepth<T>(roots: T[], adjacency: Map<T, Set<T>>): Map<T, number> {
+    let depths = new Map<T, number>()
+    bfsFold<T, number>(roots, () => 0, c => adjacency.get(c) ?? [], (node, depth) => {
+        depths.set(node, depth)
+        return [SearchState.Continue, depth + 1]
+    })
+
+    return depths
+}
+
+class DirectedAcyclicGraph<T> {
+    adjacency: Map<T, Set<T>> // contains at least an empty set for each node
+    depths: Map<T, number>
+    roots: T[]
+    maxDepth: number
+
+    constructor(adjacency: Map<T, Set<T>>) {
+        this.adjacency = adjacency
+        this.roots = findDagRoots(adjacency)
+        this.depths = computeDagDepth(this.roots, adjacency)
+        this.maxDepth = Math.max(...this.depths.values())
+    }
+
+    addRoot(root: T) {
+        this.roots.push(root)
+        this.depths.set(root, 0)
+        this.adjacency.set(root, new Set())
+    }
+
+    addChild(parent: T, child: T) {
+        this.adjacency.get(parent)!.add(child)
+        this.depths.set(child, this.depths.get(parent)! + 1)
+        this.adjacency.set(child, new Set())
+    }
+
+    // inverse of depth
+    getHeight(node: T) {
+        let leaf = this.walkToLeaf(node)
+        return this.depths.get(leaf)! - this.depths.get(node)!
+    }
+
+    getChild(node: T) {
+        return this.adjacency.get(node)!.values().next().value
+    }
+
+    walkToLeaf(node: T) {
+        let current = node
+        while (this.adjacency.get(current)!.size > 0) {
+            current = this.getChild(current)
+        }
+        return current
+    }
 }
 
 // never lets borders collide
@@ -889,66 +959,10 @@ export function antiCollisionColoring(radius: number): DynamicLocal<NodeColor> {
             const insideBorderColor = 0
             const outsideBorderColor = 1
             const borderColor = 2
+
             let neighborhood = collectNeighborhood(pointOfChange, radius)
-            let reachable = collectNeighborhood(pointOfChange, Infinity)
-            let outerMargin = new Set(getOuterMargin(neighborhood))
-            let [componentCount, components] = findConnectedComponents(
-                reachable,
-                (node) => neighborhood.has(node) || node.data == borderColor
-            )
-
-            let nodesByComponent = getNodesByComponent(components, components.keys())
-            let significantComponents = new Set([...nodesByComponent.keys()].filter((component) => nodesByComponent.get(component)!.length > radius))
-
-            let wantsBorder: Component[] = [] // can contain multiple borders
-
-            // find started borders
-            let startedBorders = new Set<Component>()
-            for (const [node, component] of components) {
-                if (node.data == insideBorderColor) {
-                    for (const neighbor of node.neighbors) {
-                        if (neighbor.data == borderColor) {
-                            startedBorders.add(component)
-                            break
-                        }
-                    }
-                }
-            }
-            wantsBorder.push(...startedBorders)
-
-            // compute parities
-            let componentParities = new Map<Component, number>()
-            let distances = computeDistances(pointOfChange, components.keys())
-            for (const [node, component] of components) {
-                let parity = (distances.get(node)! + node.data) % 2
-                let oldParity = componentParities.get(component)
-                if (oldParity === undefined) {
-                    componentParities.set(component, parity)
-                } else {
-                    assert(oldParity == parity, "component has inconsistent parity")
-                }
-            }
-
-            let parityBins = [new Set<Component>(), new Set<Component>()]
-            for (let [component, parity] of componentParities) {
-                if (wantsBorder.filter(i => i == component).length % 2 == 1) {
-                    parity = 1 - parity
-                }
-                parityBins[parity].add(component)
-            }
-
-            // choose parity with more components
-            let parity = parityBins[0].size > parityBins[1].size ? 0 : 1
-
-            // if in conflict, build borders
-            if (parityBins[0].size > 0 && parityBins[1].size > 0) {
-                // TODO: think about this
-                // TODO: border count, the component that has fewest borders should build a new one
-                let minority = 1 - parity
-                for (let component of parityBins[minority]) {
-                    wantsBorder.push(component)
-                }
-            }
+            let borderableNeighborhood = collectNeighborhood(pointOfChange, radius - 1) // only in this space can we reliably build borders because of alternating parity
+            let componentIgnore = new Set([pointOfChange])
 
             let coloring = new Map<Node, NodeColor>()
             let remaining = new Set<Node>(neighborhood)
@@ -963,52 +977,108 @@ export function antiCollisionColoring(radius: number): DynamicLocal<NodeColor> {
                 remaining.delete(node)
             }
 
-            // topological sort, inside should always build border before outside
-            let componentEdges = getDirectedComponentBorders(components, insideBorderColor, getColor, n => neighborhood.has(n))
-            let wantsBorderOrdered: Component[] = [...wantsBorder].sort((a, b) => {
-                let a2b = componentEdges.get(a)!.has(b)
-                let b2a = componentEdges.get(b)!.has(a)
-                assert(!(a2b && b2a), "components are not a DAG")
-                return a2b ? -1 : b2a ? 1 : 0
-            })
-            if (wantsBorder.length > 0)
-                console.log("Reordered", wantsBorder, "to", wantsBorderOrdered)
+
+            let reachable = collectNeighborhood(pointOfChange, Infinity)
+            let [componentCount, components] = findConnectedComponents(
+                reachable,
+                (node) => componentIgnore.has(node) || node.data == borderColor
+            )
+
+            // inside should always build border before outside
+            // TODO: paper version is technically a tree, not a DAG
+            let componentGraph = new DirectedAcyclicGraph(
+                getDirectedComponentBorders(components, insideBorderColor, getColor, n => componentIgnore.has(n))
+            )
+
+            // compute parities
+            let componentParities = new Map<Component, number>()
+            let distances = computeDistances(pointOfChange, components.keys())
+            for (const [node, component] of components) {
+                let parity = (distances.get(node)! + node.data + componentGraph.getHeight(component)) % 2
+                let oldParity = componentParities.get(component)
+                if (oldParity === undefined) {
+                    componentParities.set(component, parity)
+                } else {
+                    assert(oldParity == parity, "component has inconsistent parity")
+                }
+            }
+
+            // find the components where we have to resolve conflicts (in neighborhood and unbordered)
+            // TODO: extendedNeighborhood?
+            let touchingComponents = new Set<Component>()
+            for (let node of getOuterMargin(neighborhood)) {
+                let component = components.get(node)
+                if (component !== undefined) {
+                    let leaf = componentGraph.walkToLeaf(component) // always add the leaf (aka root of the upside down tree)
+                    touchingComponents.add(leaf)
+                }
+            }
+
+            // if in conflict, build borders
+            let parityBins = [new Set<Component>(), new Set<Component>()]
+            let parityHeights = [0, 0]
+            for (let component of touchingComponents) {
+                let parity = componentParities.get(component)!
+                parityBins[parity].add(component)
+                parityHeights[parity] = Math.max(parityHeights[parity], componentGraph.getHeight(component))
+            }
+
+            let parity = parityBins[0].size > parityBins[1].size ? 0 : 1 // continue existing parity
+            if (parityBins[0].size > 0 && parityBins[1].size > 0) {
+                parity = parityHeights[0] < parityHeights[1] ? 0 : 1
+                // TODO: think about this
+                // TODO: the component that has fewest borders should build a new one, according to paper
+                // choose majority parity
+                let minority = 1 - parity
+                for (let component of parityBins[minority]) {
+                    componentGraph.addChild(component, parityBins[parity].values().next().value)
+                }
+            }
 
             // TODO: fix for multiple borders
-            for (let component of wantsBorderOrdered) {
-                let nodes = nodesByComponent.get(component)!
-                let root = nodes[0]
-                let offset = getColor(root) == insideBorderColor ? 0 : 1
-                // build border
-                let borders: Node[] = []
-                bfs(root,
-                    (node, distance) => {
-                        if (!remaining.has(node)) {
-                            if (getColor(node) == borderColor) {
-                                borders.push(node)
-                                return SearchState.Skip
+            let outsideNodes = [...reachable].filter(node => !neighborhood.has(node))
+            let nodesByComponent = getNodesByComponent(components, outsideNodes)
+
+            function extendBorder(innerMut: Set<Node>, from: number, to: number) {
+                for (let node of innerMut) {
+                    let color = getColor(node)
+                    if (color == from) {
+                        for (let neighbor of node.neighbors) {
+                            if (remaining.has(neighbor)) {
+                                innerMut.add(neighbor)
+                                setColor(neighbor, to)
                             }
-                            return SearchState.Continue
-                        }
-                        if ((distance+offset) % 2 == 0) {
-                            setColor(node, insideBorderColor)
-                            return SearchState.Continue
-                        } else {
-                            setColor(node, borderColor)
-                            borders.push(node)
-                            return SearchState.Skip
-                        }
-                    }
-                )
-                // build border padding
-                for (let node of borders) {
-                    for (let neighbor of node.neighbors) {
-                        if (remaining.has(neighbor)) {
-                            setColor(neighbor, outsideBorderColor)
                         }
                     }
                 }
             }
+
+            bfsFold(
+                componentGraph.roots.filter(c => nodesByComponent.has(c)),
+                (c) => nodesByComponent.get(c)!,
+                (c) => componentGraph.adjacency.get(c)!,
+                (component: Component, nodes: Iterable<Node>) => {
+                assertExists(nodes)
+
+                // leaf, no borders
+                if (componentGraph.adjacency.get(component)!.size == 0) {
+                    return [SearchState.Skip, []]
+                }
+                // internal node, build border with 3s
+                console.log("Building border around " + component)
+                let newNodes = new Set([...nodes, ...nodesByComponent.get(component)!])
+                console.log("Before: " + newNodes.size)
+                extendBorder(newNodes, outsideBorderColor, insideBorderColor)
+                console.log("Outside->Inside: " + newNodes.size)
+                extendBorder(newNodes, insideBorderColor, borderColor)
+                console.log("Inside->Border: " + newNodes.size)
+                extendBorder(newNodes, borderColor, outsideBorderColor)
+                console.log("Border->Outside: " + newNodes.size)
+                assertExists(newNodes)
+                return [SearchState.Continue, newNodes]
+            })
+
+            console.log(parityBins.map(s => s.size))
 
             let neighborhoodDistances = computeDistances(pointOfChange, neighborhood)
             for (let node of remaining) {
