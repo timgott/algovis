@@ -8,13 +8,14 @@ let localityInput = document.getElementById("locality") as HTMLInputElement
 let animateAdvCheckbox = document.getElementById("animate_adv") as HTMLInputElement
 let animateStepCheckbox = document.getElementById("animate_step") as HTMLInputElement
 let paritiesCheckbox = document.getElementById("show_parities") as HTMLInputElement
+let borderSidesCheckbox = document.getElementById("show_border_side") as HTMLInputElement
 let radiusCheckbox = document.getElementById("show_radius") as HTMLInputElement
 
 let undoButton = document.getElementById("undo") as HTMLButtonElement
 let buildBoxesButton = document.getElementById("build_boxes") as HTMLButtonElement
 
-let rows = 20
-let columns = 20
+let rows = 25
+let columns = 25
 let svgGrid = new ColoredGridSvg(root, rows, columns, 30)
 
 // locality path around cursor
@@ -27,6 +28,7 @@ radiusCheckbox.addEventListener("input", (ev) => {
 })
 svgGrid.setBallVisible(radiusCheckbox.checked)
 
+let undoHistory: PartialGrid<NodeColor>[] = []
 
 let adversary = randomAdversary
 
@@ -65,6 +67,8 @@ async function dynamicAlgorithmStepAnimated(grid: PartialGrid<NodeColor>, i: num
 }
 
 function step(grid: PartialGrid<NodeColor>, i: number, j: number, delay: number = 0) {
+    undoHistory.push(grid.copy())
+
     let algo
     if (algorithmSelect.value == "greedy") {
         algo = neighborhoodGreedy(localityInput.valueAsNumber)
@@ -98,16 +102,14 @@ function putRectangle(grid: PartialGrid<NodeColor>, i: number, j: number, width:
 }
 
 function render(grid: PartialGrid<NodeColor>) {
-    renderColoredGrid(grid, svgGrid, paritiesCheckbox.checked)
+    renderColoredGrid(grid, svgGrid, paritiesCheckbox.checked, borderSidesCheckbox.checked)
 }
 
 function run() {
     let grid = new PartialGrid<NodeColor>(rows, columns)
-    let undoHistory: PartialGrid<NodeColor>[] = []
     render(grid)
     svgGrid.onClick = (i, j) => {
         if (grid.get(i, j) == null) {
-            undoHistory.push(grid.copy())
             step(grid, i, j, animateStepCheckbox.checked ? 200 : 0)
             render(grid)
         }
@@ -120,6 +122,9 @@ function run() {
         }
     }
     paritiesCheckbox.onchange = () => {
+        render(grid)
+    }
+    borderSidesCheckbox.onchange = () => {
         render(grid)
     }
     buildBoxesButton.onclick = () => {

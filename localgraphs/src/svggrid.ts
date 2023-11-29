@@ -20,7 +20,9 @@ export class ColoredGridSvg {
     onClick?: (i: number, j: number) => any
 
     ballPathParent: SVGGElement
-    ballVisible: boolean
+    ballVisible: boolean = false
+
+    coordinateText: SVGTextElement
 
     // path around all cells within radius on the grid
     _createBallPath(radius: number, cellSize: number): SVGElement {
@@ -59,16 +61,32 @@ export class ColoredGridSvg {
     }
 
     constructor(parent: Element, rows: number, columns: number, cellSize: number) {
+        let width = rows * cellSize
+        let height = columns * cellSize
         let svg = createSvgNode(parent, "svg", {
-            width: rows * cellSize,
-            height: columns * cellSize,
+            width: width,
+            height: height,
         })
         let backGroup = createSvgNode(svg, "g")
         let borderGroup = createSvgNode(svg, "g")
         let cellGroup = createSvgNode(svg, "g")
         let textGroup = createSvgNode(svg, "g")
         this.ballPathParent = createSvgNode(null, "g")
-        this.ballVisible = false
+        let overlayTextGroup = createSvgNode(svg, "g")
+
+        this.coordinateText = createSvgNode(overlayTextGroup, "text", {
+            x: width - 5,
+            y: height - 5,
+            "text-anchor": "end",
+            "font-family": "sans-serif",
+            "font-size": 12,
+            // outline
+            stroke: "white",
+            "stroke-width": 3,
+            "stroke-opacity": 0.8,
+            "paint-order": "stroke",
+        })
+
         this.cellSize = cellSize
         this.cells = createGrid(rows, columns, (i, j) => {
             let x = i * cellSize
@@ -105,7 +123,7 @@ export class ColoredGridSvg {
             rect.addEventListener("mousemove", clickListener)
             rect.addEventListener("mousedown", clickListener)
             rect.addEventListener("mouseenter", (event) => {
-                this.moveBall(i, j)
+                this.hover(i, j)
             })
             let label = createSvgNode(textGroup, "text", {
                 x: x + cellSize / 2,
@@ -131,6 +149,7 @@ export class ColoredGridSvg {
         })
         svg.addEventListener("mouseleave", () => {
             this.ballPathParent.remove()
+            this.coordinateText.textContent = ""
         })
         this.svg = svg
     }
@@ -160,6 +179,11 @@ export class ColoredGridSvg {
         )
     }
 
+    hover(x: number, y: number) {
+        this.coordinateText.textContent = `${x}, ${y}`
+        this.moveBall(x, y)
+    }
+
     moveBall(x: number, y: number) {
         this.ballPathParent.setAttribute("transform", `translate(${x * this.cellSize}, ${y * this.cellSize})`)
     }
@@ -173,7 +197,7 @@ export class ColoredGridSvg {
     }
 }
 
-export function renderColoredGrid(grid: PartialGrid<NodeColor>, svg: ColoredGridSvg, parities: boolean) {
+export function renderColoredGrid(grid: PartialGrid<NodeColor>, svg: ColoredGridSvg, showParities: boolean, showBorderSides: boolean) {
     let colors = [
         "#CDFAD5",
         "#F6FDC3",
@@ -200,11 +224,11 @@ export function renderColoredGrid(grid: PartialGrid<NodeColor>, svg: ColoredGrid
     grid.forEach((i, j, nodeColor) => {
         if (nodeColor !== null) {
             let c = colors[nodeColor] ?? "white"
-            if (parities && (i+j+nodeColor) % 2 == 1) {
+            if (showParities && (i+j+nodeColor) % 2 == 1) {
                 c = alternativeColors[nodeColor] ?? c
             }
             let neighborValues = grid.neighborValues(i, j)
-            if (nodeColor == outsideColor) {
+            if (showBorderSides && nodeColor == outsideColor) {
                 if (neighborValues.includes(wallColor)) {
                     c = wallOutsideColor
                 }

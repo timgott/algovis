@@ -27,7 +27,7 @@ export function isLocalColoring(
     return true
 }
 
-function isLocalColoringAll(nodes: readonly Node[], overrides: Map<Node, NodeColor>) {
+function isLocalColoringAll(nodes: Iterable<Node>, overrides: Map<Node, NodeColor>) {
     for (let node of nodes) {
         if (!isLocalColoring(node, overrides)) {
             return false
@@ -692,6 +692,7 @@ class ComplicatedPartiallyColoredNeighborhood {
     fixAndRemoveNode(node: Node, value: NodeColor) {
         this.coloring.set(node, value)
         this.nodes.delete(node)
+        node.data = value // the finishColoring step does not respect the partial this.coloring
         this.update()
     }
 
@@ -759,7 +760,7 @@ class ComplicatedPartiallyColoredNeighborhood {
         for (const node of border) {
             const color = this.greedyColoring(node, this.borderColor)
             this.fixAndRemoveNode(node, color)
-            console.assert(color == this.borderColor, "broke the coloring by sealing")
+            console.assert(color == this.borderColor, `broke the coloring by sealing at ${node.x}, ${node.y}`)
         }
 
         // expand the component to the border
@@ -830,7 +831,7 @@ export function borderComponentColoring(radius: number): DynamicLocal<NodeColor>
                 coloring.sealUntilNoBorderConflict()
             }
             if (coloring.hasTunnel()) {
-                coloring.sealUntilNoBorderConflict()
+                coloring.sealAllNonTunnelComponents()
             }
 
             // two+ components:
@@ -955,14 +956,15 @@ export function antiCollisionColoring(radius: number): DynamicLocal<NodeColor> {
             return radius
         },
         step(graph, pointOfChange) {
-            // TODO: use memory for wantsBorder instead
+            // TODO: use memory?
             const insideBorderColor = 0
             const outsideBorderColor = 1
             const borderColor = 2
 
+            // need to retry with smaller radiuses because it is possible that borders cannot be built
+            // -> don't think this is guaranteed to solve the issue
             let neighborhood = collectNeighborhood(pointOfChange, radius)
-            let borderableNeighborhood = collectNeighborhood(pointOfChange, radius - 1) // only in this space can we reliably build borders because of alternating parity
-            let componentIgnore = new Set([pointOfChange])
+            let componentIgnore = neighborhood
 
             let coloring = new Map<Node, NodeColor>()
             let remaining = new Set<Node>(neighborhood)
@@ -975,8 +977,12 @@ export function antiCollisionColoring(radius: number): DynamicLocal<NodeColor> {
                 console.assert(remaining.has(node), `tried to color node twice, was ${coloring.get(node)}, now ${color}`)
                 coloring.set(node, color)
                 remaining.delete(node)
+                checkLocalColoring(node)
             }
 
+            function checkLocalColoring(node: Node) {
+                console.assert(isLocalColoring(node, coloring, remaining), `broke coloring at ${node.x},${node.y}`)
+            }
 
             let reachable = collectNeighborhood(pointOfChange, Infinity)
             let [componentCount, components] = findConnectedComponents(
@@ -1035,9 +1041,8 @@ export function antiCollisionColoring(radius: number): DynamicLocal<NodeColor> {
                 }
             }
 
-            // TODO: fix for multiple borders
             let outsideNodes = [...reachable].filter(node => !neighborhood.has(node))
-            let nodesByComponent = getNodesByComponent(components, outsideNodes)
+            let outsideNodesByComponent = getNodesByComponent(components, outsideNodes)
 
             function extendBorder(innerMut: Set<Node>, from: number, to: number) {
                 for (let node of innerMut) {
@@ -1046,16 +1051,21 @@ export function antiCollisionColoring(radius: number): DynamicLocal<NodeColor> {
                         for (let neighbor of node.neighbors) {
                             if (remaining.has(neighbor)) {
                                 innerMut.add(neighbor)
+                                console.log("Replacing " + from + "->" + to + " at " + neighbor.x + ", " + neighbor.y)
                                 setColor(neighbor, to)
+                            } else if (getColor(neighbor) == to) {
+                                innerMut.add(neighbor)
                             }
                         }
                     }
                 }
             }
 
+            // walk through all components in the bordering components tree,
+            // from inside to outside
             bfsFold(
-                componentGraph.roots.filter(c => nodesByComponent.has(c)),
-                (c) => nodesByComponent.get(c)!,
+                componentGraph.roots.filter(c => outsideNodesByComponent.has(c)),
+                (c) => outsideNodesByComponent.get(c)!,
                 (c) => componentGraph.adjacency.get(c)!,
                 (component: Component, nodes: Iterable<Node>) => {
                 assertExists(nodes)
@@ -1064,16 +1074,18 @@ export function antiCollisionColoring(radius: number): DynamicLocal<NodeColor> {
                 if (componentGraph.adjacency.get(component)!.size == 0) {
                     return [SearchState.Skip, []]
                 }
+
                 // internal node, build border with 3s
                 console.log("Building border around " + component)
-                let newNodes = new Set([...nodes, ...nodesByComponent.get(component)!])
-                console.log("Before: " + newNodes.size)
+                let componentNodes = outsideNodesByComponent.get(component)!
+                if (componentNodes === undefined) {
+                    console.log("Inside component, ignore")
+                    return [SearchState.Skip, []]
+                }
+                let newNodes = new Set([...nodes, ...componentNodes])
                 extendBorder(newNodes, outsideBorderColor, insideBorderColor)
-                console.log("Outside->Inside: " + newNodes.size)
                 extendBorder(newNodes, insideBorderColor, borderColor)
-                console.log("Inside->Border: " + newNodes.size)
                 extendBorder(newNodes, borderColor, outsideBorderColor)
-                console.log("Border->Outside: " + newNodes.size)
                 assertExists(newNodes)
                 return [SearchState.Continue, newNodes]
             })
@@ -1086,6 +1098,9 @@ export function antiCollisionColoring(radius: number): DynamicLocal<NodeColor> {
                 setColor(node, (distance + parity) % 2)
             }
 
+            if (!isLocalColoringAll(neighborhood, coloring)) {
+                console.error("Coloring incorrect")
+            }
             return coloring
         },
     }
