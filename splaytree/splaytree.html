@@ -9,17 +9,40 @@
             margin: 0;
             padding: 0;
             overflow: hidden;
+            font-family: sans-serif;
+            padding: 8px 16px;
         }
         canvas {
-            display: block;
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            z-index: -1;
             background-color: #f0f0f0;
+        }
+        #description {
+            font-style: italic;
+        }
+        #christmas_controls {
+            display: none;
         }
     </style>
 </head>
 <body>
     <canvas id="splay_canvas"></canvas>
-
+    <button id="btn_options_toggle">Hide</button>
+    <span id="control_bar" class="control_bar">
+        <button id="btn_spines">Spines</button>
+        <button id="btn_strings">Strings</button>
+        <button id="btn_heap">Heap</button>
+        <div id="christmas_controls">
+            <input type="checkbox" id="check_christmasmode"/><label for="check_christmasmode">🎄</label>
+        </div>
+        <p id="description">
+            Tap to splay 
+        </p>
+    </span>
+    
     <!-- Include the compiled JavaScript file -->
-    <script type="module" src="src/splayvis.ts"></script>
+    <script type="module" src="src/splayvis.ts" class="mini_button"></script>
 </body>
 </html>

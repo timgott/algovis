@@ -25,6 +25,9 @@ const boundaryWidth = radius * 4
 const mainCommandDelay = 100
 const subCommandDelay = 50
 
+let christmasColors = false
+let splayedNode: PhysicsNode | undefined = undefined
+
 class PhysicsNode {
   x: number
   y: number
@@ -51,8 +54,34 @@ class PhysicsNode {
   }
 
   draw(ctx: CanvasRenderingContext2D) {
+    let radius = this.radius
+    let stroke = false
+    if (christmasColors) {
+      ctx.fillStyle = "black"
+      ctx.fillStyle = "green"
+      //ctx.strokeStyle = "green"
+      if (Object.keys(this.node.children).length == 2) {
+        ctx.fillStyle = "red"
+      }
+      if (this == splayedNode) {
+        ctx.fillStyle = "gold"
+      }
+      stroke=true
+      ctx.lineWidth = this.radius / 3
+    } else {
+      ctx.fillStyle = "black"
+    }
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    if (stroke) ctx.stroke();
+    ctx.closePath();
+  }
+
+  drawEdge(ctx: CanvasRenderingContext2D) {
     let parent = this.node.parent?.data;
     if (parent) {
+      ctx.strokeStyle = "black"
       ctx.beginPath();
       ctx.lineWidth = this.radius / 3
       ctx.moveTo(this.x, this.y)
@@ -60,11 +89,6 @@ class PhysicsNode {
       ctx.stroke()
       ctx.closePath()
     }
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-    //ctx.fillStyle = 'blue';
-    ctx.fill();
-    ctx.closePath();
   }
 }
 
@@ -154,10 +178,10 @@ function findClosestNode(x: number, y: number, nodes: PhysicsNode[]) {
   return result
 }
 
-let nodes: PhysicsNode[] = []
+let nodes: PhysicsNode[]
 function createRoot() {
   let root = new PhysicsNode(rootX, rootY, radius * (0.2 * Math.random() + 0.9))
-  nodes.push(root)
+  nodes = [root]
   return root
 }
 
@@ -226,12 +250,21 @@ function animate(timeStamp: number) {
   }
   let dt = Math.min(timeStamp - previousTimeStamp, 1./30.)
   ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+  if (christmasColors) {
+    ctx.fillStyle = "white"
+    ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight)
+  }
   
   let root = findRoot(nodes)
   applyLayoutForces(root, dt)
   
   for (let node of nodes) {
     node.update(dt);
+  }
+  for (let node of nodes) {
+    node.drawEdge(ctx);
+  }
+  for (let node of nodes) {
     node.draw(ctx);
   }
 
@@ -256,6 +289,7 @@ function clicked(x: number, y: number) {
   for (let [cmd, cmdtype] of commands) {
     cmd()
   }
+  splayedNode = node
   commands = splaySteps(node.node)
 }
 
@@ -264,7 +298,44 @@ canvas.addEventListener("click", (ev) => {
   clicked(x, y)
 })
 
-//createTwoSpines(100)
+function setupControls() {
+  const controlBarContainer = document.getElementById("control_bar")!
+  const controls = {
+    "btn_spines": () => createTwoSpines(100),
+    "btn_strings": () => createTwoStrings(150),
+    "btn_heap": () => createUniformsHeap(200),
+  }
+  for (let [name, cmd] of Object.entries(controls)) {
+    let button = document.getElementById(name)!
+    button.addEventListener("click", cmd)
+  }
+  let optionButton = document.getElementById("btn_options_toggle")!
+  function toggleOptionBar() {
+    if (controlBarContainer.style.display == "none") {
+      controlBarContainer.style.display = "inline"
+      optionButton.innerText = "Hide"
+    } else {
+      controlBarContainer.style.display = "none"
+      optionButton.innerText = "Show"
+    }
+  }
+  optionButton.addEventListener("click", toggleOptionBar)
+  let now = new Date()
+  if (now.getMonth() == 11) {
+    let christmasControls = document.getElementById("christmas_controls")!
+    christmasControls.style.display = "inline"
+    let christmasCheckbox = document.getElementById("check_christmasmode") as HTMLInputElement
+    christmasCheckbox.addEventListener("change", (ev) => {
+      christmasColors = christmasCheckbox.checked
+    })
+    christmasColors = christmasCheckbox.checked
+  }
+}
+
+
+setupControls()
+
+createTwoSpines(200)
 //createTwoStrings(200)
-createUniformsHeap(200)
+//createUniformsHeap(200)
 animate(performance.now());
