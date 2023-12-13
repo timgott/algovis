@@ -13,22 +13,22 @@ const elbow_ratio = 2/5;
 let globalStickman
 let globalLastDeltaTime = Infinity
 
-const GRAVITY = 0.001;
+const GRAVITY = 0.0002;
 const MOTOR_FORCE = 0.001;
-const LIMB_DAMPENING = 0.004;
+const LIMB_DAMPENING = 0.0001;
 
 const PHYSICS_STEP = 5
-const PLAN_EVERY = 1
-const PLAN_STEP = 5
+const PLAN_EVERY = 2
+const PLAN_STEP = 20
 const PLAN_ITERATIONS = 1 // how often to iterate over all limbs
-const TWO_STEP_PLANNING = false // consider second step in planning
-const PREFER_RELAXING = true // relax all limbs before planning
+const TWO_STEP_PLANNING = true // consider second step in planning
+const PREFER_RELAXING = false // relax all limbs before planning
 const PROPAGATE_GROUND_CONSTRAINTS = true // more realistic energy transfer? better jumping?
 const LOOKAHEAD_EVALUATION = false // don't enable
-const GRIP_SURFACE_HEIGHT = -0.04 // surface friction, can be negative
+const GRIP_SURFACE_HEIGHT = 0.08 // surface friction, can be negative
 const RANDOM_SAMPLED_PREPLANNING = false
 const RANDOM_SAMPLES = 200
-const RANDOM_SAMPLING_STEPS = 1
+const RANDOM_SAMPLING_STEPS = 5
 
 
 function createStickman(x, y) {
@@ -102,6 +102,9 @@ let globalTimeRemainder = PHYSICS_STEP
 let globalPlanningCounter = 0
 
 function draw() {
+  if (keyIsPressed) {
+    deltaTime = deltaTime * 0.1
+  }
   globalTimeRemainder += deltaTime
   globalTimeRemainder = min(globalTimeRemainder, PHYSICS_STEP * 10)
 
