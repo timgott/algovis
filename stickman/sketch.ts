@@ -1,5 +1,4 @@
 import * as p5 from 'p5';
-import { sq, dist, min, max } from 'p5'
 
 let t = 0
 
@@ -463,10 +462,6 @@ function propagateOffset(stickman, node, dirX, dirY, offset, sourceLimb: Limb | 
   }
 }
 
-function clamp(value, lower, upper) {
-  return min(max(lower, value), upper)
-}
-
 function resetForces(stickman) {
   for (const node of stickman.nodes) {
     node.forceX = 0
@@ -553,8 +548,11 @@ function initSketch(sketch) {
   let globalStickman
 
   sketch.setup = function setup() {
-    sketch.createCanvas(1000, 400);
+    sketch.createCanvas(sketch.min(sketch.windowWidth, 1000), sketch.min(sketch.windowHeight, 400));
     globalStickman = createStickman(100, 200)
+  }
+  sketch.windowResized = function windowResized() {
+    sketch.resizeCanvas(sketch.min(sketch.windowWidth, 1000), sketch.min(sketch.windowHeight, 400));
   }
 
   let globalTimeRemainder = PHYSICS_STEP
