@@ -1,3 +1,6 @@
+import * as p5 from 'p5';
+import { sq, dist, min, max } from 'p5'
+
 let t = 0
 
 const head_radius = 30;
@@ -9,9 +12,6 @@ const arm_length = 100;
 const arm_spread = 10;
 const elbow_ratio = 2/5;
 
-
-let globalStickman
-let globalLastDeltaTime = Infinity
 
 const GRAVITY = 0.0002;
 const MOTOR_FORCE = 0.001;
@@ -30,8 +30,34 @@ const RANDOM_SAMPLED_PREPLANNING = false
 const RANDOM_SAMPLES = 200
 const RANDOM_SAMPLING_STEPS = 5
 
+type Node = {
+  x: number,
+  y: number,
+  lastX?: number,
+  lastY?: number,
+  forceX?: number,
+  forceY?: number,
+  velX?: number,
+  velY?: number,
+  grip?: boolean,
+  nodeType?: string
+}
 
-function createStickman(x, y) {
+type Limb = {
+  start: Node,
+  end: Node,
+  name?: string,
+  power: number,
+  length: number,
+  motor?: number
+}
+
+type Stickman = {
+  nodes: Node[],
+  limbs: Limb[],
+}
+
+function createStickman(x, y): Stickman {
   const head = headNode(0, -body_height - head_radius)
   const shoulders = limbNode(0, -body_height)
   const hips = limbNode(0, 0)
@@ -58,7 +84,7 @@ function createStickman(x, y) {
     rightHand
   ]
 
-  for (node of nodes) {
+  for (const node of nodes) {
     node.x += x
     node.y += y
   }
@@ -78,11 +104,11 @@ function createStickman(x, y) {
 
   return {
     nodes: nodes,
-    limbs: limbs
+    limbs: limbs,
   }
 }
 
-function copyStickman(stickman) {
+function copyStickman(stickman: Stickman): Stickman {
   const newNodes = stickman.nodes.map(node => ({ copy: true, ...node }))
   function mapNode(oldNode) {
     return newNodes[stickman.nodes.indexOf(oldNode)]
@@ -93,42 +119,7 @@ function copyStickman(stickman) {
   }
 }
 
-function setup() {
-  createCanvas(1000, 400);
-  globalStickman = createStickman(100, 200)
-}
-
-let globalTimeRemainder = PHYSICS_STEP
-let globalPlanningCounter = 0
-
-function draw() {
-  if (keyIsPressed) {
-    deltaTime = deltaTime * 0.1
-  }
-  globalTimeRemainder += deltaTime
-  globalTimeRemainder = min(globalTimeRemainder, PHYSICS_STEP * 10)
-
-  background(220);
-  drawStickman(0, 0, globalStickman)
-
-  let scoreToBeat = -Infinity
-  while (globalTimeRemainder >= PHYSICS_STEP) {
-    globalPlanningCounter = (globalPlanningCounter + 1) % PLAN_EVERY
-    if (globalPlanningCounter == 0) {
-      const evaluationFunction = LOOKAHEAD_EVALUATION ? evaluateLookahead : evaluate
-      if (RANDOM_SAMPLED_PREPLANNING)
-        planMotorsSampling(globalStickman, PLAN_STEP, PHYSICS_STEP, evaluationFunction, scoreToBeat)
-      scoreToBeat = planMotorsIndividual(globalStickman, PLAN_STEP, PHYSICS_STEP, evaluationFunction)
-    }
-    let dt = PHYSICS_STEP
-    reorderLimbsRandomly(globalStickman)
-    simulateStep(globalStickman, dt, dt)
-    globalTimeRemainder -= dt
-  }
-
-}
-
-function simulateStep(stickman, dt, lastDt) {
+function simulateStep(sketch: p5, stickman: Stickman, dt, lastDt) {
   resetForces(stickman)
   applyJointForces(stickman)
   applyPhysics(stickman, dt, lastDt)
@@ -136,22 +127,22 @@ function simulateStep(stickman, dt, lastDt) {
 
   for (let index = 0; index < 5; index++) {
     satisfyConstraints(stickman)
-    groundConstraints(stickman)
+    groundConstraints(stickman, sketch.width, sketch.height)
   }
 
 }
 
-function evaluate(stickman) {
-  let headMouseDistSqr = sq(mouseX - stickman.nodes[0].x) + sq(mouseY - stickman.nodes[0].y)
-  let handMouseDistSqr = sq(mouseX - stickman.nodes[8].x) + sq(mouseY - stickman.nodes[8].y)
-  let hipsMouseDistSqr = sq(mouseX - stickman.nodes[2].x) + sq(mouseY - stickman.nodes[2].y)
-  let shouldersMouseDistSqr = sq(mouseX - stickman.nodes[1].x) + sq(mouseY - stickman.nodes[1].y)
+function evaluate(sketch, stickman) {
+  let headMouseDistSqr = sq(sketch.mouseX - stickman.nodes[0].x) + sq(sketch.mouseY - stickman.nodes[0].y)
+  let handMouseDistSqr = sq(sketch.mouseX - stickman.nodes[8].x) + sq(sketch.mouseY - stickman.nodes[8].y)
+  let hipsMouseDistSqr = sq(sketch.mouseX - stickman.nodes[2].x) + sq(sketch.mouseY - stickman.nodes[2].y)
+  let shouldersMouseDistSqr = sq(sketch.mouseX - stickman.nodes[1].x) + sq(sketch.mouseY - stickman.nodes[1].y)
   let headUp = -sq(stickman.nodes[0].y)
   let feetUp = -sq(stickman.nodes[4].y) - sq(stickman.nodes[6].y)
   let handsUp = -sq(stickman.nodes[8].y) - sq(stickman.nodes[10].y)
   let bodyUp = -sq(stickman.nodes[0].y)-sq(stickman.nodes[1].y)
   let headRight = sq(stickman.nodes[0].x)
-  let headCenter = -sq(width / 2 - stickman.nodes[0].x)
+  let headCenter = -sq(sketch.width / 2 - stickman.nodes[0].x)
   let spreadArms = sq(stickman.nodes[10].x - stickman.nodes[8].x)
   let spreadLegs = sq(stickman.nodes[4].x - stickman.nodes[6].x)
   let movement = stickman.nodes.reduce((sum, node) => sum + sq(node.velX) + sq(node.velY), 0)
@@ -161,30 +152,30 @@ function evaluate(stickman) {
   )
 }
 
-function evaluateLookahead(stickman) {
+function evaluateLookahead(sketch, stickman) {
   const copiedStickman = stickman;
-  planMotorsSampling(copiedStickman, PLAN_STEP, PLAN_STEP, evaluate)
-  simulateStep(stickman, PLAN_STEP, PLAN_STEP)
+  planMotorsSampling(sketch, copiedStickman, PLAN_STEP, PLAN_STEP, evaluate, undefined)
+  simulateStep(sketch, stickman, PLAN_STEP, PLAN_STEP)
   //diffStickman(stickman, copiedStickman)
-  let score = evaluate(copiedStickman)
-  //print(score)
+  let score = evaluate(sketch, copiedStickman)
+  //console.log(score)
   return score
 }
 
 function diffObject(a, b, name) {
   if (typeof a == "object") {
     if (a === b) {
-      print("Identical references found at")
+      console.error("Identical references found at")
       return
     }
 
-    for (key in a) {
+    for (const key in a) {
       diffObject(a[key], b[key], name + "/" + key)
     }
   }
   else {
     if (a !== b) {
-      print("Difference at " + name + ": " + a + " vs " + b)
+      console.log("Difference at " + name + ": " + a + " vs " + b)
     }
   }
 
@@ -195,39 +186,39 @@ function diffStickman(a, b) {
   diffObject(a.limbs, b.limbs, "")
 }
 
-function evaluateAfterSteps(stickman, evaluationFunction, deltaTime, lastDeltaTime, steps) {
+function evaluateAfterSteps(sketch: p5, stickman: Stickman, evaluationFunction, deltaTime: number, lastDeltaTime: number, steps) {
   for (let i = 0; i < steps; i++) {
-    simulateStep(stickman, deltaTime, lastDeltaTime)
+    simulateStep(sketch, stickman, deltaTime, lastDeltaTime)
   }
-  return evaluationFunction(stickman)
+  return evaluationFunction(sketch, stickman)
 }
 
-function simulateWithMotor(stickman, limbIndex, control, dt, lastDt) {
+function simulateWithMotor(sketch: p5, stickman: Stickman, limbIndex, control, dt, lastDt) {
   stickman.limbs[limbIndex].motor = control
-  simulateStep(stickman, dt, lastDt)
+  simulateStep(sketch, stickman, dt, lastDt)
 }
 
-function evaluateControlSequence(stickman, evaluationFunction, limbIndex, controlSequence, dt, lastDt) {
+function evaluateControlSequence(sketch: p5, stickman: Stickman, evaluationFunction, limbIndex: number, controlSequence, dt, lastDt) {
   const copiedStickman = copyStickman(stickman);
 
   for (let index = 0; index < controlSequence.length; index++) {
     const control = controlSequence[index];
-    simulateWithMotor(copiedStickman, limbIndex, control, dt, lastDt)
+    simulateWithMotor(sketch, copiedStickman, limbIndex, control, dt, lastDt)
     lastDt = dt
   }
 
-  return evaluationFunction(copiedStickman)
+  return evaluationFunction(sketch, copiedStickman)
 }
 
-function evaluateControlWithContinuation(copiedStickman, evaluationFunction, limbIndex, firstControl, continuations, dt, lastDt) {
-  simulateWithMotor(copiedStickman, limbIndex, firstControl, dt, lastDt)
+function evaluateControlWithContinuation(sketch, copiedStickman, evaluationFunction, limbIndex, firstControl, continuations, dt, lastDt) {
+  simulateWithMotor(sketch, copiedStickman, limbIndex, firstControl, dt, lastDt)
   if (continuations) {
     let bestScore = -Infinity
 
     for (let continuationIndex = 0; continuationIndex < continuations.length; continuationIndex++) {
       const continuedStickman = copyStickman(copiedStickman)
       const nextSequence = continuations[continuationIndex]
-      const score = evaluateControlWithContinuation(continuedStickman, evaluationFunction, limbIndex, nextSequence[0], nextSequence[1], dt, dt)
+      const score = evaluateControlWithContinuation(sketch, continuedStickman, evaluationFunction, limbIndex, nextSequence[0], nextSequence[1], dt, dt)
 
       if (score > bestScore) {
         bestScore = score
@@ -237,12 +228,13 @@ function evaluateControlWithContinuation(copiedStickman, evaluationFunction, lim
     return bestScore
   }
   else {
-    return evaluationFunction(copiedStickman)
+    return evaluationFunction(sketch, copiedStickman)
   }
 }
 
-function planMotorsIndividual(stickman, dt, lastDt, evaluationFunction) {
-  const controlTypes = TWO_STEP_PLANNING ? [
+function planMotorsIndividual(sketch: p5, stickman: Stickman, dt, lastDt, evaluationFunction) {
+  type ControlContinuation = [number, number[]?]
+  const controlTypes: ControlContinuation[] = TWO_STEP_PLANNING ? [
     [0, [0]],
     [1, [1, 0, -1]],
     [-1, [-1, 0, 1]]
@@ -252,21 +244,18 @@ function planMotorsIndividual(stickman, dt, lastDt, evaluationFunction) {
     stickman.limbs.forEach(limb => limb.motor = 0)
   }
 
-  const bestMotorAssignment = []
+  const bestMotorAssignment: number[] = []
   let bestScore = -Infinity
 
   for (let i = 0; i < PLAN_ITERATIONS; i++) {
     for (let index = 0; index < stickman.limbs.length; index++) {
       const limb = stickman.limbs[index];
 
-      for (let controlIndex = 0; controlIndex < controlTypes.length; controlIndex++) {
-        const controlSequence = controlTypes[controlIndex]
-        const nextSequence = controlSequence[controlIndex + 1]
-
+      for (const controlSequence of controlTypes) {
         const firstControl = controlSequence[0]
         const continuations = controlSequence[1]
         if (continuations || firstControl != bestMotorAssignment[index]) {
-          let score = evaluateControlWithContinuation(copyStickman(stickman), evaluationFunction, index, firstControl, continuations, dt, lastDt)
+          let score = evaluateControlWithContinuation(sketch, copyStickman(stickman), evaluationFunction, index, firstControl, continuations, dt, lastDt)
           if (score > bestScore) {
             bestScore = score
             bestMotorAssignment[index] = firstControl
@@ -283,17 +272,17 @@ function planMotorsIndividual(stickman, dt, lastDt, evaluationFunction) {
   return bestScore
 }
 
-function planMotorsSampling(stickman, dt, lastDt, evaluationFunction, scoreToBeat) {
+function planMotorsSampling(sketch: p5, stickman: Stickman, dt: number, lastDt: number, evaluationFunction, scoreToBeat: number | undefined): void {
   const bestMotorAssignment = stickman.limbs.map(limb => limb.motor)
-  let bestScore = scoreToBeat || evaluateAfterSteps(copyStickman(stickman), evaluationFunction, dt, lastDt, RANDOM_SAMPLING_STEPS)
+  let bestScore = scoreToBeat || evaluateAfterSteps(sketch, copyStickman(stickman), evaluationFunction, dt, lastDt, RANDOM_SAMPLING_STEPS)
 
   for (let i = 0; i < RANDOM_SAMPLES; i++) {
     const copiedStickman = copyStickman(stickman)
     for (let index = 0; index < stickman.limbs.length; index++) {
-      copiedStickman.limbs[index].motor = random([0, -1, 1])
+      copiedStickman.limbs[index].motor = sketch.random([0, -1, 1])
     }
 
-    const score = evaluateAfterSteps(copiedStickman, evaluationFunction, dt, lastDt, RANDOM_SAMPLING_STEPS)
+    const score = evaluateAfterSteps(sketch, copiedStickman, evaluationFunction, dt, lastDt, RANDOM_SAMPLING_STEPS)
     if (score > bestScore) {
       bestScore = score
       for (let index = 0; index < stickman.limbs.length; index++) {
@@ -306,23 +295,31 @@ function planMotorsSampling(stickman, dt, lastDt, evaluationFunction, scoreToBea
   }
 }
 
-function limbNode(x, y) {
+function limbNode(x: number, y: number): Node {
   return { x: x, y: y }
 }
 
-function headNode(x, y) {
+function headNode(x: number, y: number): Node {
   return { x: x, y: y, nodeType: "head" }
 }
 
-function gripNode(x, y) {
+function gripNode(x: number, y: number): Node {
   return { x: x, y: y, grip: true }
 }
 
-function mirrorNode(node) {
+function mirrorNode(node: Node): Node {
   return { ...node, x: -node.x }
 }
 
-function limb(start, end, power, name) {
+function sq(x: number): number {
+  return x * x
+}
+
+function dist(x1: number, y1: number, x2: number, y2: number) {
+  return Math.hypot(x1 - x2, y1 - y2)
+}
+
+function limb(start: Node, end: Node, power: number, name: string | undefined = undefined): Limb {
   return {
     start: start,
     end: end,
@@ -334,7 +331,7 @@ function limb(start, end, power, name) {
 
 function reorderLimbsRandomly(stickman) {
   shuffle(stickman.limbs)
-  //for (limb of stickman.limbs) {
+  //for (const limb of stickman.limbs) {
   //  if (random() > 0.5) {
   //    flipLimb(limb)
   //  }
@@ -361,8 +358,8 @@ function reorderLimbsFromRoot(stickman) {
   let roots = new Set([stickman.nodes[7], stickman.nodes[5]])
   let remainingLimbs = new Set([...stickman.limbs])
   while (remainingLimbs.size > 0) {
-    print(remainingLimbs)
-    for (limb of remainingLimbs) {
+    console.log(remainingLimbs)
+    for (const limb of remainingLimbs) {
       if (roots.has(limb.start)) {
         remainingLimbs.delete(limb)
         roots.add(limb.end)
@@ -376,16 +373,16 @@ function reorderLimbsFromRoot(stickman) {
 }
 
 function applyPhysics(stickman, dt, lastDt) {
-  for (node of stickman.nodes) {
-    x = node.x
-    y = node.y
-    lastX = node.lastX || x
-    lastY = node.lastY || y
+  for (const node of stickman.nodes) {
+    const x = node.x
+    const y = node.y
+    const lastX = node.lastX || x
+    const lastY = node.lastY || y
     node.lastX = x
     node.lastY = y
 
-    forceX = node.forceX || 0
-    forceY = node.forceY || 0
+    const forceX = node.forceX || 0
+    const forceY = node.forceY || 0
 
     let velX = (x - lastX) / lastDt
     let velY = (y - lastY) / lastDt
@@ -408,43 +405,43 @@ function applyPhysics(stickman, dt, lastDt) {
   }
 }
 
-function groundConstraints(stickman) {
-  for (node of stickman.nodes) {
+function groundConstraints(stickman, width, height) {
+  for (const node of stickman.nodes) {
     if (node.y >= height - GRIP_SURFACE_HEIGHT && node.grip) {
       node.x = node.lastX
     }
     if (node.y > height) {
-      offset = node.y - height
+      const offset = node.y - height
       propagateOffset(stickman, node, 0, -1, offset)
     }
     if (node.y < 0) {
       if (node.grip)
         node.x = node.lastX
-      offset = -node.y
+      const offset = -node.y
       propagateOffset(stickman, node, 0, 1, offset)
     }
     if (node.x > width) {
       if (node.grip)
         node.y = node.lastY
-      offset = node.x - width
+      const offset = node.x - width
       propagateOffset(stickman, node, -1, 0, offset)
     }
     if (node.x < 0) {
       if (node.grip)
         node.y = node.lastY
-      offset = -node.x
+      const offset = -node.x
       propagateOffset(stickman, node, 1, 0, offset)
     }
   }
 }
 
-function propagateOffset(stickman, node, dirX, dirY, offset, sourceLimb) {
+function propagateOffset(stickman, node, dirX, dirY, offset, sourceLimb: Limb | undefined = undefined) {
   node.x += dirX * offset
   node.y += dirY * offset
 
   //circle(node.x, node.y, offset)
   if (PROPAGATE_GROUND_CONSTRAINTS) {
-    for (limb of stickman.limbs) {
+    for (const limb of stickman.limbs) {
       if (limb != sourceLimb) {
         let nextNode
         if (limb.start == node) {
@@ -471,14 +468,14 @@ function clamp(value, lower, upper) {
 }
 
 function resetForces(stickman) {
-  for (node of stickman.nodes) {
+  for (const node of stickman.nodes) {
     node.forceX = 0
     node.forceY = 0
   }
 }
 
 function applyJointForces(stickman) {
-  for (limb of stickman.limbs) {
+  for (const limb of stickman.limbs) {
     const start = limb.start
     const end = limb.end
     const length = dist(start.x, start.y, end.x, end.y)
@@ -502,7 +499,7 @@ function applyJointForces(stickman) {
 }
 
 function satisfyConstraints(stickman) {
-  for (limb of stickman.limbs) {
+  for (const limb of stickman.limbs) {
     const start = limb.start
     const end = limb.end
     const currentLength = dist(start.x, start.y, end.x, end.y)
@@ -521,7 +518,7 @@ function satisfyConstraints(stickman) {
 }
 
 function forceConstraints(stickman) {
-  for (limb of stickman.limbs) {
+  for (const limb of stickman.limbs) {
     const start = limb.start
     const end = limb.end
     const currentLength = dist(start.x, start.y, end.x, end.y)
@@ -538,17 +535,58 @@ function forceConstraints(stickman) {
   }
 }
 
-function drawStickman(x, y, stickman) {
-
-  for (limb of stickman.limbs) {
-    line(limb.start.x + x, limb.start.y + y, limb.end.x + x, limb.end.y + y)
+function drawStickman(sketch, x, y, stickman) {
+  for (const limb of stickman.limbs) {
+    sketch.line(limb.start.x + x, limb.start.y + y, limb.end.x + x, limb.end.y + y)
   }
-  for (node of stickman.nodes) {
-    stroke(255, 100, 0, 100)
+  for (const node of stickman.nodes) {
+    sketch.stroke(255, 100, 0, 100)
     //line(node.x, node.y, node.x + node.forceX * 10000, node.y + node.forceY * 10000)
-    stroke("black")
+    sketch.stroke("black")
     if (node.nodeType == "head") {
-      circle(node.x + x, node.y + y, head_radius * 2)
+      sketch.circle(node.x + x, node.y + y, head_radius * 2)
     }
   }
 }
+
+function initSketch(sketch) {
+  let globalStickman
+
+  sketch.setup = function setup() {
+    sketch.createCanvas(1000, 400);
+    globalStickman = createStickman(100, 200)
+  }
+
+  let globalTimeRemainder = PHYSICS_STEP
+  let globalPlanningCounter = 0
+
+  function draw() {
+    if (sketch.keyIsPressed || sketch.mouseIsPressed) {
+      sketch.deltaTime = sketch.deltaTime * 0.1
+    }
+    globalTimeRemainder += sketch.deltaTime
+    globalTimeRemainder = sketch.min(globalTimeRemainder, PHYSICS_STEP * 10)
+
+    sketch.background(220);
+    drawStickman(sketch, 0, 0, globalStickman)
+
+    let scoreToBeat = -Infinity
+    while (globalTimeRemainder >= PHYSICS_STEP) {
+      globalPlanningCounter = (globalPlanningCounter + 1) % PLAN_EVERY
+      if (globalPlanningCounter == 0) {
+        const evaluationFunction = LOOKAHEAD_EVALUATION ? evaluateLookahead : evaluate
+        if (RANDOM_SAMPLED_PREPLANNING)
+          planMotorsSampling(sketch, globalStickman, PLAN_STEP, PHYSICS_STEP, evaluationFunction, scoreToBeat)
+        scoreToBeat = planMotorsIndividual(sketch, globalStickman, PLAN_STEP, PHYSICS_STEP, evaluationFunction)
+      }
+      let dt = PHYSICS_STEP
+      reorderLimbsRandomly(globalStickman)
+      simulateStep(sketch, globalStickman, dt, dt)
+      globalTimeRemainder -= dt
+    }
+  }
+
+  sketch.draw = draw
+}
+
+new p5(initSketch)

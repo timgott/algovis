@@ -3,5 +3,8 @@
     "parcel": "^2.10.2",
     "typescript": "^5.2.2"
   },
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "p5": "^1.9.0"
+  }
 }
