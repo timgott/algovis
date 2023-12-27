@@ -6,5 +6,9 @@
   "type": "module",
   "dependencies": {
     "p5": "^1.9.0"
+  },
+  "scripts": {
+      "build": "parcel build index.html",
+      "serve": "parcel serve index.html"
   }
 }
