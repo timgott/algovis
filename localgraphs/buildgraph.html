@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unrooted Tree</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        canvas {
+            position: absolute;
+            z-index: -1;
+            background-color: #f0f0f0;
+        }
+        .control_bar {
+            padding: 8px;
+        }
+        .control_bar button {
+            margin: 0 4px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="graph_canvas"></canvas>
+    <div id="control_bar" class="control_bar">
+        <select id="select_algorithm">
+            <option value="minimal">Minimal change</option>
+            <option value="greedy">Greedy</option>
+            <option value="random">Random</option>
+            <option value="parityaware">Parity aware</option>
+            <option value="tunneling">Tunneling</option>
+            <option value="walls">Walls</option>
+        </select>
+        <label for="locality">Locality</label>
+        <input type="number" id="locality" min="0" max="10" value="0"/>
+
+        <button id="tool_build">Build</button>
+        <button id="tool_move">Move</button>
+        <button id="reset">Reset</button>
+        <button id="undo">Undo</button>
+    </div>
+    
+
+    <script type="module" src="src/buildgraphmain.ts"></script>
+</body>
+</html>

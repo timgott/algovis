@@ -1,5 +1,5 @@
 import { createEmptyGrid } from "../../shared/utils.js";
-import { Graph, GraphNode, createEdge, createEmptyGraph, createNode } from "./graphlayout.js";
+import { Graph, GraphNode, createEdge, createEmptyGraph, createNode } from "./graph.js";
 
 export type OnlineAlgorithm<T> = (graph: Graph<T>, pointOfChange: GraphNode<T>) => T
 export type GridAdversary<T> = (grid: PartialGrid<T>) => [number, number]
@@ -8,6 +8,7 @@ export type DynamicLocal<T> = {
     step: (graph: Graph<T>, pointOfChange: GraphNode<T>) => Map<GraphNode<T>, T>,
 }
 
+// partially colored grid
 export class PartialGrid<T> {
     cells: (T | null)[][];
     rows: number;
