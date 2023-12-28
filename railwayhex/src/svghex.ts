@@ -6,7 +6,8 @@ import { HexCoordinate, HexGrid } from "./hexgrid.js"
 export class HexGridSvg {
     cellPadding: number = 0
     svg: SVGSVGElement // including overlay
-    mapGroup: SVGSVGElement
+    hexGroup: SVGGElement
+    markerGroup: SVGGElement
     lineGroup: SVGGElement
     cellSize: number = 20
     onClick?: (i: number, j: number) => any
@@ -48,14 +49,43 @@ export class HexGridSvg {
         })
     }
 
-    createCircle(parent: SVGElement, coord: HexCoordinate, radius: number, attrs: SVGAttrs): SVGCircleElement {
-        const pos = this.getHexPosition(coord)
+    createCircle(parent: SVGElement, pos: Vector, radius: number, attrs: SVGAttrs): SVGCircleElement {
         return createSvgNode(parent, "circle", {
             cx: pos.x,
             cy: pos.y,
             r: radius,
             ...attrs
         })
+    }
+
+    createCityMarker(coord: HexCoordinate, name: string, capital: boolean): void {
+        const pos = this.getHexPosition(coord)
+        const radius = 5
+        const capitalStyle = {
+            fill: "white",
+            stroke: "black",
+            "stroke-width": 2,
+        }
+        const normalStyle = {
+            fill: "black",
+            stroke: "none",
+        }
+        this.createCircle(this.markerGroup, pos, radius, capital ? capitalStyle : normalStyle)
+        let text = createSvgNode(this.markerGroup, "text", {
+            "text-anchor": "start",
+            "dominant-baseline": "hanging",
+            "font-family": "serif",
+            "font-size": capital ? 12 : 10,
+            "font-weight": capital ? "bold" : "normal",
+            fill: "black",
+            stroke: "#fff",
+            "stroke-width": capital ? 5 : 3,
+            "stroke-opacity": capital ? 0.9 : 0.8,
+            "paint-order": "stroke",
+            "stroke-linejoin": "bevel",
+            "transform": `translate(${pos.x}, ${pos.y + radius}) rotate(0)`
+        })
+        text.textContent = name
     }
 
     constructor(parent: Element, colorMap: HexGrid<string>, width: number|string, height: number|string) {
@@ -67,6 +97,7 @@ export class HexGridSvg {
         let mapSvg = createSvgNode(svg, "svg") // has viewbox for map
         let cellGroup = createSvgNode(mapSvg, "g")
         let lineGroup = createSvgNode(mapSvg, "g")
+        let markerGroup = createSvgNode(mapSvg, "g")
         let overlayTextGroup = createSvgNode(svg, "g")
 
         this.coordinateText = createSvgNode(overlayTextGroup, "text", {
@@ -99,7 +130,8 @@ export class HexGridSvg {
         }
         mapSvg.setAttribute("viewBox", `${vbox.left} ${vbox.top} ${vbox.width} ${vbox.height}`)
         this.svg = svg
-        this.mapGroup = mapSvg
+        this.hexGroup = cellGroup
+        this.markerGroup = markerGroup
         this.lineGroup = lineGroup
     }
 

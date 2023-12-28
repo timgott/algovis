@@ -30,28 +30,25 @@ class RailBuilder {
 
     hover(coord: HexCoordinate) {
         if (this.hoverStart !== null) {
-            this.hoverPath?.remove()
-            let uniqueCoords = this.map.map((_, coord) => coord)
-            let start = uniqueCoords.get(this.hoverStart)
-            let end = uniqueCoords.get(coord)
-            if (start === undefined || end === undefined) {
+            if (!this.map.has(this.hoverStart) || !this.map.has(coord)) {
                 return
             }
-            let neighbors = (node: HexCoordinate) => {
-                return getHexNeighbors(node)
-                    .filter(c => uniqueCoords.has(c))
-                    .map(c => uniqueCoords.get(c))
-            }
+            let start = this.map.getUniqueCoord(this.hoverStart)
+            let end = this.map.getUniqueCoord(coord)
+
             let path = findPath(
                 start, end,
-                neighbors,
+                (c: HexCoordinate) => this.map.getNeighbors(c),
                 (a, b) => this.getEdgeCost(a, b)
             )
+
+            this.hoverPath?.remove()
             this.hoverPath = this.mapSvg.createPath(this.mapSvg.lineGroup, path, {
-                stroke: "black",
+                stroke: "darkred",
                 "stroke-width": 4,
-                "box-shadow": "0 0 10px red",
-                fill: "transparent"
+                fill: "transparent",
+                "stroke-linejoin": "round",
+                "stroke-linecap": "round",
             })
         }
     }
@@ -140,6 +137,127 @@ function generateMap(): HexGrid<GroundType> {
     return map
 }
 
+function generateCityName() {
+    const prefixes = [
+        "New ",
+        "Old ",
+        "Bad ",
+        "Los ",
+        "Las ",
+        "St. ",
+    ]
+
+    const firstParts = [
+        "Lon",
+        "New",
+        "Old",
+        "York",
+        "Ham",
+        "Birm",
+        "South",
+        "North",
+        "East",
+        "West",
+        "Hemp",
+        "Bright",
+        "Stein",
+        "Berg",
+        "Klein",
+        "Groß",
+        "Bad",
+        "Schön",
+        "Schwarz",
+        "Stras",
+        "Darm",
+        "Dürk",
+        "Ber",
+        "Dres",
+        "Ober",
+        "Unter",
+        "Ve",
+        "Veg",
+        "Mün",
+        "Lei",
+        "Eppel",
+        "Man",
+        "Wash",
+        "Mos",
+        "Dub",
+        "Peter",
+        "Kan",
+        "San",
+        "Zwick",
+        "Wein",
+        "Heid",
+    ]
+
+    const middleParts = [
+        "ing",
+        "wester",
+        "che",
+        "brook",
+        "brück",
+        "as",
+        "wald",
+        "er",
+        "unter",
+        "e",
+        "i",
+        "o",
+        "s",
+        "t",
+        "li",
+        "bo",
+        "sen",
+        "kirch",
+        "orz",
+        "el",
+    ]
+
+    const secondParts = [
+        "don",
+        "ville",
+        "burg",
+        "town",
+        "hausen",
+        "heim",
+        "lingen",
+        "berg",
+        "furt",
+        "kirchen",
+        "ton",
+        "ham",
+        "wick",
+        "wich",
+        "stadt",
+        "lin",
+        "zig",
+        "dorf",
+        "bach",
+        "lyn",
+        "brück",
+        "ster",
+        "gow",
+        "chen",
+        "born",
+        "ford",
+        "as",
+        "ow",
+        "au",
+    ]
+
+    let prefix = ""
+    let middle = ""
+    if (Math.random() < 0.1) {
+        prefix = randomChoice(prefixes)
+    }
+    if (Math.random() < 0.3) {
+        middle = randomChoice(middleParts)
+    }
+
+    return prefix + randomChoice(firstParts) + middle + randomChoice(secondParts)
+}
+
 function main() {
     const map = generateMap()
 
@@ -151,9 +269,8 @@ function main() {
 
     for (let cell of map.cells) {
         if (map.get(cell) === GroundType.City) {
-            hexSvg.createCircle(hexSvg.mapGroup, cell, 5, {
-                fill: "black",
-            })
+            const capital = Math.random() < 0.1
+            hexSvg.createCityMarker(cell, generateCityName(), capital)
         }
     }
 

@@ -22,14 +22,18 @@ export function getHexNeighbors(coord: HexCoordinate): HexCoordinate[] {
 
 export class HexGrid<T> {
     data: T[][] = []
+    uniqueCells: HexCoordinate[][] = []
     cells: HexCoordinate[] = []
 
-    set([x, y, z]: HexCoordinate, value: T) {
+    set(coord: HexCoordinate, value: T) {
+        let [x, y, z] = coord
         if (this.data[x] === undefined) {
             this.data[x] = []
+            this.uniqueCells[x] = []
         }
         if (this.data[x][y] === undefined) {
-            this.cells.push([x,y,z])
+            this.cells.push(coord)
+            this.uniqueCells[x][y] = coord
         }
         this.data[x][y] = value
     }
@@ -41,6 +45,17 @@ export class HexGrid<T> {
 
     has([x, y, _]: HexCoordinate): boolean {
         return this.data[x] !== undefined && this.data[x][y] !== undefined
+    }
+
+    getUniqueCoord([x, y, _]: HexCoordinate): HexCoordinate {
+        assert(this.has([x, y, _]), "need to check if cell exists before getting it")
+        return this.uniqueCells[x][y]
+    }
+
+    getNeighbors([x, y, z]: HexCoordinate): HexCoordinate[] {
+        return HexDirections.map((dir) => hexAdd([x, y, z], dir))
+            .filter((coord) => this.has(coord))
+            .map((coord) => this.getUniqueCoord(coord))
     }
 
     drawRandomWalk(start: HexCoordinate, length: number, value: T) {
