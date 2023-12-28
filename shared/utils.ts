@@ -28,6 +28,10 @@ export function shuffle<T>(arr: T[]): T[] {
     return arr
 }
 
+export function randomChoice<T>(arr: T[]): T {
+    return arr[randInt(arr.length)]
+}
+
 export function assert(condition: boolean, message: string): asserts condition {
     if (!condition) {
         throw message

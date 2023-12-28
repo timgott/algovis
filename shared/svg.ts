@@ -1,7 +1,9 @@
+export type SVGAttrs = { [x: string]: any; }
+
 export function createSvgNode<T extends keyof SVGElementTagNameMap>(
     parent: Element | null,
     tag: T,
-    attrs: { [x: string]: any; } = {})
+    attrs: SVGAttrs = {})
     : SVGElementTagNameMap[T]
 {
     let element = document.createElementNS("http://www.w3.org/2000/svg", tag);
@@ -12,7 +14,7 @@ export function createSvgNode<T extends keyof SVGElementTagNameMap>(
 
 export function setSvgAttributes(
     element: SVGElement,
-    attrs: { [x: string]: any; })
+    attrs: SVGAttrs)
 {
     for (let key in attrs) {
         element.setAttribute(key, attrs[key]);

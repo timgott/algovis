@@ -122,7 +122,7 @@ export class ColoredGridSvg {
             }
             rect.addEventListener("mousemove", clickListener)
             rect.addEventListener("mousedown", clickListener)
-            rect.addEventListener("mouseenter", (event) => {
+            rect.addEventListener("mouseover", (event) => {
                 this.hover(i, j)
             })
             let label = createSvgNode(textGroup, "text", {
