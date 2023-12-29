@@ -1,14 +1,11 @@
 import { HexGridSvg } from "./svghex.js";
-import { HexCoordinate, HexGrid, getHexNeighbors } from "./hexgrid.js";
-import { randomChoice } from "../../shared/utils.js";
-import { findPath } from "./pathfinding.js";
+import { HexCoordinate, HexDirection, HexGrid, getHexNeighbors } from "./hexgrid.js";
+import { assert, randomChoice } from "../../shared/utils.js";
+import { findPath, getPathEdges as splitPathEdges } from "./pathfinding.js";
+import { generateMap } from "./mapgen.js";
+import { GroundType, IGameUserInterface, IPlayer, RailwayGame, RailwayMap } from "./game.js";
+import { generateCityName } from "./citynames.js";
 
-enum GroundType {
-    Plains,
-    Forest,
-    City,
-    Mountain
-}
 
 const GroundColors: {[ground in GroundType]: string} = {
     [GroundType.Plains]: "lightgreen",
@@ -18,56 +15,17 @@ const GroundColors: {[ground in GroundType]: string} = {
 }
 
 class RailBuilder {
-    map: HexGrid<GroundType>
+    map: RailwayMap
     mapSvg: HexGridSvg
-
+    
+    currentPlayer: IPlayer | null = null
     hoverStart: HexCoordinate | null = null
     hoverPath: SVGElement | null = null
 
-    startHover(coord: HexCoordinate) {
-        this.hoverStart = coord
-    }
+    path: HexCoordinate[] = []
+    onFinish: (path: HexCoordinate[]) => void = () => {}
 
-    hover(coord: HexCoordinate) {
-        if (this.hoverStart !== null) {
-            if (!this.map.has(this.hoverStart) || !this.map.has(coord)) {
-                return
-            }
-            let start = this.map.getUniqueCoord(this.hoverStart)
-            let end = this.map.getUniqueCoord(coord)
-
-            let path = findPath(
-                start, end,
-                (c: HexCoordinate) => this.map.getNeighbors(c),
-                (a, b) => this.getEdgeCost(a, b)
-            )
-
-            this.hoverPath?.remove()
-            this.hoverPath = this.mapSvg.createPath(this.mapSvg.lineGroup, path, {
-                stroke: "darkred",
-                "stroke-width": 4,
-                fill: "transparent",
-                "stroke-linejoin": "round",
-                "stroke-linecap": "round",
-            })
-        }
-    }
-
-    endHover() {
-        this.hoverStart = null
-        this.hoverPath = null
-    }
-
-    getEdgeCost(coordA: HexCoordinate, coordB: HexCoordinate) {
-        if (this.map.get(coordA) === GroundType.Mountain
-         || this.map.get(coordB) === GroundType.Mountain) {
-            return 3
-        } else {
-            return 1
-        }
-    }
-
-    constructor(map: HexGrid<GroundType>, mapSvg: HexGridSvg) {
+    constructor(map: RailwayMap, mapSvg: HexGridSvg) {
         this.map = map
         this.mapSvg = mapSvg
 
@@ -76,205 +34,94 @@ class RailBuilder {
                 this.startHover(coord)
             } else {
                 this.endHover()
+                this.onFinish(this.path)
             }
         })
         mapSvg.addCellListener("mouseover", (coord) => {
             this.hover(coord)
         })
     }
-}
 
-function isAtCoast(map: HexGrid<GroundType>, coord: HexCoordinate): boolean {
-    for (let neighbor of getHexNeighbors(coord)) {
-        if (!map.has(neighbor)) {
-            return true
-        }
-    }
-    return false
-}
-
-function isNear(map: HexGrid<GroundType>, coord: HexCoordinate, ground: GroundType): boolean {
-    for (let neighbor of getHexNeighbors(coord)) {
-        if (map.has(neighbor) && map.get(neighbor) === ground) {
-            return true
-        }
-    }
-    return false
-}
-
-function generateMap(): HexGrid<GroundType> {
-    let map = new HexGrid<GroundType>()
-
-    map.set([0,0,0], GroundType.Plains)
-    for (let i = 0; i < 100; i++) {
-        let startPos = randomChoice(map.cells)
-        map.drawRandomWalk(startPos, 20, GroundType.Plains)
-    }
-    for (let i = 0; i < 40; i++) {
-        let startPos = randomChoice(map.cells)
-        map.drawRandomWalk(startPos, 5, GroundType.Mountain)
+    async performBuild(player: IPlayer): Promise<HexCoordinate[]> {
+        this.currentPlayer = player
+        let result: HexCoordinate[] = await new Promise((resolve, reject) => {
+            this.onFinish = resolve
+        })
+        this.currentPlayer = null
+        return result
     }
 
-    // place cities
-    for (let cell of map.cells) {
-        if (map.get(cell) === GroundType.Plains) {
-            let prob = 0.03
-            if (isAtCoast(map, cell)) {
-                prob = 0.1
-            }
-            if (isNear(map, cell, GroundType.Mountain)) {
-                prob = 0.05
-            }
-            if (isNear(map, cell, GroundType.City)) {
-                prob = 0.001
-            }
-            if (Math.random() < prob) {
-                map.set(cell, GroundType.City)
-            }
+    startHover(coord: HexCoordinate) {
+        if (this.currentPlayer) {
+            this.hoverStart = coord
         }
     }
 
-    return map
+    hover(coord: HexCoordinate) {
+        assert(this.currentPlayer !== null, "should only hover when player is active")
+        if (this.hoverStart !== null) {
+            // do not pass current player so that we can build new connections between existing tracks
+            const path = this.map.findPath(null, this.hoverStart, coord)
+            this.hoverPath?.remove()
+            if (path !== null) {
+                this.hoverPath = this.mapSvg.createTrackPath(path, "gray")
+            }
+            this.path = path ?? []
+        }
+    }
+
+    endHover() {
+        this.hoverPath?.remove()
+        this.hoverStart = null
+        this.hoverPath = null
+    }
 }
 
-function generateCityName() {
-    const prefixes = [
-        "New ",
-        "Old ",
-        "Bad ",
-        "Los ",
-        "Las ",
-        "St. ",
-    ]
-
-    const firstParts = [
-        "Lon",
-        "New",
-        "Old",
-        "York",
-        "Ham",
-        "Birm",
-        "South",
-        "North",
-        "East",
-        "West",
-        "Hemp",
-        "Bright",
-        "Stein",
-        "Berg",
-        "Klein",
-        "Groß",
-        "Bad",
-        "Schön",
-        "Schwarz",
-        "Stras",
-        "Darm",
-        "Dürk",
-        "Ber",
-        "Dres",
-        "Ober",
-        "Unter",
-        "Ve",
-        "Veg",
-        "Mün",
-        "Lei",
-        "Eppel",
-        "Man",
-        "Wash",
-        "Mos",
-        "Dub",
-        "Peter",
-        "Kan",
-        "San",
-        "Zwick",
-        "Wein",
-        "Heid",
-    ]
-
-    const middleParts = [
-        "ing",
-        "wester",
-        "che",
-        "brook",
-        "brück",
-        "as",
-        "wald",
-        "er",
-        "unter",
-        "e",
-        "i",
-        "o",
-        "s",
-        "t",
-        "li",
-        "bo",
-        "sen",
-        "kirch",
-        "orz",
-        "el",
-    ]
-
-    const secondParts = [
-        "don",
-        "ville",
-        "burg",
-        "town",
-        "hausen",
-        "heim",
-        "lingen",
-        "berg",
-        "furt",
-        "kirchen",
-        "ton",
-        "ham",
-        "wick",
-        "wich",
-        "stadt",
-        "lin",
-        "zig",
-        "dorf",
-        "bach",
-        "lyn",
-        "brück",
-        "ster",
-        "gow",
-        "chen",
-        "born",
-        "ford",
-        "as",
-        "ow",
-        "au",
-    ]
-
-    let prefix = ""
-    let middle = ""
-    if (Math.random() < 0.1) {
-        prefix = randomChoice(prefixes)
-    }
-    if (Math.random() < 0.3) {
-        middle = randomChoice(middleParts)
+class GameSvgRenderer implements IGameUserInterface {
+    constructor(private mapSvg: HexGridSvg, private playerColors: Map<IPlayer, string>) {
     }
 
-    return prefix + randomChoice(firstParts) + middle + randomChoice(secondParts)
+    drawTrack(player: IPlayer, path: HexCoordinate[]): void {
+        this.mapSvg.createTrackPath(path, this.playerColors.get(player)!)
+    }
+    updateBudget(player: IPlayer, value: number): void {
+        console.log("update budget", player, value)
+    }
+}
+
+class HumanPlayer implements IPlayer {
+    constructor(private builder: RailBuilder) {}
+
+    async performBuildTurn(budget: number): Promise<[HexCoordinate, HexCoordinate][]> {
+        return splitPathEdges(await this.builder.performBuild(this))
+    }
+
 }
 
 function main() {
-    const map = generateMap()
+    const railMap = generateMap()
 
     let root = document.getElementById("grid_root")!
 
-    const colorMap = map.map((ground) => GroundColors[ground])
+    const colorMap = railMap.terrain.map((ground) => GroundColors[ground])
     let hexSvg = new HexGridSvg(root, colorMap, "100%", "100%")
     hexSvg.svg.setAttribute("style", "background: navy")
 
-    for (let cell of map.cells) {
-        if (map.get(cell) === GroundType.City) {
-            const capital = Math.random() < 0.1
-            hexSvg.createCityMarker(cell, generateCityName(), capital)
-        }
+    for (let cell of railMap.cities.cells) {
+        let city = railMap.cities.get(cell)
+        hexSvg.createCityMarker(cell, city.name, city.capital)
     }
 
-    let railBuilder = new RailBuilder(map, hexSvg)
+    let railBuilder = new RailBuilder(railMap, hexSvg)
+    let player1 = new HumanPlayer(railBuilder)
+    let player2 = new HumanPlayer(railBuilder)
+    let playerColors = new Map([
+        [player1, "darkred"],
+        [player2, "orange"]
+    ])
+    let renderer = new GameSvgRenderer(hexSvg, playerColors)
+    let game = new RailwayGame(railMap, [player1], renderer)
+    game.run()
 }
 
 main()

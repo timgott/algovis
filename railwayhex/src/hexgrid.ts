@@ -1,23 +1,32 @@
 import { assert, randomChoice } from "../../shared/utils"
 
-export type HexCoordinate = [number, number, number]
+export type HexCoordinate = readonly [number, number, number]
 
-const HexDirections: HexCoordinate[] = [
+export const hexDirections = [
     [1, 0, -1],
     [0, 1, -1],
     [-1, 1, 0],
     [-1, 0, 1],
     [0, -1, 1],
     [1, -1, 0],
-]
+] as const
 
+export type HexDirection = typeof hexDirections[number]
 
-function hexAdd([a,b,c]: HexCoordinate, [u,v,w]: HexCoordinate): HexCoordinate {
+export function hexAdd([a,b,c]: HexCoordinate, [u,v,w]: HexCoordinate): HexCoordinate {
     return [a+u, b+v, c+w]
 }
 
+export function getHexDirection([a,b,c]: HexCoordinate, [u,v,w]: HexCoordinate): HexDirection | undefined {
+    return hexDirections.find(([du,dv,dw]) => du === u-a && dv === v-b && dw === w-c)
+}
+
+export function isNeighbor(a: HexCoordinate, b: HexCoordinate): boolean {
+    return getHexDirection(a, b) !== undefined
+}
+
 export function getHexNeighbors(coord: HexCoordinate): HexCoordinate[] {
-    return HexDirections.map((dir) => hexAdd(coord, dir))
+    return hexDirections.map((dir) => hexAdd(coord, dir))
 }
 
 export class HexGrid<T> {
@@ -53,18 +62,9 @@ export class HexGrid<T> {
     }
 
     getNeighbors([x, y, z]: HexCoordinate): HexCoordinate[] {
-        return HexDirections.map((dir) => hexAdd([x, y, z], dir))
+        return hexDirections.map((dir) => hexAdd([x, y, z], dir))
             .filter((coord) => this.has(coord))
             .map((coord) => this.getUniqueCoord(coord))
-    }
-
-    drawRandomWalk(start: HexCoordinate, length: number, value: T) {
-        let current = start
-        for (let i = 0; i < length; i++) {
-            this.set(current, value)
-            const dir = randomChoice(HexDirections)
-            current = hexAdd(current, dir)
-        }
     }
 
     map<U>(f: (value: T, coord: HexCoordinate) => U): HexGrid<U> {

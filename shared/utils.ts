@@ -28,7 +28,7 @@ export function shuffle<T>(arr: T[]): T[] {
     return arr
 }
 
-export function randomChoice<T>(arr: T[]): T {
+export function randomChoice<T>(arr: readonly T[]): T {
     return arr[randInt(arr.length)]
 }
 

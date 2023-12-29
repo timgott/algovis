@@ -7,7 +7,8 @@ export class HexGridSvg {
     cellPadding: number = 0
     svg: SVGSVGElement // including overlay
     hexGroup: SVGGElement
-    markerGroup: SVGGElement
+    cityMarkerGroup: SVGGElement
+    cityLabelGroup: SVGGElement
     lineGroup: SVGGElement
     cellSize: number = 20
     onClick?: (i: number, j: number) => any
@@ -49,6 +50,16 @@ export class HexGridSvg {
         })
     }
 
+    createTrackPath(coords: HexCoordinate[], color: string): SVGPathElement {
+        return this.createPath(this.lineGroup, coords, {
+            stroke: color,
+            "stroke-width": 4,
+            fill: "transparent",
+            "stroke-linejoin": "round",
+            "stroke-linecap": "round",
+        })
+    }
+
     createCircle(parent: SVGElement, pos: Vector, radius: number, attrs: SVGAttrs): SVGCircleElement {
         return createSvgNode(parent, "circle", {
             cx: pos.x,
@@ -70,8 +81,8 @@ export class HexGridSvg {
             fill: "black",
             stroke: "none",
         }
-        this.createCircle(this.markerGroup, pos, radius, capital ? capitalStyle : normalStyle)
-        let text = createSvgNode(this.markerGroup, "text", {
+        this.createCircle(this.cityMarkerGroup, pos, radius, capital ? capitalStyle : normalStyle)
+        let text = createSvgNode(this.cityLabelGroup, "text", {
             "text-anchor": "start",
             "dominant-baseline": "hanging",
             "font-family": "serif",
@@ -83,7 +94,7 @@ export class HexGridSvg {
             "stroke-opacity": capital ? 0.9 : 0.8,
             "paint-order": "stroke",
             "stroke-linejoin": "bevel",
-            "transform": `translate(${pos.x}, ${pos.y + radius}) rotate(0)`
+            "transform": `translate(${pos.x}, ${pos.y + radius}) rotate(10)`
         })
         text.textContent = name
     }
@@ -96,8 +107,9 @@ export class HexGridSvg {
         })
         let mapSvg = createSvgNode(svg, "svg") // has viewbox for map
         let cellGroup = createSvgNode(mapSvg, "g")
-        let lineGroup = createSvgNode(mapSvg, "g")
         let markerGroup = createSvgNode(mapSvg, "g")
+        let labelGroup = createSvgNode(mapSvg, "g")
+        let lineGroup = createSvgNode(mapSvg, "g")
         let overlayTextGroup = createSvgNode(svg, "g")
 
         this.coordinateText = createSvgNode(overlayTextGroup, "text", {
@@ -131,7 +143,8 @@ export class HexGridSvg {
         mapSvg.setAttribute("viewBox", `${vbox.left} ${vbox.top} ${vbox.width} ${vbox.height}`)
         this.svg = svg
         this.hexGroup = cellGroup
-        this.markerGroup = markerGroup
+        this.cityMarkerGroup = markerGroup
+        this.cityLabelGroup = labelGroup
         this.lineGroup = lineGroup
     }
 
