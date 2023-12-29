@@ -1,5 +1,5 @@
-import { assert, assertExists } from "../../shared/utils";
-import { HexCoordinate, HexDirection, HexGrid, hexDirections, isNeighbor } from "./hexgrid";
+import { assert, randInt } from "../../shared/utils";
+import { HexCoordinate, HexGrid, isNeighbor } from "./hexgrid";
 import { findPath } from "./pathfinding";
 
 export enum GroundType {
@@ -31,20 +31,61 @@ export class RailwayMap {
         return this.connections.get(coordA).get(player)?.has(coordB) ?? false
     }
 
-    getEdgeCost(player: IPlayer | null, coordA: HexCoordinate, coordB: HexCoordinate) {
-        assert(isNeighbor(coordA, coordB), "can only compute cost between neighbors")
-        if (player !== null && this.hasPlayerConnection(player, coordA, coordB)) {
-            return 0
-        }
+    getEdgeTerrainCost(coordA: HexCoordinate, coordB: HexCoordinate) {
         if (this.terrain.get(coordA) === GroundType.Mountain
-         || this.terrain.get(coordB) === GroundType.Mountain) {
-            return 3
+        || this.terrain.get(coordB) === GroundType.Mountain) {
+           return 3
         } else {
             return 1
         }
     }
 
-    findPath(player: IPlayer | null, start: HexCoordinate, end: HexCoordinate): HexCoordinate[] | null {
+    getConnectionCost(player: IPlayer, coord: HexCoordinate) {
+        const connectionCost = 1
+        let cellConnections = this.connections.get(coord)
+        if (cellConnections.has(player)) {
+            return 0
+        } else {
+            return cellConnections.size * connectionCost // 1 cost for each connected network
+        }
+    }
+
+    getParallelBuildCost(player: IPlayer, coordA: HexCoordinate, coordB: HexCoordinate) {
+        const parallelBuildCost = 2 // per half edge
+        // assuming not yet connected by player
+        // half edges on cities do not count
+        let costingHalfEdges = [coordA, coordB].filter(c => !this.cities.has(c)).length
+        let connectionsA = this.connections.get(coordA)
+        let cost = 0
+        for (let [player, connections] of connectionsA) {
+            if (connections.has(coordB)) {
+                cost += parallelBuildCost*costingHalfEdges
+            }
+        }
+        return cost
+    }
+    
+    getEdgePlayerCost(player: IPlayer, coordA: HexCoordinate, coordB: HexCoordinate) {
+        // assuming coordA is already connected
+        return this.getConnectionCost(player, coordB) + this.getParallelBuildCost(player, coordA, coordB)
+    }
+    
+    getEdgeBuildCost(player: IPlayer, coordA: HexCoordinate, coordB: HexCoordinate) {
+        assert(isNeighbor(coordA, coordB), "can only compute cost between neighbors")
+        if (this.hasPlayerConnection(player, coordA, coordB)) {
+            return 0
+        }
+        return this.getEdgeTerrainCost(coordA, coordB) + this.getEdgePlayerCost(player, coordA, coordB)
+    }
+
+    estimateEdgeOperatingCost(player: IPlayer, coordA: HexCoordinate, coordB: HexCoordinate) {
+        if (this.terrain.get(coordA) === GroundType.Mountain || this.terrain.get(coordB) === GroundType.Mountain) {
+            return 1.5
+        }
+        return 1
+    }
+
+    findPath(player: IPlayer, start: HexCoordinate, end: HexCoordinate, operatingRatio: number): HexCoordinate[] | null {
         if (!this.terrain.has(start) || !this.terrain.has(end)) {
             return null
         }
@@ -54,7 +95,7 @@ export class RailwayMap {
         return findPath(
             start, end,
             (c: HexCoordinate) => this.terrain.getNeighbors(c),
-            (a, b) => this.getEdgeCost(player, a, b)
+            (a, b) => this.getEdgeBuildCost(player, a, b) + this.estimateEdgeOperatingCost(player, a, b)*operatingRatio
         )
     }
 
@@ -104,21 +145,39 @@ export class RailwayGame {
         return this.setBudget(player, this.accounts.get(player)! - amount)
     }
 
+    executeBuildActions(player: IPlayer, buildActions: [HexCoordinate, HexCoordinate][], budget: number) {
+        let cost = 0
+        for (let [start, end] of buildActions) {
+            if (!this.map.connections.get(start).get(player)?.has(end)) {
+                cost += this.map.getEdgeBuildCost(player, start, end)
+                if (cost > budget) {
+                    console.log("Player spent more than budget")
+                    break;
+                }
+                this.map.buildConnection(player, start, end)
+                this.graphics.drawTrack(player, [start, end])
+                console.log(`Player ${player} built ${start}, ${end}`)
+            }
+        }
+        return cost
+    }
+
     async run() {
         while (true) {
-            let budget = 10
+            let budget = 10 + randInt(10)
             for (let player of this.players) {
-                let buildActions = await player.performBuildTurn(budget)
                 let cost = 0
-                for (let [start, end] of buildActions) {
-                    cost += this.map.getEdgeCost(player, start, end)
-                    if (cost > budget) {
-                        console.log("Player spent more than budget")
-                        break;
+                while (cost < budget) {
+                    let remainingBudget = budget - cost
+                    console.log("Player", player, "has", remainingBudget, "budget")
+                    let buildActions = await player.performBuildTurn(remainingBudget)
+                    let stepCost = this.executeBuildActions(player, buildActions, remainingBudget)
+                    cost += stepCost
+                    if (stepCost === 0) {
+                        break
                     }
-                    this.map.buildConnection(player, start, end)
-                    this.graphics.drawTrack(player, [start, end])
                 }
+                console.log("Player", player, "spent", cost)
             }
         }
     }

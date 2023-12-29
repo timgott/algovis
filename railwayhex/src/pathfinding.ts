@@ -1,10 +1,11 @@
-import { min } from "../../shared/utils"
+import { assertExists, min } from "../../shared/utils"
 
+// returns list of nodes along path and costs to reach them
 export function findPath<NodeT>(
     startNode: NodeT, endNode: NodeT,
     getNeighbors: (node: NodeT) => NodeT[],
     getCost: (node: NodeT, neighbor: NodeT) => number,
-): NodeT[] {
+): NodeT[] | null {
     let frontier = new Set<NodeT>([startNode])
     let cameFrom = new Map<NodeT, NodeT>()
     let costSoFar = new Map<NodeT, number>()
@@ -27,6 +28,11 @@ export function findPath<NodeT>(
         }
     }
 
+    if (!costSoFar.has(endNode)) {
+        // no path found
+        return null
+    }
+
     let backtrack: NodeT[] = []
     let current: NodeT | undefined = endNode
     while (current !== undefined) {
@@ -36,10 +42,27 @@ export function findPath<NodeT>(
     return backtrack.reverse()
 }
 
-export function getPathEdges<NodeT>(path: NodeT[]) {
+export function getPathEdges<NodeT>(path: readonly NodeT[]) {
     let edges: [NodeT, NodeT][] = []
     for (let i = 0; i < path.length - 1; i++) {
         edges.push([path[i], path[i+1]])
     }
     return edges
+}
+
+export function limitPathBudget<NodeT>(path: NodeT[] | null, edgeCost: (a:NodeT, b:NodeT) => number, budget: number): [NodeT[], number] {
+    if (path === null) {
+        return [[], 0]
+    }
+    let total = 0
+    let i: number
+    for (i = 1; i < path.length; i++) {
+        let cost = edgeCost(path[i-1], path[i])
+        if (total + cost > budget) {
+            break
+        }
+        total += cost
+    }
+    path = path.slice(0, i)
+    return [path, total]
 }

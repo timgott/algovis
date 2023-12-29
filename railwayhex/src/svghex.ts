@@ -38,8 +38,11 @@ export class HexGridSvg {
         return this.origin.add(this.axisU.scale(u)).add(this.axisV.scale(v))
     }
 
-    createPath(parent: SVGElement, coords: HexCoordinate[], attrs: SVGAttrs): SVGPathElement {
+    createPath(parent: SVGElement, coords: HexCoordinate[], offsets: Vector[], attrs: SVGAttrs): SVGPathElement {
         const points = coords.map((c) => this.getHexPosition(c))
+        for (let i = 0; i < points.length; i++) {
+            points[i] = points[i].add(offsets[i])
+        }
         let d = `M ${points[0].x} ${points[0].y} `
         for (let i = 1; i < points.length; i++) {
             d += `L ${points[i].x} ${points[i].y} `
@@ -50,8 +53,8 @@ export class HexGridSvg {
         })
     }
 
-    createTrackPath(coords: HexCoordinate[], color: string): SVGPathElement {
-        return this.createPath(this.lineGroup, coords, {
+    createTrackPath(coords: HexCoordinate[], offsets: Vector[], color: string): SVGPathElement {
+        return this.createPath(this.lineGroup, coords, offsets, {
             stroke: color,
             "stroke-width": 4,
             fill: "transparent",
@@ -103,13 +106,14 @@ export class HexGridSvg {
         let svg = createSvgNode(parent, "svg", {
             width: width,
             height: height,
-            "pointer-events": "none"
+            "pointer-events": "none",
+            "user-select": "none"
         })
         let mapSvg = createSvgNode(svg, "svg") // has viewbox for map
         let cellGroup = createSvgNode(mapSvg, "g")
+        let lineGroup = createSvgNode(mapSvg, "g")
         let markerGroup = createSvgNode(mapSvg, "g")
         let labelGroup = createSvgNode(mapSvg, "g")
-        let lineGroup = createSvgNode(mapSvg, "g")
         let overlayTextGroup = createSvgNode(svg, "g")
 
         this.coordinateText = createSvgNode(overlayTextGroup, "text", {

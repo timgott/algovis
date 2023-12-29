@@ -41,15 +41,15 @@ function drawRandomWalk<T>(map: HexGrid<T>, start: HexCoordinate, length: number
 
 function generateTerrain(): HexGrid<GroundType> {
     let map = new HexGrid<GroundType>()
-
+    let scale = 15
     map.set([0,0,0], GroundType.Plains)
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 10*scale; i++) {
         let startPos = randomChoice(map.cells)
-        drawRandomWalk(map, startPos, 20, GroundType.Plains)
+        drawRandomWalk(map, startPos, 2*scale, GroundType.Plains)
     }
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 4*scale; i++) {
         let startPos = randomChoice(map.cells)
-        drawRandomWalk(map, startPos, 5, GroundType.Mountain)
+        drawRandomWalk(map, startPos, 0.5*scale, GroundType.Mountain)
     }
     return map
 }
@@ -71,7 +71,7 @@ export function generateMap(): RailwayMap {
                 prob = 0.001
             }
             if (Math.random() < prob) {
-                const isCapital = Math.random() < 0.1
+                const isCapital = Math.random() < 0.05
                 const name = generateCityName(isCapital)
                 cities.set(cell, {
                     name: name,

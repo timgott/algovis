@@ -32,6 +32,14 @@ export function randomChoice<T>(arr: readonly T[]): T {
     return arr[randInt(arr.length)]
 }
 
+export function popRandomUnordered<T>(arr: T[]): T {
+    let index = randInt(arr.length)
+    let result = arr[index]
+    arr[index] = arr[arr.length - 1]
+    arr.pop()
+    return result
+}
+
 export function assert(condition: boolean, message: string): asserts condition {
     if (!condition) {
         throw message
@@ -83,4 +91,8 @@ Set.prototype.find = function<T>(this: Set<T>, predicate: (item: T) => boolean):
         }
     }
     return undefined
+}
+
+export function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }

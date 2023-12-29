@@ -1,3 +1,4 @@
+import { sleep } from "../../shared/utils.js";
 import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring } from "./coloring.js";
 import { DynamicLocal, PartialGrid, randomAdversary } from "./partialgrid.js";
 import { ColoredGridSvg, renderColoredGrid } from "./svggrid.js";
@@ -139,10 +140,6 @@ function run() {
         render(grid)
     }
     return grid
-}
-
-export function sleep(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function runAutoAdversary() {
