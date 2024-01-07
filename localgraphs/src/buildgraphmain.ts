@@ -1,8 +1,8 @@
 import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring } from "./coloring.js";
-import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode, moveNodes } from "./graphlayout.js";
+import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode, dragNodes, offsetNodes } from "./graphlayout.js";
 import { initFullscreenCanvas } from "../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, copyGraph, copyGraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, mapGraph } from "./graph.js";
-import { assertExists, ensured, invertMap } from "../../shared/utils.js";
+import { assert, assertExists, ensured, invertMap } from "../../shared/utils.js";
 import { collectNeighborhood } from "./graphalgos.js";
 
 let algorithmSelect = document.getElementById("select_algorithm") as HTMLSelectElement
@@ -13,12 +13,13 @@ let undoHistory: Graph<NodeData>[] = []
 
 const layoutStyle: LayoutConfig = {
     nodeRadius: 14,
-    targetDistance: 40,
-    edgeLength: 40,
-    pushForce: 10.0,
+    pushDistance: 30,
+    minEdgeLength: 30,
+    pushForce: 30.0,
     edgeForce: 100.0,
     centeringForce: 0.0,
     dampening: 5.0,
+    sleepVelocity: 0.5,
 }
 
 type NodeData = {
@@ -63,13 +64,20 @@ function pushToHistory(graph: Graph<NodeData>) {
     undoHistory.push(copyGraph(graph))
 }
 
+function moveSlightly(node: GraphNode<NodeData>) {
+    // prevents nodes on same position and wakes them from sleep
+    let strength = 3
+    assert(strength > layoutStyle.sleepVelocity, "push strength cannot overcome sleep threshold")
+    node.vx += (Math.random()*2.-1.) * strength
+    node.vy += (Math.random()*2.-1.) * strength
+}
+
 function putNewNode(graph: Graph<NodeData>, x: number, y: number) {
     let node = createNode(graph, {
         color: undefined as any,
         markFixed: false
     }, x, y)
-    node.vx = (Math.random()*2.-1.) * 5
-    node.vy = (Math.random()*2.-1.) * 5
+    moveSlightly(node)
     algoStep(graph, node)
     assertExists(node.data.color)
 }
@@ -81,7 +89,7 @@ function putNewEdge(graph: Graph<NodeData>, a: GraphNode<NodeData>, b: GraphNode
 }
 
 class BuildGraphInteraction<T> implements GraphInteractionMode<NodeData> {
-    edgeThreshold: number = 5
+    edgeThreshold: number = 20
 
     startNode: GraphNode<NodeData> | null = null
     startX: number = 0
@@ -155,18 +163,21 @@ class DuplicateInteraction implements GraphInteractionMode<NodeData> {
             }
         }
     }
-    onDragStep(graph: Graph<NodeData>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D): void {
+    onDragStep(graph: Graph<NodeData>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
         // draw preview?
         let state = this.state
         if (state !== null) {
-            moveNodes(state.subgraph.nodes, mouseX - state.root.x, mouseY - state.root.y)
+            offsetNodes(state.subgraph.nodes, mouseX - state.root.x, mouseY - state.root.y)
             this.painter.drawGraph(drawCtx, state.subgraph)
         }
     }
     onMouseUp(graph: Graph<NodeData>, mouseX: number, mouseY: number): void {
         let state = this.state
-        if (state !== null && mouseX != state.startX && mouseY != state.startY) {
+        if (state !== null) {
             pushToHistory(graph)
+            for (let node of state.subgraph.nodes) {
+                moveSlightly(node)
+            }
             copyGraphTo(state.subgraph, graph)
             this.state = null
         }
@@ -180,10 +191,11 @@ export class MoveComponentInteraction<T> implements GraphInteractionMode<T> {
         this.draggedNode = findClosestNode(mouseX, mouseY, graph)
     }
 
-    onDragStep(graph: Graph<T>, mouseX: number, mouseY: number) {
+    onDragStep(graph: Graph<T>, mouseX: number, mouseY: number, ctx: unknown, dt: number) {
         if (this.draggedNode) {
             let nodes = collectNeighborhood(this.draggedNode, Infinity)
-            moveNodes(nodes, mouseX - this.draggedNode.x, mouseY - this.draggedNode.y)
+            dragNodes(nodes, mouseX - this.draggedNode.x, mouseY - this.draggedNode.y, dt)
+            console.log("Move dt", dt)
         }
     }
 
@@ -278,14 +290,14 @@ initFullscreenCanvas(canvas)
 const painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
 const sim = new GraphPhysicsSimulator(canvas, createEmptyGraph<NodeData>(), layoutStyle, painter)
 function reset() {
-    pushToHistory(sim.graph)
-    sim.graph = createEmptyGraph()
+    pushToHistory(sim.getGraph())
+    sim.changeGraph(createEmptyGraph())
 }
 
 undoButton.addEventListener("click", () => {
     let last = undoHistory.pop()
     if (last) {
-        sim.graph = last
+        sim.changeGraph(last)
     } else {
         console.error("End of undo history")
     }

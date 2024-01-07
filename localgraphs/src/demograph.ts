@@ -6,12 +6,13 @@ initFullscreenCanvas(canvas)
 
 const layoutStyle: LayoutConfig = {
     nodeRadius: 10,
-    targetDistance: 40,
-    edgeLength: 200,
+    pushDistance: 40,
+    minEdgeLength: 200,
     pushForce: 9,
     edgeForce: 16,
     centeringForce: 1.0,
     dampening: 1.0,
+    sleepVelocity: 0.1,
 }
 
 let graph = createRandomGraph(20, 3)

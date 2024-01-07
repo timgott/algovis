@@ -14,6 +14,8 @@
             position: absolute;
             z-index: -1;
             background-color: #f0f0f0;
+            user-select: none;
+            touch-action: none;
         }
         .control_bar {
             padding: 8px;
@@ -35,7 +37,7 @@
             <option value="walls">Walls</option>
         </select>
         <label for="locality">Locality</label>
-        <input type="number" id="locality" min="0" max="10" value="0"/>
+        <input type="number" id="locality" min="0" max="10" value="2"/>
 
         <button id="tool_build">Build</button>
         <button id="tool_drag">Drag</button>

@@ -25,13 +25,13 @@ export function createEmptyGraph<T>(): Graph<T> {
     }
 }
 
-export function createNode<T>(graph: Graph<T>, data: T, x: number = 0, y: number = 0): GraphNode<T> {
+export function createNode<T>(graph: Graph<T>, data: T, x: number = 0, y: number = 0, vx: number = 0, vy: number = 0): GraphNode<T> {
     const node = {
         data: data,
         x: x,
         y: y,
-        vx: 0,
-        vy: 0,
+        vx: vx,
+        vy: vy,
         neighbors: new Set<GraphNode<T>>()
     }
     graph.nodes.push(node)
@@ -58,7 +58,7 @@ export function mapSubgraphTo<S,T>(nodes: Iterable<GraphNode<S>>, targetGraph: G
     let nodeMap = new Map<GraphNode<S>, GraphNode<T>>()
     for (let node of nodes) {
         // translate node
-        let newNode = createNode(targetGraph, mapping(node.data), node.x, node.y)
+        let newNode = createNode(targetGraph, mapping(node.data), node.x, node.y, node.vx, node.vy)
         nodeMap.set(node, newNode)
 
         // translate edge (only if other node is already translated)

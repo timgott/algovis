@@ -3,40 +3,56 @@ import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode }
 
 
 export type LayoutConfig = {
-    edgeLength: number,
-    targetDistance: number,
+    minEdgeLength: number,
+    pushDistance: number,
     pushForce: number,
     edgeForce: number,
     centeringForce: number,
     dampening: number
     nodeRadius: number
+    sleepVelocity: number,
 }
 
-export function applyLayoutPhysics(graph: Graph<unknown>, layout: LayoutConfig, width: number, height: number, dt: number) {
+// returns number of active nodes during this physics update
+export function applyLayoutPhysics(graph: Graph<unknown>, layout: LayoutConfig, width: number, height: number, dt: number): number {
+    // find nodes that have moved in the last time step
+    let activeNodes = new Set<GraphNode<unknown>>()
+    for (let node of graph.nodes) {
+        if (Math.abs(node.vx)+Math.abs(node.vy) < layout.sleepVelocity) {
+            node.vx = 0
+            node.vy = 0
+        } else {
+            activeNodes.add(node)
+        }
+    }
+
     // pull together edges
     for (let edge of graph.edges) {
-        let dx = edge.b.x - edge.a.x
-        let dy = edge.b.y - edge.a.y
-        let dist = Math.sqrt(dx * dx + dy * dy)
-        console.assert(dist > 0, "Points on same spot")
-        let unitX = dx / dist
-        let unitY = dy / dist
-        let delta = 0
-        if (dist > edge.length) {
-            delta = edge.length - dist
-        } else if (dist < layout.edgeLength) {
-            delta = layout.edgeLength - dist
+        if (activeNodes.has(edge.a) || activeNodes.has(edge.b)) {
+            let dx = edge.b.x - edge.a.x
+            let dy = edge.b.y - edge.a.y
+            let dist = Math.sqrt(dx * dx + dy * dy)
+            console.assert(dist > 0, "Points on same spot")
+            let unitX = dx / dist
+            let unitY = dy / dist
+            let delta = 0
+            let length = Math.max(edge.length, layout.minEdgeLength)
+            if (dist > length) {
+                delta = length - dist
+            } else if (dist < layout.minEdgeLength) {
+                delta = layout.minEdgeLength - dist
+            }
+            let force = delta * layout.edgeForce * dt
+            edge.a.vx -= force * unitX
+            edge.a.vy -= force * unitY
+            edge.b.vx += force * unitX
+            edge.b.vy += force * unitY
         }
-        let force = delta * layout.edgeForce * dt
-        edge.a.vx -= force * unitX
-        edge.a.vy -= force * unitY
-        edge.b.vx += force * unitX
-        edge.b.vy += force * unitY
     }
     // push apart nodes
-    const targetDistSqr = layout.targetDistance * layout.targetDistance
-    const pushForce = layout.pushForce * layout.targetDistance
-    for (let a of graph.nodes) {
+    const targetDistSqr = layout.pushDistance * layout.pushDistance
+    const pushForce = layout.pushForce * layout.pushDistance
+    for (let a of activeNodes) {
         for (let b of graph.nodes) {
             if (a !== b && !a.neighbors.has(b)) {
                 let dx = b.x - a.x
@@ -55,7 +71,7 @@ export function applyLayoutPhysics(graph: Graph<unknown>, layout: LayoutConfig, 
     // push nodes to center
     let centerX = width / 2
     let centerY = height / 2
-    for (let node of graph.nodes) {
+    for (let node of activeNodes) {
         let dx = centerX - node.x
         let dy = centerY - node.y
         node.vx += dx * dt * layout.centeringForce
@@ -70,6 +86,8 @@ export function applyLayoutPhysics(graph: Graph<unknown>, layout: LayoutConfig, 
         node.vx -= node.vx * layout.dampening * dt;
         node.vy -= node.vy * layout.dampening * dt;
     }
+
+    return activeNodes.size
 }
 
 export function findClosestNode<T>(x: number, y: number, graph: Graph<T>): GraphNode<T> | null {
@@ -97,7 +115,16 @@ export function shuffleGraphPositions(graph: Graph<unknown>, width: number, heig
     }
 }
 
-export function moveNodes(nodes: Iterable<GraphNode<unknown>>, dx: number, dy: number) {
+export function dragNodes(nodes: Iterable<GraphNode<unknown>>, dx: number, dy: number, deltaTime: number) {
+    if (deltaTime > 0) {
+        for (let node of nodes) {
+            node.vx = dx / deltaTime
+            node.vy = dy / deltaTime
+        }
+    }
+}
+
+export function offsetNodes(nodes: Iterable<GraphNode<unknown>>, dx: number, dy: number) {
     for (let node of nodes) {
         node.x += dx
         node.y += dy
@@ -123,7 +150,7 @@ export function createGridGraph(size: number, layout: LayoutConfig): Graph<null>
     let graph = createEmptyGraph<null>()
     for (let i = 0; i < size; i++) {
         for (let j = 0; j < size; j++) {
-            let node = createNode(graph, null, i * layout.edgeLength, j * layout.edgeLength)
+            let node = createNode(graph, null, i * layout.minEdgeLength, j * layout.minEdgeLength)
             if (i > 0) {
                 createEdge(graph, node, graph.nodes[(i - 1) * size + j])
             }
@@ -138,7 +165,7 @@ export function createGridGraph(size: number, layout: LayoutConfig): Graph<null>
 
 export interface GraphInteractionMode<T> {
     onMouseDown(graph: Graph<T>, mouseX: number, mouseY: number): void
-    onDragStep(graph: Graph<T>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D): void
+    onDragStep(graph: Graph<T>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void
     onMouseUp(graph: Graph<T>, mouseX: number, mouseY: number): void
 }
 
@@ -149,12 +176,11 @@ export class DragNodeInteraction<T> implements GraphInteractionMode<T> {
         this.draggedNode = findClosestNode(mouseX, mouseY, graph)
     }
 
-    onDragStep(graph: Graph<T>, mouseX: number, mouseY: number) {
+    onDragStep(graph: Graph<T>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number) {
         if (this.draggedNode) {
-            this.draggedNode.x = mouseX
-            this.draggedNode.y = mouseY
-            this.draggedNode.vx = 0
-            this.draggedNode.vy = 0
+            const dx = mouseX - this.draggedNode.x
+            const dy = mouseY - this.draggedNode.y
+            dragNodes([this.draggedNode], dx, dy, deltaTime)
         }
     }
 
@@ -195,19 +221,20 @@ export class GraphPainter<T> {
 }
 
 export class GraphPhysicsSimulator<T> {
-    mouseX: number = 0
-    mouseY: number = 0
-    isMouseDown: boolean = false
+    private mouseX: number = 0
+    private mouseY: number = 0
+    private isMouseDown: boolean = false
 
-    previousTimeStamp: number | undefined = undefined
+    private previousTimeStamp: number | null = null
+    private hasRequestedFrame: boolean = false
+    
+    private graph: Graph<T>
+    private layoutStyle: LayoutConfig
+    private canvas: HTMLCanvasElement
+    private ctx: CanvasRenderingContext2D
+    private painter: GraphPainter<T>
 
-    graph: Graph<T>
-    layoutStyle: LayoutConfig
-    canvas: HTMLCanvasElement
-    ctx: CanvasRenderingContext2D
-    painter: GraphPainter<T>
-
-    interactionMode: GraphInteractionMode<T> | null = null
+    private interactionMode: GraphInteractionMode<T> | null = null
 
     constructor(canvas: HTMLCanvasElement, graph: Graph<T>, layoutStyle: LayoutConfig, painter: GraphPainter<T>) {
         this.graph = graph
@@ -216,17 +243,20 @@ export class GraphPhysicsSimulator<T> {
         this.painter = painter
         this.ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
 
-        canvas.addEventListener("mousedown", (ev) => {
+        canvas.addEventListener("pointerdown", (ev) => {
             const [x, y] = getCursorPosition(canvas, ev)
             this.onMouseDown(x, y)
         })
-        window.addEventListener("mousemove", (ev) => {
+        window.addEventListener("pointermove", (ev) => {
             const [x, y] = getCursorPosition(canvas, ev)
             this.onMouseMoved(x, y)
         })
-        window.addEventListener("mouseup", (ev) => {
+        window.addEventListener("pointerup", (ev) => {
             const [x, y] = getCursorPosition(canvas, ev)
             this.onMouseUp(x, y)
+        })
+        window.addEventListener("resize", () => {
+            this.requestFrame()
         })
     }
 
@@ -235,27 +265,48 @@ export class GraphPhysicsSimulator<T> {
     }
 
     animate(timeStamp: number) {
-        if (!this.previousTimeStamp) {
+        if (this.previousTimeStamp === null) {
             this.previousTimeStamp = timeStamp
         }
         const dt = Math.min(timeStamp - this.previousTimeStamp, 1. / 30.)
+        if (dt < 0) {
+            console.log("Negative dt", dt)
+        }
 
         const width = this.canvas.width
         const height = this.canvas.height
         this.ctx.clearRect(0, 0, width, height);
 
         if (this.interactionMode !== null && this.isMouseDown) {
-            this.interactionMode.onDragStep(this.graph, this.mouseX, this.mouseY, this.ctx)
+            this.interactionMode.onDragStep(this.graph, this.mouseX, this.mouseY, this.ctx, dt)
         }
-
+        
         // physics
-        applyLayoutPhysics(this.graph, this.layoutStyle, width, height, dt)
-
+        let activeCount = applyLayoutPhysics(this.graph, this.layoutStyle, width, height, dt)
+        
         // render
         this.painter.drawGraph(this.ctx, this.graph)
 
         this.previousTimeStamp = timeStamp
-        requestAnimationFrame((t) => this.animate(t));
+
+        if (activeCount > 0) {
+            this.requestFrame()
+        } else {
+            console.log("Physics settled, sleeping")
+        }
+    }
+
+    requestFrame() {
+        if (!this.hasRequestedFrame) {
+            this.hasRequestedFrame = true
+            if (this.previousTimeStamp === null) {
+                this.previousTimeStamp = document.timeline.currentTime as number | null
+            }
+            requestAnimationFrame((timeStamp) => {
+                this.hasRequestedFrame = false
+                this.animate(timeStamp)
+            })
+        }
     }
 
     onMouseDown(x: number, y: number) {
@@ -265,13 +316,18 @@ export class GraphPhysicsSimulator<T> {
         this.mouseY = y
         if (this.interactionMode !== null) {
             this.interactionMode.onMouseDown(this.graph, x, y)
+            this.requestFrame()
         }
     }
 
     onMouseMoved(x: number, y: number) {
-        // drag event sent on every animate step
         this.mouseX = x
         this.mouseY = y
+
+        if (this.interactionMode !== null && this.isMouseDown) {
+            // drag event sent in animate step
+            this.requestFrame()
+        }
     }
 
     onMouseUp(x: number, y: number) {
@@ -280,6 +336,7 @@ export class GraphPhysicsSimulator<T> {
             this.isMouseDown = false
             if (this.interactionMode !== null) {
                 this.interactionMode.onMouseUp(this.graph, x, y)
+                this.requestFrame()
             }
         }
     }
@@ -291,7 +348,16 @@ export class GraphPhysicsSimulator<T> {
             applyLayoutPhysics(this.graph, this.layoutStyle, this.canvas.width, this.canvas.height, 1 / 30)
         }
         // start frame loop
-        this.animate(performance.now());
+        this.requestFrame()
     }
 
+    changeGraph(graph: Graph<T>) {
+        // setter to enforce repaint
+        this.graph = graph
+        this.requestFrame()
+    }
+
+    getGraph() {
+        return this.graph
+    }
 }
