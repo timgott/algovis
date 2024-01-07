@@ -26,6 +26,15 @@ export function applyLayoutPhysics(graph: Graph<unknown>, layout: LayoutConfig, 
         }
     }
 
+    // position and velocity integration
+    for (let node of graph.nodes) {
+        node.x += node.vx * dt;
+        node.y += node.vy * dt;
+
+        node.vx -= node.vx * layout.dampening * dt;
+        node.vy -= node.vy * layout.dampening * dt;
+    }
+
     // pull together edges
     for (let edge of graph.edges) {
         if (activeNodes.has(edge.a) || activeNodes.has(edge.b)) {
@@ -76,15 +85,6 @@ export function applyLayoutPhysics(graph: Graph<unknown>, layout: LayoutConfig, 
         let dy = centerY - node.y
         node.vx += dx * dt * layout.centeringForce
         node.vy += dy * dt * layout.centeringForce
-    }
-
-    // position and velocity integration
-    for (let node of graph.nodes) {
-        node.x += node.vx * dt;
-        node.y += node.vy * dt;
-
-        node.vx -= node.vx * layout.dampening * dt;
-        node.vy -= node.vy * layout.dampening * dt;
     }
 
     return activeNodes.size
@@ -272,6 +272,7 @@ export class GraphPhysicsSimulator<T> {
         if (dt < 0) {
             console.log("Negative dt", dt)
         }
+        console.log("dt", dt)
 
         const width = this.canvas.width
         const height = this.canvas.height
