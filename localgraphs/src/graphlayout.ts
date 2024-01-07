@@ -13,26 +13,33 @@ export type LayoutConfig = {
     sleepVelocity: number,
 }
 
-// returns number of active nodes during this physics update
-export function applyLayoutPhysics(graph: Graph<unknown>, layout: LayoutConfig, width: number, height: number, dt: number): number {
-    // find nodes that have moved in the last time step
+function filterActiveNodes(graph: Graph<unknown>, layout: LayoutConfig): Set<GraphNode<unknown>> {
     let activeNodes = new Set<GraphNode<unknown>>()
     for (let node of graph.nodes) {
-        if (Math.abs(node.vx)+Math.abs(node.vy) < layout.sleepVelocity) {
-            node.vx = 0
-            node.vy = 0
-        } else {
+        if (Math.abs(node.vx)+Math.abs(node.vy) >= layout.sleepVelocity) {
             activeNodes.add(node)
         }
     }
+    return activeNodes
+}
+
+// returns number of active nodes during this physics update
+export function applyLayoutPhysics(graph: Graph<unknown>, layout: LayoutConfig, width: number, height: number, dt: number): number {
+    // find nodes that have moved in the last time step
+    const activeNodes = filterActiveNodes(graph, layout)
 
     // position and velocity integration
     for (let node of graph.nodes) {
-        node.x += node.vx * dt;
-        node.y += node.vy * dt;
+        if (activeNodes.has(node)) {
+            node.x += node.vx * dt;
+            node.y += node.vy * dt;
 
-        node.vx -= node.vx * layout.dampening * dt;
-        node.vy -= node.vy * layout.dampening * dt;
+            node.vx -= node.vx * layout.dampening * dt;
+            node.vy -= node.vy * layout.dampening * dt;
+        } else {
+            node.vx = 0;
+            node.vy = 0;
+        }
     }
 
     // pull together edges
@@ -80,7 +87,7 @@ export function applyLayoutPhysics(graph: Graph<unknown>, layout: LayoutConfig, 
     // push nodes to center
     let centerX = width / 2
     let centerY = height / 2
-    for (let node of activeNodes) {
+    for (let node of graph.nodes) {
         let dx = centerX - node.x
         let dy = centerY - node.y
         node.vx += dx * dt * layout.centeringForce
@@ -274,8 +281,8 @@ export class GraphPhysicsSimulator<T> {
         }
         console.log("dt", dt)
 
-        const width = this.canvas.width
-        const height = this.canvas.height
+        const width = this.canvas.clientWidth
+        const height = this.canvas.clientHeight
         this.ctx.clearRect(0, 0, width, height);
 
         if (this.interactionMode !== null && this.isMouseDown) {
@@ -283,14 +290,15 @@ export class GraphPhysicsSimulator<T> {
         }
         
         // physics
-        let activeCount = applyLayoutPhysics(this.graph, this.layoutStyle, width, height, dt)
-        
+        applyLayoutPhysics(this.graph, this.layoutStyle, width, height, dt)
+        const activeCount = filterActiveNodes(this.graph, this.layoutStyle).size // active in next step
+
         // render
         this.painter.drawGraph(this.ctx, this.graph)
 
         this.previousTimeStamp = timeStamp
 
-        if (activeCount > 0) {
+        if (activeCount > 0 || dt == 0) {
             this.requestFrame()
         } else {
             console.log("Physics settled, sleeping")

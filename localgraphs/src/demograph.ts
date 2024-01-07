@@ -9,7 +9,7 @@ const layoutStyle: LayoutConfig = {
     pushDistance: 40,
     minEdgeLength: 200,
     pushForce: 9,
-    edgeForce: 16,
+    edgeForce: 60,
     centeringForce: 1.0,
     dampening: 1.0,
     sleepVelocity: 0.1,

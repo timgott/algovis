@@ -6,6 +6,8 @@ export function setCanvasSize(canvas: HTMLCanvasElement, width: number, height: 
     canvas.height = height * dpiRatio;
     canvas.style.width = width + "px";
     canvas.style.height = height + "px";
+    canvas.style.touchAction = "none";
+    canvas.style.userSelect = "none";
     const ctx = canvas.getContext("2d") as CanvasRenderingContext2D
     ctx.scale(dpiRatio, dpiRatio);
 }
