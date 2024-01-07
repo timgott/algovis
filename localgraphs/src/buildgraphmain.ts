@@ -1,27 +1,32 @@
-import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring, isLocalColoring } from "./coloring.js";
-import { DragNodeInteraction, GraphInteractionMode, GraphPhysicsSimulator, LayoutConfig, createGridGraph, createRandomGraph, findClosestNode, shuffleGraphPositions } from "./graphlayout.js";
+import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring } from "./coloring.js";
+import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode, moveNodes } from "./graphlayout.js";
 import { initFullscreenCanvas } from "../../shared/canvas.js"
-import { Graph, GraphEdge, GraphNode, copyGraph, createEdge, createEmptyGraph, createNode } from "./graph.js";
-import { assertExists } from "../../shared/utils.js";
+import { Graph, GraphEdge, GraphNode, copyGraph, copyGraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, mapGraph } from "./graph.js";
+import { assertExists, ensured, invertMap } from "../../shared/utils.js";
+import { collectNeighborhood } from "./graphalgos.js";
 
 let algorithmSelect = document.getElementById("select_algorithm") as HTMLSelectElement
 let localityInput = document.getElementById("locality") as HTMLInputElement
 let undoButton = document.getElementById("undo") as HTMLButtonElement
 let resetButton = document.getElementById("reset") as HTMLButtonElement
-let undoHistory: Graph<NodeColor>[] = []
+let undoHistory: Graph<NodeData>[] = []
 
 const layoutStyle: LayoutConfig = {
     nodeRadius: 14,
-    targetDistance: 50,
+    targetDistance: 40,
     edgeLength: 40,
     pushForce: 10.0,
-    edgeForce: 0.0,
+    edgeForce: 100.0,
     centeringForce: 0.0,
     dampening: 5.0,
 }
 
+type NodeData = {
+    color: NodeColor
+    markFixed: boolean
+}
 
-function algoStep(graph: Graph<NodeColor>, pointOfChange: GraphNode<NodeColor>) {
+function algoStep(graph: Graph<NodeData>, pointOfChange: GraphNode<NodeData>) {
     let algo
     if (algorithmSelect.value == "greedy") {
         algo = neighborhoodGreedy(localityInput.valueAsNumber)
@@ -39,25 +44,50 @@ function algoStep(graph: Graph<NodeColor>, pointOfChange: GraphNode<NodeColor>) 
         throw "Unknown algorithm"
     }
 
-    let updates = algo.step(graph, pointOfChange)
+    // get graph with NodeColor type
+    let [rawGraph, rawNodes] = mapGraph(graph, (data) => data.color)
+    let originalNodes = invertMap(rawNodes)
+
+    // run algorithm to get changed nodes
+    let updates = algo.step(rawGraph, ensured(rawNodes.get(pointOfChange)))
+
+    // apply updates both to actual graph and the mapped graph
     for (let [node, color] of updates) {
         node.data = color
+        ensured(originalNodes.get(node)).data.color = color
     }
-    console.assert(isGlobalColoring(graph), "correctness check failed")
+    console.assert(isGlobalColoring(rawGraph), "correctness check failed")
 }
 
-function pushToHistory(graph: Graph<NodeColor>) {
+function pushToHistory(graph: Graph<NodeData>) {
     undoHistory.push(copyGraph(graph))
 }
 
-class BuildGraphInteraction<T> implements GraphInteractionMode<NodeColor> {
+function putNewNode(graph: Graph<NodeData>, x: number, y: number) {
+    let node = createNode(graph, {
+        color: undefined as any,
+        markFixed: false
+    }, x, y)
+    node.vx = (Math.random()*2.-1.) * 5
+    node.vy = (Math.random()*2.-1.) * 5
+    algoStep(graph, node)
+    assertExists(node.data.color)
+}
+
+function putNewEdge(graph: Graph<NodeData>, a: GraphNode<NodeData>, b: GraphNode<NodeData>) {
+    createEdge(graph, a, b)
+    algoStep(graph, b)
+    algoStep(graph, a)
+}
+
+class BuildGraphInteraction<T> implements GraphInteractionMode<NodeData> {
     edgeThreshold: number = 5
 
-    startNode: GraphNode<NodeColor> | null = null
+    startNode: GraphNode<NodeData> | null = null
     startX: number = 0
     startY: number = 0
 
-    onMouseDown(graph: Graph<NodeColor>, mouseX: number, mouseY: number): void {
+    onMouseDown(graph: Graph<NodeData>, mouseX: number, mouseY: number): void {
         this.startX = mouseX
         this.startY = mouseY
         this.startNode = findClosestNode(mouseX, mouseY, graph)
@@ -66,7 +96,7 @@ class BuildGraphInteraction<T> implements GraphInteractionMode<NodeColor> {
         let distance = Math.hypot(mouseX - this.startX, mouseY - this.startY)
         return distance >= this.edgeThreshold
     }
-    onDragStep(graph: Graph<NodeColor>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D): void {
+    onDragStep(graph: Graph<NodeData>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D): void {
         // TODO: draw edge
         if (this.startNode !== null && this.shouldCreateEdge(mouseX, mouseY)) {
             drawCtx.lineWidth = 2
@@ -85,34 +115,97 @@ class BuildGraphInteraction<T> implements GraphInteractionMode<NodeColor> {
             drawCtx.setLineDash([]) 
         }
     }
-    onMouseUp(graph: Graph<NodeColor>, endX: number, endY: number): void {
-        const defaultColor = undefined as any
-
+    onMouseUp(graph: Graph<NodeData>, endX: number, endY: number): void {
         if (this.shouldCreateEdge(endX, endY)) {
             let endNode = findClosestNode(endX, endY, graph)
             if (this.startNode !== null && endNode !== null && this.startNode !== endNode && !this.startNode.neighbors.has(endNode)) {
                 // create new edge
-                console.log("Create node")
                 pushToHistory(graph)
-                createEdge(graph, this.startNode, endNode)
-                algoStep(graph, endNode)
-                algoStep(graph, this.startNode)
+                putNewEdge(graph, this.startNode, endNode)
             }
         }
         else {
             // create new node
             pushToHistory(graph)
-            const newNode = createNode(graph, defaultColor, endX, endY)
-            newNode.vx = (Math.random()*2.-1.) * 30
-            newNode.vy = (Math.random()*2.-1.) * 30
-            algoStep(graph, newNode)
+            putNewNode(graph, endX, endY)
         }
 
     }
 }
 
+class DuplicateInteraction implements GraphInteractionMode<NodeData> {
+    state: {
+        subgraph: Graph<NodeData>,
+        startX: number,
+        startY: number,
+        root: GraphNode<NodeData>
+    } | null = null
+    painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
 
-function getSvgColorForNode(node: GraphNode<NodeColor>): string {
+    onMouseDown(graph: Graph<NodeData>, mouseX: number, mouseY: number): void {
+        let rootNode = findClosestNode(mouseX, mouseY, graph)
+        if (rootNode !== null) {
+            let radius = localityInput.valueAsNumber + 1
+            let [subgraph, nodeMap] = extractSubgraph(collectNeighborhood(rootNode, radius))
+            this.state = {
+                startX: rootNode.x,
+                startY: rootNode.y,
+                subgraph: subgraph,
+                root: ensured(nodeMap.get(rootNode))
+            }
+        }
+    }
+    onDragStep(graph: Graph<NodeData>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D): void {
+        // draw preview?
+        let state = this.state
+        if (state !== null) {
+            moveNodes(state.subgraph.nodes, mouseX - state.root.x, mouseY - state.root.y)
+            this.painter.drawGraph(drawCtx, state.subgraph)
+        }
+    }
+    onMouseUp(graph: Graph<NodeData>, mouseX: number, mouseY: number): void {
+        let state = this.state
+        if (state !== null && mouseX != state.startX && mouseY != state.startY) {
+            pushToHistory(graph)
+            copyGraphTo(state.subgraph, graph)
+            this.state = null
+        }
+    }
+}
+
+export class MoveComponentInteraction<T> implements GraphInteractionMode<T> {
+    draggedNode: GraphNode<T> | null = null
+
+    onMouseDown(graph: Graph<T>, mouseX: number, mouseY: number) {
+        this.draggedNode = findClosestNode(mouseX, mouseY, graph)
+    }
+
+    onDragStep(graph: Graph<T>, mouseX: number, mouseY: number) {
+        if (this.draggedNode) {
+            let nodes = collectNeighborhood(this.draggedNode, Infinity)
+            moveNodes(nodes, mouseX - this.draggedNode.x, mouseY - this.draggedNode.y)
+        }
+    }
+
+    onMouseUp() {
+        this.draggedNode = null
+    }
+}
+
+export class MarkInteraction implements GraphInteractionMode<NodeData> {
+    onMouseDown(graph: Graph<NodeData>, mouseX: number, mouseY: number) {
+        let node = findClosestNode(mouseX, mouseY, graph)
+        if (node !== null) {
+            pushToHistory(graph)
+            node.data.markFixed = !node.data.markFixed
+        }
+    }
+    onDragStep() {}
+    onMouseUp() {}
+}
+
+
+function getSvgColorForNode(node: GraphNode<NodeData>): string {
     let colors = [
         "#CDFAD5",
         "#F6FDC3",
@@ -125,29 +218,56 @@ function getSvgColorForNode(node: GraphNode<NodeColor>): string {
     ]
 
     const errorColor = "red"
-    if (!isLocalColoring(node)) {
-        return errorColor
+    for (let neighbor of node.neighbors) {
+        if (neighbor.data.color == node.data.color) {
+            return errorColor
+        }
     }
 
-    return colors[node.data] ?? "gray"
+    return colors[node.data.color] ?? "gray"
 }
 
-class ColoredGraphSimulator extends GraphPhysicsSimulator<NodeColor> {
-    override drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<NodeColor>) {
-        ctx.fillStyle = getSvgColorForNode(node)
-        ctx.lineWidth = 3
+class ColoredGraphPainter extends GraphPainter<string> {
+    getNodeRadius(small: boolean) {
+        return small? this.nodeRadius*0.75 : this.nodeRadius
+    }
+
+    getStrokeWidth(small: boolean) {
+        return small? 2 : 3
+    }
+
+    override drawEdge(ctx: CanvasRenderingContext2D, edge: GraphEdge<NodeData>) {
+        const thin = edge.a.data.markFixed || edge.b.data.markFixed
         ctx.beginPath()
-        ctx.arc(node.x, node.y, layoutStyle.nodeRadius, 0, 2 * Math.PI)
+        ctx.lineWidth = this.getStrokeWidth(thin)*1.25
+        ctx.strokeStyle = thin ? "gray" : "black"
+        ctx.moveTo(edge.a.x, edge.a.y)
+        ctx.lineTo(edge.b.x, edge.b.y)
+        ctx.stroke()
+        ctx.closePath()
+    }
+
+    override drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>) {
+        const smaller = node.data.markFixed
+        const fat = false
+        ctx.fillStyle = getSvgColorForNode(node)
+        ctx.strokeStyle = smaller ? "gray" : "black"
+        ctx.lineWidth = this.getStrokeWidth(smaller)
+        ctx.beginPath()
+        ctx.arc(node.x, node.y, this.getNodeRadius(smaller), 0, 2 * Math.PI)
         ctx.fill()
         ctx.stroke()
         ctx.closePath()
 
         // label
-        ctx.fillStyle = "black"
+        ctx.fillStyle = ctx.strokeStyle // text in same color as outline
         ctx.textAlign = "center"
         ctx.textBaseline = "middle"
-        ctx.font = "12pt sans-serif"
-        ctx.fillText(node.data.toString(), node.x, node.y)
+        const fontWeight = fat? "bold" : "normal"
+        const fontSize = smaller? "10pt" : "12pt"
+        ctx.font = `${fontWeight} ${fontSize} sans-serif`
+        let label = (node.data.color+1).toString()
+        ctx.fillText(label, node.x, node.y)
     }
 }
 
@@ -155,7 +275,8 @@ class ColoredGraphSimulator extends GraphPhysicsSimulator<NodeColor> {
 const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
 initFullscreenCanvas(canvas)
 
-let sim = new ColoredGraphSimulator(canvas, createEmptyGraph(), layoutStyle)
+const painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
+const sim = new GraphPhysicsSimulator(canvas, createEmptyGraph<NodeData>(), layoutStyle, painter)
 function reset() {
     pushToHistory(sim.graph)
     sim.graph = createEmptyGraph()
@@ -170,14 +291,17 @@ undoButton.addEventListener("click", () => {
     }
 })
 
-function toolButton(id: string, tool: GraphInteractionMode<NodeColor>) {
+function toolButton(id: string, tool: GraphInteractionMode<NodeData>) {
     document.getElementById(id)!.addEventListener("click", () => {
         sim.setInteractionMode(tool)
     })
 }
 
-toolButton("tool_move", new DragNodeInteraction())
+toolButton("tool_move", new MoveComponentInteraction())
+toolButton("tool_drag", new DragNodeInteraction())
 toolButton("tool_build", new BuildGraphInteraction())
+toolButton("tool_duplicate", new DuplicateInteraction())
+toolButton("tool_mark", new MarkInteraction())
 
 sim.setInteractionMode(new BuildGraphInteraction())
 sim.run()

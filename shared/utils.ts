@@ -52,6 +52,11 @@ export function assertExists<T>(value: T | null | undefined, message: string = "
     }
 }
 
+export function ensured<T>(value: T | null | undefined): T {
+    assertExists(value)
+    return value
+}
+
 export function min<T>(items: Iterable<T>, key: (item: T) => number): T | undefined {
     let minItem: T | undefined = undefined
     let minValue = Infinity
@@ -95,4 +100,12 @@ Set.prototype.find = function<T>(this: Set<T>, predicate: (item: T) => boolean):
 
 export function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export function invertMap<K, V>(map: Map<K, V>): Map<V, K> {
+    let result = new Map<V, K>()
+    for (let [key, value] of map) {
+        result.set(value, key)
+    }
+    return result
 }

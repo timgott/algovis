@@ -1,4 +1,4 @@
-import { DragNodeInteraction, GraphPhysicsSimulator, LayoutConfig, createGridGraph, createRandomGraph, shuffleGraphPositions } from "./graphlayout.js";
+import { DragNodeInteraction, GraphPainter, GraphPhysicsSimulator, LayoutConfig, createGridGraph, createRandomGraph, shuffleGraphPositions } from "./graphlayout.js";
 import { initFullscreenCanvas } from "../../shared/canvas.js"
 
 const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
@@ -19,6 +19,6 @@ shuffleGraphPositions(graph, canvas.width, canvas.height)
 
 graph = createGridGraph(10, layoutStyle)
 
-const sim = new GraphPhysicsSimulator(canvas, graph, layoutStyle)
+const sim = new GraphPhysicsSimulator(canvas, graph, layoutStyle, new GraphPainter(layoutStyle.nodeRadius))
 sim.setInteractionMode(new DragNodeInteraction())
 sim.run()

@@ -21,7 +21,13 @@ export function applyLayoutPhysics(graph: Graph<unknown>, layout: LayoutConfig, 
         console.assert(dist > 0, "Points on same spot")
         let unitX = dx / dist
         let unitY = dy / dist
-        let force = (layout.edgeLength - dist) * layout.edgeForce * dt
+        let delta = 0
+        if (dist > edge.length) {
+            delta = edge.length - dist
+        } else if (dist < layout.edgeLength) {
+            delta = layout.edgeLength - dist
+        }
+        let force = delta * layout.edgeForce * dt
         edge.a.vx -= force * unitX
         edge.a.vy -= force * unitY
         edge.b.vx += force * unitX
@@ -91,6 +97,13 @@ export function shuffleGraphPositions(graph: Graph<unknown>, width: number, heig
     }
 }
 
+export function moveNodes(nodes: Iterable<GraphNode<unknown>>, dx: number, dy: number) {
+    for (let node of nodes) {
+        node.x += dx
+        node.y += dy
+    }
+}
+
 export function createRandomGraph(size: number, edgesPerNode: number): Graph<null> {
     let graph = createEmptyGraph<null>()
     createNode(graph, null)
@@ -150,6 +163,37 @@ export class DragNodeInteraction<T> implements GraphInteractionMode<T> {
     }
 }
 
+export class GraphPainter<T> {
+    constructor(protected nodeRadius: number) {}
+
+    public drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<unknown>) {
+        // edges
+        for (let edge of graph.edges) {
+            this.drawEdge(ctx, edge)
+        }
+        // nodes
+        for (let node of graph.nodes) {
+            this.drawNode(ctx, node)
+        }
+    }
+
+    protected drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<unknown>) {
+        ctx.beginPath()
+        ctx.arc(node.x, node.y, this.nodeRadius, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.closePath()
+    }
+
+    protected drawEdge(ctx: CanvasRenderingContext2D, edge: GraphEdge<unknown>) {
+        ctx.beginPath()
+        ctx.lineWidth = this.nodeRadius / 3
+        ctx.moveTo(edge.a.x, edge.a.y)
+        ctx.lineTo(edge.b.x, edge.b.y)
+        ctx.stroke()
+        ctx.closePath()
+    }
+}
+
 export class GraphPhysicsSimulator<T> {
     mouseX: number = 0
     mouseY: number = 0
@@ -161,13 +205,15 @@ export class GraphPhysicsSimulator<T> {
     layoutStyle: LayoutConfig
     canvas: HTMLCanvasElement
     ctx: CanvasRenderingContext2D
+    painter: GraphPainter<T>
 
     interactionMode: GraphInteractionMode<T> | null = null
 
-    constructor(canvas: HTMLCanvasElement, graph: Graph<T>, layoutStyle: LayoutConfig) {
+    constructor(canvas: HTMLCanvasElement, graph: Graph<T>, layoutStyle: LayoutConfig, painter: GraphPainter<T>) {
         this.graph = graph
         this.layoutStyle = layoutStyle
         this.canvas = canvas
+        this.painter = painter
         this.ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
 
         canvas.addEventListener("mousedown", (ev) => {
@@ -206,37 +252,10 @@ export class GraphPhysicsSimulator<T> {
         applyLayoutPhysics(this.graph, this.layoutStyle, width, height, dt)
 
         // render
-        this.drawGraph(this.ctx, this.graph)
+        this.painter.drawGraph(this.ctx, this.graph)
 
         this.previousTimeStamp = timeStamp
         requestAnimationFrame((t) => this.animate(t));
-    }
-
-    protected drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<unknown>) {
-        // edges
-        for (let edge of graph.edges) {
-            this.drawEdge(ctx, edge)
-        }
-        // nodes
-        for (let node of graph.nodes) {
-            this.drawNode(ctx, node)
-        }
-    }
-
-    protected drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<unknown>) {
-        ctx.beginPath()
-        ctx.arc(node.x, node.y, this.layoutStyle.nodeRadius, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.closePath()
-    }
-
-    protected drawEdge(ctx: CanvasRenderingContext2D, edge: GraphEdge<unknown>) {
-        ctx.beginPath()
-        ctx.lineWidth = this.layoutStyle.nodeRadius / 3
-        ctx.moveTo(edge.a.x, edge.a.y)
-        ctx.lineTo(edge.b.x, edge.b.y)
-        ctx.stroke()
-        ctx.closePath()
     }
 
     onMouseDown(x: number, y: number) {
