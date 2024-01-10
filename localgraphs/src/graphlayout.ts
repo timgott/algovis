@@ -1,5 +1,5 @@
 import { getCursorPosition } from "../../shared/canvas"
-import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode } from "./graph"
+import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode, filteredGraphView } from "./graph"
 
 
 export type LayoutConfig = {
@@ -13,7 +13,7 @@ export type LayoutConfig = {
     sleepVelocity: number,
 }
 
-function filterActiveNodes(graph: Graph<unknown>, layout: LayoutConfig): Set<GraphNode<unknown>> {
+function findActiveNodes(graph: Graph<unknown>, layout: LayoutConfig): Set<GraphNode<unknown>> {
     let activeNodes = new Set<GraphNode<unknown>>()
     for (let node of graph.nodes) {
         if (Math.abs(node.vx)+Math.abs(node.vy) >= layout.sleepVelocity) {
@@ -23,47 +23,50 @@ function filterActiveNodes(graph: Graph<unknown>, layout: LayoutConfig): Set<Gra
     return activeNodes
 }
 
-// returns number of active nodes during this physics update
-export function applyLayoutPhysics(graph: Graph<unknown>, layout: LayoutConfig, width: number, height: number, dt: number): number {
-    // find nodes that have moved in the last time step
-    const activeNodes = filterActiveNodes(graph, layout)
-
+export function applyVelocityStep(graph: Graph<unknown>, layout: LayoutConfig, dt: number) {
     // position and velocity integration
     for (let node of graph.nodes) {
-        if (activeNodes.has(node)) {
-            node.x += node.vx * dt;
-            node.y += node.vy * dt;
+        node.x += node.vx * dt;
+        node.y += node.vy * dt;
 
-            node.vx -= node.vx * layout.dampening * dt;
-            node.vy -= node.vy * layout.dampening * dt;
-        } else {
-            node.vx = 0;
-            node.vy = 0;
+        node.vx -= node.vx * layout.dampening * dt;
+        node.vy -= node.vy * layout.dampening * dt;
+    }
+}
+
+// returns number of active nodes during this physics update
+export function applyLayoutForces(graph: Graph<unknown>, layout: LayoutConfig, width: number, height: number, dt: number): number {
+    // find nodes that have moved in the last time step
+    const activeNodes = findActiveNodes(graph, layout)
+
+    for (let node of graph.nodes) {
+        if (!activeNodes.has(node)) {
+            node.vx = 0
+            node.vy = 0
         }
     }
 
     // pull together edges
     for (let edge of graph.edges) {
-        if (activeNodes.has(edge.a) || activeNodes.has(edge.b)) {
-            let dx = edge.b.x - edge.a.x
-            let dy = edge.b.y - edge.a.y
-            let dist = Math.sqrt(dx * dx + dy * dy)
-            console.assert(dist > 0, "Points on same spot")
-            let unitX = dx / dist
-            let unitY = dy / dist
-            let delta = 0
-            let length = Math.max(edge.length, layout.minEdgeLength)
-            if (dist > length) {
-                delta = length - dist
-            } else if (dist < layout.minEdgeLength) {
-                delta = layout.minEdgeLength - dist
-            }
-            let force = delta * layout.edgeForce * dt
-            edge.a.vx -= force * unitX
-            edge.a.vy -= force * unitY
-            edge.b.vx += force * unitX
-            edge.b.vy += force * unitY
+        // don't check for active nodes because of edge cases like uncollapsing nodes
+        let dx = edge.b.x - edge.a.x
+        let dy = edge.b.y - edge.a.y
+        let dist = Math.sqrt(dx * dx + dy * dy)
+        console.assert(dist > 0, "Points on same spot")
+        let unitX = dx / dist
+        let unitY = dy / dist
+        let delta = 0
+        let length = Math.max(edge.length, layout.minEdgeLength)
+        if (dist > length) {
+            delta = length - dist
+        } else if (dist < layout.minEdgeLength) {
+            delta = layout.minEdgeLength - dist
         }
+        let force = delta * layout.edgeForce * dt
+        edge.a.vx -= force * unitX
+        edge.a.vy -= force * unitY
+        edge.b.vx += force * unitX
+        edge.b.vy += force * unitY
     }
     // push apart nodes
     const targetDistSqr = layout.pushDistance * layout.pushDistance
@@ -97,13 +100,10 @@ export function applyLayoutPhysics(graph: Graph<unknown>, layout: LayoutConfig, 
     return activeNodes.size
 }
 
-export function findClosestNode<T>(x: number, y: number, graph: Graph<T>): GraphNode<T> | null {
-    if (graph.nodes.length == 0) {
-        return null
-    }
-    let result = graph.nodes[0]
+export function findClosestNode<T>(x: number, y: number, nodes: Iterable<GraphNode<T>>): GraphNode<T> | null {
+    let result = null
     let minDistance = Number.POSITIVE_INFINITY
-    for (let node of graph.nodes) {
+    for (let node of nodes) {
         let dx = (node.x - x)
         let dy = (node.y - y)
         let dist = dx * dx + dy * dy
@@ -171,19 +171,19 @@ export function createGridGraph(size: number, layout: LayoutConfig): Graph<null>
 
 
 export interface GraphInteractionMode<T> {
-    onMouseDown(graph: Graph<T>, mouseX: number, mouseY: number): void
-    onDragStep(graph: Graph<T>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void
-    onMouseUp(graph: Graph<T>, mouseX: number, mouseY: number): void
+    onMouseDown(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number): void
+    onDragStep(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void
+    onMouseUp(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number): void
 }
 
 export class DragNodeInteraction<T> implements GraphInteractionMode<T> {
     draggedNode: GraphNode<T> | null = null
 
-    onMouseDown(graph: Graph<T>, mouseX: number, mouseY: number) {
-        this.draggedNode = findClosestNode(mouseX, mouseY, graph)
+    onMouseDown(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number) {
+        this.draggedNode = findClosestNode(mouseX, mouseY, visible)
     }
 
-    onDragStep(graph: Graph<T>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number) {
+    onDragStep(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number) {
         if (this.draggedNode) {
             const dx = mouseX - this.draggedNode.x
             const dy = mouseY - this.draggedNode.y
@@ -227,6 +227,9 @@ export class GraphPainter<T> {
     }
 }
 
+// Returns whether something has been updated
+export type PhysicsStep<T> = (obj: T, width: number, height: number, dt: number) => boolean
+
 export class GraphPhysicsSimulator<T> {
     private mouseX: number = 0
     private mouseY: number = 0
@@ -240,6 +243,7 @@ export class GraphPhysicsSimulator<T> {
     private canvas: HTMLCanvasElement
     private ctx: CanvasRenderingContext2D
     private painter: GraphPainter<T>
+    public visibleFilter: (node: GraphNode<T>) => boolean = () => true
 
     private interactionMode: GraphInteractionMode<T> | null = null
 
@@ -271,6 +275,14 @@ export class GraphPhysicsSimulator<T> {
         this.interactionMode = mode
     }
 
+    getVisibleGraph() {
+        return filteredGraphView(this.graph, this.visibleFilter)
+    }
+
+    getVisibleNodes() {
+        return this.graph.nodes.filter(this.visibleFilter)
+    }
+
     animate(timeStamp: number) {
         if (this.previousTimeStamp === null) {
             this.previousTimeStamp = timeStamp
@@ -285,16 +297,18 @@ export class GraphPhysicsSimulator<T> {
         const height = this.canvas.clientHeight
         this.ctx.clearRect(0, 0, width, height);
 
+        let visibleGraph = this.getVisibleGraph()
         if (this.interactionMode !== null && this.isMouseDown) {
-            this.interactionMode.onDragStep(this.graph, this.mouseX, this.mouseY, this.ctx, dt)
+            this.interactionMode.onDragStep(this.graph, visibleGraph.nodes, this.mouseX, this.mouseY, this.ctx, dt)
         }
         
         // physics
-        applyLayoutPhysics(this.graph, this.layoutStyle, width, height, dt)
-        const activeCount = filterActiveNodes(this.graph, this.layoutStyle).size // active in next step
+        applyVelocityStep(this.graph, this.layoutStyle, dt)
+        applyLayoutForces(visibleGraph, this.layoutStyle, width, height, dt)
+        const activeCount = findActiveNodes(this.graph, this.layoutStyle).size // active in next step
 
         // render
-        this.painter.drawGraph(this.ctx, this.graph)
+        this.painter.drawGraph(this.ctx, visibleGraph)
 
         this.previousTimeStamp = timeStamp
 
@@ -324,7 +338,7 @@ export class GraphPhysicsSimulator<T> {
         this.mouseX = x
         this.mouseY = y
         if (this.interactionMode !== null) {
-            this.interactionMode.onMouseDown(this.graph, x, y)
+            this.interactionMode.onMouseDown(this.graph, this.getVisibleNodes(), x, y)
             this.requestFrame()
         }
     }
@@ -344,7 +358,7 @@ export class GraphPhysicsSimulator<T> {
         if (this.isMouseDown) {
             this.isMouseDown = false
             if (this.interactionMode !== null) {
-                this.interactionMode.onMouseUp(this.graph, x, y)
+                this.interactionMode.onMouseUp(this.graph, this.getVisibleNodes(), x, y)
                 this.requestFrame()
             }
         }
@@ -354,7 +368,9 @@ export class GraphPhysicsSimulator<T> {
         // settle physics
         const PreIterations = 0
         for (let i = 0; i < PreIterations; i++) {
-            applyLayoutPhysics(this.graph, this.layoutStyle, this.canvas.width, this.canvas.height, 1 / 30)
+            const dt = 1 / 30
+            applyVelocityStep(this.graph, this.layoutStyle, dt)
+            applyLayoutForces(this.graph, this.layoutStyle, this.canvas.width, this.canvas.height, dt)
         }
         // start frame loop
         this.requestFrame()

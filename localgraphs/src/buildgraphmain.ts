@@ -1,7 +1,7 @@
 import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring } from "./coloring.js";
 import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode, dragNodes, offsetNodes } from "./graphlayout.js";
 import { initFullscreenCanvas } from "../../shared/canvas.js"
-import { Graph, GraphEdge, GraphNode, copyGraph, copyGraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, mapGraph } from "./graph.js";
+import { Graph, GraphEdge, GraphNode, copyGraph, copyGraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, filteredGraphView, mapGraph } from "./graph.js";
 import { assert, assertExists, ensured, invertMap } from "../../shared/utils.js";
 import { collectNeighborhood } from "./graphalgos.js";
 
@@ -9,7 +9,9 @@ let algorithmSelect = document.getElementById("select_algorithm") as HTMLSelectE
 let localityInput = document.getElementById("locality") as HTMLInputElement
 let undoButton = document.getElementById("undo") as HTMLButtonElement
 let resetButton = document.getElementById("reset") as HTMLButtonElement
+let pruneButton = document.getElementById("prune") as HTMLButtonElement
 let undoHistory: Graph<NodeData>[] = []
+const historyLimit = 100
 
 const layoutStyle: LayoutConfig = {
     nodeRadius: 14,
@@ -24,7 +26,8 @@ const layoutStyle: LayoutConfig = {
 
 type NodeData = {
     color: NodeColor
-    markFixed: boolean
+    marked: boolean
+    collapsed: boolean
 }
 
 function algoStep(graph: Graph<NodeData>, pointOfChange: GraphNode<NodeData>) {
@@ -61,7 +64,8 @@ function algoStep(graph: Graph<NodeData>, pointOfChange: GraphNode<NodeData>) {
 }
 
 function pushToHistory(graph: Graph<NodeData>) {
-    undoHistory.push(copyGraph(graph))
+    undoHistory.push(structuredClone(graph))
+    undoHistory = undoHistory.slice(-historyLimit)
 }
 
 function moveSlightly(node: GraphNode<NodeData>) {
@@ -75,7 +79,8 @@ function moveSlightly(node: GraphNode<NodeData>) {
 function putNewNode(graph: Graph<NodeData>, x: number, y: number) {
     let node = createNode(graph, {
         color: undefined as any,
-        markFixed: false
+        marked: false,
+        collapsed: false
     }, x, y)
     moveSlightly(node)
     algoStep(graph, node)
@@ -95,21 +100,21 @@ class BuildGraphInteraction<T> implements GraphInteractionMode<NodeData> {
     startX: number = 0
     startY: number = 0
 
-    onMouseDown(graph: Graph<NodeData>, mouseX: number, mouseY: number): void {
+    onMouseDown(graph: Graph<NodeData>, visible: GraphNode<NodeData>[], mouseX: number, mouseY: number): void {
         this.startX = mouseX
         this.startY = mouseY
-        this.startNode = findClosestNode(mouseX, mouseY, graph)
+        this.startNode = findClosestNode(mouseX, mouseY, visible)
     }
     shouldCreateEdge(mouseX: number, mouseY: number): boolean {
         let distance = Math.hypot(mouseX - this.startX, mouseY - this.startY)
         return distance >= this.edgeThreshold
     }
-    onDragStep(graph: Graph<NodeData>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D): void {
+    onDragStep(graph: Graph<NodeData>, visible: Iterable<GraphNode<unknown>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D): void {
         // TODO: draw edge
         if (this.startNode !== null && this.shouldCreateEdge(mouseX, mouseY)) {
             drawCtx.lineWidth = 2
             drawCtx.beginPath()
-            let endNode = findClosestNode(mouseX, mouseY, graph)
+            let endNode = findClosestNode(mouseX, mouseY, visible)
             if (endNode !== null && this.startNode !== endNode) {
                 drawCtx.moveTo(endNode.x, endNode.y)
                 drawCtx.quadraticCurveTo(mouseX, mouseY, this.startNode.x, this.startNode.y)
@@ -123,9 +128,9 @@ class BuildGraphInteraction<T> implements GraphInteractionMode<NodeData> {
             drawCtx.setLineDash([]) 
         }
     }
-    onMouseUp(graph: Graph<NodeData>, endX: number, endY: number): void {
+    onMouseUp(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, endX: number, endY: number): void {
         if (this.shouldCreateEdge(endX, endY)) {
-            let endNode = findClosestNode(endX, endY, graph)
+            let endNode = findClosestNode(endX, endY, visible)
             if (this.startNode !== null && endNode !== null && this.startNode !== endNode && !this.startNode.neighbors.has(endNode)) {
                 // create new edge
                 pushToHistory(graph)
@@ -146,32 +151,34 @@ class DuplicateInteraction implements GraphInteractionMode<NodeData> {
         subgraph: Graph<NodeData>,
         startX: number,
         startY: number,
-        root: GraphNode<NodeData>
+        root: GraphNode<NodeData>,
+        visibleSubgraph: Graph<NodeData>
     } | null = null
     painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
 
-    onMouseDown(graph: Graph<NodeData>, mouseX: number, mouseY: number): void {
-        let rootNode = findClosestNode(mouseX, mouseY, graph)
+    onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
+        let rootNode = findClosestNode(mouseX, mouseY, visible)
         if (rootNode !== null) {
-            let radius = localityInput.valueAsNumber + 1
+            let radius = Infinity
             let [subgraph, nodeMap] = extractSubgraph(collectNeighborhood(rootNode, radius))
             this.state = {
                 startX: rootNode.x,
                 startY: rootNode.y,
                 subgraph: subgraph,
-                root: ensured(nodeMap.get(rootNode))
+                root: ensured(nodeMap.get(rootNode)),
+                visibleSubgraph: filteredGraphView(subgraph, (node) => !node.data.collapsed)
             }
         }
     }
-    onDragStep(graph: Graph<NodeData>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
+    onDragStep(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
         // draw preview?
         let state = this.state
         if (state !== null) {
             offsetNodes(state.subgraph.nodes, mouseX - state.root.x, mouseY - state.root.y)
-            this.painter.drawGraph(drawCtx, state.subgraph)
+            this.painter.drawGraph(drawCtx, state.visibleSubgraph)
         }
     }
-    onMouseUp(graph: Graph<NodeData>, mouseX: number, mouseY: number): void {
+    onMouseUp(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
         let state = this.state
         if (state !== null) {
             pushToHistory(graph)
@@ -187,11 +194,11 @@ class DuplicateInteraction implements GraphInteractionMode<NodeData> {
 export class MoveComponentInteraction<T> implements GraphInteractionMode<T> {
     draggedNode: GraphNode<T> | null = null
 
-    onMouseDown(graph: Graph<T>, mouseX: number, mouseY: number) {
-        this.draggedNode = findClosestNode(mouseX, mouseY, graph)
+    onMouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number) {
+        this.draggedNode = findClosestNode(mouseX, mouseY, visible)
     }
 
-    onDragStep(graph: Graph<T>, mouseX: number, mouseY: number, ctx: unknown, dt: number) {
+    onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number, ctx: unknown, dt: number) {
         if (this.draggedNode) {
             let nodes = collectNeighborhood(this.draggedNode, Infinity)
             dragNodes(nodes, mouseX - this.draggedNode.x, mouseY - this.draggedNode.y, dt)
@@ -205,11 +212,44 @@ export class MoveComponentInteraction<T> implements GraphInteractionMode<T> {
 }
 
 export class MarkInteraction implements GraphInteractionMode<NodeData> {
-    onMouseDown(graph: Graph<NodeData>, mouseX: number, mouseY: number) {
-        let node = findClosestNode(mouseX, mouseY, graph)
+    onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number) {
+        let node = findClosestNode(mouseX, mouseY, visible)
         if (node !== null) {
             pushToHistory(graph)
-            node.data.markFixed = !node.data.markFixed
+            node.data.marked = !node.data.marked
+        }
+    }
+    onDragStep() {}
+    onMouseUp() {}
+}
+
+export class CollapseInteraction implements GraphInteractionMode<NodeData> {
+    onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number) {
+        let node = findClosestNode(mouseX, mouseY, visible)
+        if (node !== null) {
+            pushToHistory(graph)
+            const radius = localityInput.valueAsNumber + 1
+            const neighborhood = collectNeighborhood(node, radius)
+            const allConnected = [...collectNeighborhood(node, Infinity)]
+            const remaining = allConnected.filter(n => !neighborhood.has(n))
+            const shouldCollapse = remaining.some(n => !n.data.collapsed) || [...neighborhood].some(n => n.data.collapsed)
+            if (shouldCollapse) {
+                for (let n of remaining) {
+                    n.data.collapsed = true
+                }
+                for (let n of neighborhood) {
+                    n.data.collapsed = false
+                }
+            } else {
+                if (allConnected.length > 500) {
+                    if (!confirm(`This will uncollapse ${allConnected.length} nodes. Are you sure?`)) {
+                        return
+                    }
+                }
+                for (let n of allConnected) {
+                    n.data.collapsed = false
+                }
+            }
         }
     }
     onDragStep() {}
@@ -239,19 +279,28 @@ function getSvgColorForNode(node: GraphNode<NodeData>): string {
     return colors[node.data.color] ?? "gray"
 }
 
-class ColoredGraphPainter extends GraphPainter<string> {
+class ColoredGraphPainter extends GraphPainter<NodeData> {
     getNodeRadius(small: boolean) {
         return small? this.nodeRadius*0.75 : this.nodeRadius
     }
 
-    getStrokeWidth(small: boolean) {
-        return small? 2 : 3
+    getStrokeWidth(small: boolean, fat: boolean) {
+        let w = small? 2 : 3
+        if (fat) {
+            w *= 2
+        }
+        return w
+    }
+
+    isSmaller(node: GraphNode<NodeData>): boolean {
+        const hasCollapsedNeighbors = [...node.neighbors].some(n => n.data.collapsed)
+        return node.data.marked || node.data.collapsed || hasCollapsedNeighbors
     }
 
     override drawEdge(ctx: CanvasRenderingContext2D, edge: GraphEdge<NodeData>) {
-        const thin = edge.a.data.markFixed || edge.b.data.markFixed
+        const thin = this.isSmaller(edge.a) || this.isSmaller(edge.b)
         ctx.beginPath()
-        ctx.lineWidth = this.getStrokeWidth(thin)*1.25
+        ctx.lineWidth = this.getStrokeWidth(thin, false)*1.25
         ctx.strokeStyle = thin ? "gray" : "black"
         ctx.moveTo(edge.a.x, edge.a.y)
         ctx.lineTo(edge.b.x, edge.b.y)
@@ -260,11 +309,11 @@ class ColoredGraphPainter extends GraphPainter<string> {
     }
 
     override drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>) {
-        const smaller = node.data.markFixed
-        const fat = false
+        const smaller = this.isSmaller(node)
+        const highlight = false
         ctx.fillStyle = getSvgColorForNode(node)
         ctx.strokeStyle = smaller ? "gray" : "black"
-        ctx.lineWidth = this.getStrokeWidth(smaller)
+        ctx.lineWidth = this.getStrokeWidth(smaller, highlight)
         ctx.beginPath()
         ctx.arc(node.x, node.y, this.getNodeRadius(smaller), 0, 2 * Math.PI)
         ctx.fill()
@@ -275,7 +324,7 @@ class ColoredGraphPainter extends GraphPainter<string> {
         ctx.fillStyle = ctx.strokeStyle // text in same color as outline
         ctx.textAlign = "center"
         ctx.textBaseline = "middle"
-        const fontWeight = fat? "bold" : "normal"
+        const fontWeight = highlight? "bold" : "normal"
         const fontSize = smaller? "10pt" : "12pt"
         ctx.font = `${fontWeight} ${fontSize} sans-serif`
         let label = (node.data.color+1).toString()
@@ -289,6 +338,8 @@ initFullscreenCanvas(canvas)
 
 const painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
 const sim = new GraphPhysicsSimulator(canvas, createEmptyGraph<NodeData>(), layoutStyle, painter)
+sim.visibleFilter = (node) => !node.data.collapsed
+
 function reset() {
     pushToHistory(sim.getGraph())
     sim.changeGraph(createEmptyGraph())
@@ -303,6 +354,17 @@ undoButton.addEventListener("click", () => {
     }
 })
 
+pruneButton.addEventListener("click", () => {
+    pushToHistory(sim.getGraph())
+    const visibleGraphView = filteredGraphView(sim.getGraph(), (node) => !node.data.collapsed)
+    const prunedGraph = structuredClone(visibleGraphView)
+    const nodeSet = new Set(prunedGraph.nodes)
+    for (const node of nodeSet) {
+        node.neighbors = new Set([...node.neighbors].filter(n => nodeSet.has(n)))
+    }
+    sim.changeGraph(prunedGraph)
+})
+
 function toolButton(id: string, tool: GraphInteractionMode<NodeData>) {
     document.getElementById(id)!.addEventListener("click", () => {
         sim.setInteractionMode(tool)
@@ -313,6 +375,7 @@ toolButton("tool_move", new MoveComponentInteraction())
 toolButton("tool_drag", new DragNodeInteraction())
 toolButton("tool_build", new BuildGraphInteraction())
 toolButton("tool_duplicate", new DuplicateInteraction())
+toolButton("tool_collapse", new CollapseInteraction())
 toolButton("tool_mark", new MarkInteraction())
 
 sim.setInteractionMode(new BuildGraphInteraction())

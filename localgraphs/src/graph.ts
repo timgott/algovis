@@ -102,3 +102,13 @@ export function mapGraph<S,T>(graph: Graph<S>, mapping: (value: S) => T): [Graph
     let translation = mapSubgraphTo(graph.nodes, result, mapping)
     return [result, translation]
 }
+
+export function filteredGraphView<T>(graph: Graph<T>, predicate: (node: GraphNode<T>) => boolean): Graph<T> {
+    let nodes = graph.nodes.filter(predicate)
+    let nodesSet = new Set(nodes)
+    let edges = graph.edges.filter(edge => nodesSet.has(edge.a) && nodesSet.has(edge.b))
+    return {
+        nodes: nodes,
+        edges: edges
+    }
+}
