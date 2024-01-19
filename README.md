@@ -20,13 +20,19 @@ pretty code doing cool things.
 
 ## Build
 
-Run development server with
+Install dependencies with
+
+```
+npm install
+```
+
+Then, run development server with
 
 ```
 npm run serve
 ```
 
-and build static files in `dist/` with
+or build static files in `dist/` with
 
 ```
 npm run build
