@@ -109,3 +109,7 @@ export function invertMap<K, V>(map: Map<K, V>): Map<V, K> {
     }
     return result
 }
+
+export function degToRad(degrees: number) {
+    return degrees * Math.PI / 180
+}

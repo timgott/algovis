@@ -112,3 +112,44 @@ export function filteredGraphView<T>(graph: Graph<T>, predicate: (node: GraphNod
         edges: edges
     }
 }
+
+export type MappedNode<S, T> = GraphNode<T> & {
+    get data(): T;
+    originalNode: GraphNode<S>;
+}
+export function mapGraphLazy<S,T>(graph: Graph<S>, mapping: (value: S) => T): [Graph<T>, (node: GraphNode<S>) => MappedNode<S, T>] {
+    let nodeMap = new Map<GraphNode<S>, MappedNode<S, T>>()
+    function getNode(node: GraphNode<S>): MappedNode<S, T> {
+        let result = nodeMap.get(node)
+        if (result === undefined) {
+            result = {
+                ...node,
+                get data() {
+                    return mapping(node.data)
+                },
+                get neighbors() {
+                    return node.neighbors.map(getNode)
+                },
+                originalNode: node
+            }
+            nodeMap.set(node, result)
+        }
+        return result
+    }
+    function getEdge(edge: GraphEdge<S>): GraphEdge<T> {
+        return {
+            ...edge,
+            get a() {
+                return getNode(edge.a)
+            },
+            get b() {
+                return getNode(edge.b)
+            }
+        }
+    }
+    let errorGraph: Graph<T> = {
+        get nodes(): GraphNode<T>[] {throw new Error("not implemented")},
+        get edges(): GraphEdge<T>[] {throw new Error("not implemented")},
+    }
+    return [errorGraph, getNode]
+}

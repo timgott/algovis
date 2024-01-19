@@ -1,9 +1,12 @@
 import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring } from "./coloring.js";
 import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode, dragNodes, offsetNodes } from "./graphlayout.js";
 import { initFullscreenCanvas } from "../../shared/canvas.js"
-import { Graph, GraphEdge, GraphNode, copyGraph, copyGraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, filteredGraphView, mapGraph } from "./graph.js";
-import { assert, assertExists, ensured, invertMap } from "../../shared/utils.js";
+import { Graph, GraphEdge, GraphNode, MappedNode, copyGraph, copyGraphTo, copySubgraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, filteredGraphView, mapGraph, mapGraphLazy } from "./graph.js";
+import { assert, assertExists, degToRad, ensured, invertMap, min } from "../../shared/utils.js";
 import { collectNeighborhood } from "./graphalgos.js";
+import { Vector } from "../../shared/vector.js";
+import { Rect } from "../../shared/rectangle.js";
+import { DynamicLocal } from "./partialgrid.js";
 
 let algorithmSelect = document.getElementById("select_algorithm") as HTMLSelectElement
 let localityInput = document.getElementById("locality") as HTMLInputElement
@@ -30,23 +33,30 @@ type NodeData = {
     collapsed: boolean
 }
 
-function algoStep(graph: Graph<NodeData>, pointOfChange: GraphNode<NodeData>) {
-    let algo
+function getAlgorithm(): DynamicLocal<NodeColor> {
     if (algorithmSelect.value == "greedy") {
-        algo = neighborhoodGreedy(localityInput.valueAsNumber)
+        return neighborhoodGreedy(localityInput.valueAsNumber)
     } else if (algorithmSelect.value == "minimal") {
-        algo = minimalGreedy(localityInput.valueAsNumber)
+        return minimalGreedy(localityInput.valueAsNumber)
     } else if (algorithmSelect.value == "random") {
-        algo = randomColoring(localityInput.valueAsNumber)
+        return randomColoring(localityInput.valueAsNumber)
     } else if (algorithmSelect.value == "parityaware") {
-        algo = parityBorderColoring(localityInput.valueAsNumber)
+        return parityBorderColoring(localityInput.valueAsNumber)
     } else if (algorithmSelect.value == "tunneling") {
-        algo = borderComponentColoring(localityInput.valueAsNumber)
+        return borderComponentColoring(localityInput.valueAsNumber)
     } else if (algorithmSelect.value == "walls") {
-        algo = antiCollisionColoring(localityInput.valueAsNumber)
+        return antiCollisionColoring(localityInput.valueAsNumber)
     } else {
         throw "Unknown algorithm"
     }
+}
+
+function algoStep(graph: Graph<NodeData>, pointOfChange: GraphNode<NodeData>): void {
+    if (graph.nodes.length > 1000) {
+        return algoStepFast(graph, pointOfChange)
+    }
+
+    let algo = getAlgorithm()
 
     // get graph with NodeColor type
     let [rawGraph, rawNodes] = mapGraph(graph, (data) => data.color)
@@ -63,12 +73,30 @@ function algoStep(graph: Graph<NodeData>, pointOfChange: GraphNode<NodeData>) {
     console.assert(isGlobalColoring(rawGraph), "correctness check failed")
 }
 
+// skips checks and cuts corners such that the entire graph doesn't have to be looped over
+function algoStepFast(graph: Graph<NodeData>, pointOfChange: GraphNode<NodeData>): void {
+    let algo = getAlgorithm()
+
+    // get graph with NodeColor type
+    let [rawGraph, getRawNode] = mapGraphLazy(graph, (data) => data.color)
+
+    // run algorithm to get changed nodes
+    let updates = algo.step(rawGraph, ensured(getRawNode(pointOfChange)))
+
+    // apply updates both to actual graph and the mapped graph
+    for (let [node, color] of updates) {
+        node.data = color;
+        let originalNode = (node as MappedNode<NodeData, NodeColor>).originalNode
+        originalNode.data.color = color
+    }
+}
+
 function pushToHistory(graph: Graph<NodeData>) {
     undoHistory.push(structuredClone(graph))
     undoHistory = undoHistory.slice(-historyLimit)
 }
 
-function moveSlightly(node: GraphNode<NodeData>) {
+function moveSlightly(node: GraphNode<unknown>) {
     // prevents nodes on same position and wakes them from sleep
     let strength = 3
     assert(strength > layoutStyle.sleepVelocity, "push strength cannot overcome sleep threshold")
@@ -124,7 +152,6 @@ class BuildGraphInteraction<T> implements GraphInteractionMode<NodeData> {
                 drawCtx.lineTo(this.startNode.x, this.startNode.y)
             }
             drawCtx.stroke()
-            drawCtx.closePath()
             drawCtx.setLineDash([]) 
         }
     }
@@ -146,11 +173,15 @@ class BuildGraphInteraction<T> implements GraphInteractionMode<NodeData> {
     }
 }
 
+function duplicateSubgraph<T>(rootNode: GraphNode<T>): [Graph<T>, GraphNode<T>] {
+    let radius = Infinity
+    let [subgraph, nodeMap] = extractSubgraph(collectNeighborhood(rootNode, radius))
+    return [subgraph, ensured(nodeMap.get(rootNode))]
+}
+
 class DuplicateInteraction implements GraphInteractionMode<NodeData> {
     state: {
         subgraph: Graph<NodeData>,
-        startX: number,
-        startY: number,
         root: GraphNode<NodeData>,
         visibleSubgraph: Graph<NodeData>
     } | null = null
@@ -159,19 +190,16 @@ class DuplicateInteraction implements GraphInteractionMode<NodeData> {
     onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
         let rootNode = findClosestNode(mouseX, mouseY, visible)
         if (rootNode !== null) {
-            let radius = Infinity
-            let [subgraph, nodeMap] = extractSubgraph(collectNeighborhood(rootNode, radius))
+            let [subgraph, newRoot] = duplicateSubgraph(rootNode)
             this.state = {
-                startX: rootNode.x,
-                startY: rootNode.y,
                 subgraph: subgraph,
-                root: ensured(nodeMap.get(rootNode)),
+                root: newRoot,
                 visibleSubgraph: filteredGraphView(subgraph, (node) => !node.data.collapsed)
             }
         }
     }
     onDragStep(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
-        // draw preview?
+        // draw preview
         let state = this.state
         if (state !== null) {
             offsetNodes(state.subgraph.nodes, mouseX - state.root.x, mouseY - state.root.y)
@@ -256,6 +284,123 @@ export class CollapseInteraction implements GraphInteractionMode<NodeData> {
     onMouseUp() {}
 }
 
+function drawArrowTip(cpx: number, cpy: number, x: number, y: number, size: number, ctx: CanvasRenderingContext2D) {
+    let angle = Math.atan2(y - cpy, x - cpx)
+    let spread = degToRad(35)
+    let left = angle - spread
+    let right = angle + spread
+    ctx.moveTo(x, y)
+    ctx.lineTo(x - size * Math.cos(left), y - size * Math.sin(left))
+    ctx.moveTo(x, y)
+    ctx.lineTo(x - size * Math.cos(right), y - size * Math.sin(right))
+}
+
+function nodePos(node: GraphNode<NodeData>) {
+    return new Vector(node.x, node.y)
+}
+
+// duplicates the neighborhood around blueprintNode in the order of orderedNodes and creates edges between them in the order of orderedEdges
+// effectively maps every node of orderedNodes to a copy of the blueprint
+// targetReferenceNode is the node in orderedNodes where blueprintNode should be placed
+// the resulting graph is put into targetGraph
+function macroDuplicate(nodeOrder: GraphNode<NodeData>[], edgeOrder: GraphEdge<NodeData>[], blueprintNode: GraphNode<NodeData>, referenceNode: GraphNode<NodeData>, targetGraph: Graph<NodeData>): void {
+    let nodeMap = new Map<GraphNode<NodeData>, GraphNode<NodeData>>()
+    let blueprint = collectNeighborhood(blueprintNode, Infinity)
+
+    for (let node of nodeOrder) {
+        if (node !== referenceNode) {
+            // create copy of blueprint
+            let copiedNodes = copySubgraphTo(blueprint, targetGraph)
+
+            // move to position of pattern node
+            let dx = (node.x - referenceNode.x)
+            let dy = (node.y - referenceNode.y)
+            offsetNodes(copiedNodes.values(), dx, dy)
+
+            // store root of blueprint copy to connect edges later
+            let copiedRoot = ensured(copiedNodes.get(blueprintNode))
+            nodeMap.set(node, copiedRoot)
+
+            for (let copiedNode of copiedNodes.values()) {
+                if (node.data.collapsed) {
+                    copiedNode.data.collapsed = true
+                }
+                if (node.data.marked) {
+                    copiedNode.data.marked = true
+                }
+                if (hasCollapsedNeighbors(node) && copiedNode != copiedRoot) {
+                    copiedNode.data.collapsed = true
+                }
+                moveSlightly(copiedNode)
+            }
+        } else {
+            nodeMap.set(node, blueprintNode)
+        }
+    }
+    for (let edge of edgeOrder) {
+        let a = nodeMap.get(edge.a)
+        let b = nodeMap.get(edge.b)
+        if (a !== undefined && b !== undefined) {
+            // connect roots according to pattern
+            putNewEdge(targetGraph, a, b)
+        }
+    }
+}
+
+class MacroDuplicateInteraction implements GraphInteractionMode<NodeData> {
+    state: {
+        startNode: GraphNode<NodeData>,
+    } | null = null
+    painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
+
+    onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
+        let rootNode = findClosestNode(mouseX, mouseY, visible)
+        if (rootNode !== null) {
+            this.state = {
+                startNode: rootNode,
+            }
+        }
+    }
+    onDragStep(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
+        // draw preview?
+        if (this.state !== null) {
+            const startNode = this.state.startNode
+            const endNode = findClosestNode(mouseX, mouseY, visible)
+            if (endNode !== null && startNode !== endNode) {
+                drawCtx.lineWidth = 2
+                drawCtx.beginPath()
+                let ax = startNode.x
+                let ay = startNode.y
+                let bx = (mouseX + endNode.x) * 0.5
+                let by = (mouseY + endNode.y) * 0.5
+                drawCtx.moveTo(ax, ay)
+                drawCtx.quadraticCurveTo(mouseX, mouseY, bx, by)
+                drawArrowTip(mouseX, mouseY, bx, by, 20, drawCtx)
+                drawCtx.stroke()
+            }
+        }
+    }
+    onMouseUp(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
+        let state = this.state
+        if (state !== null) {
+            const startNode = state.startNode
+            const endNode = findClosestNode(mouseX, mouseY, visible)
+            if (endNode !== null && startNode !== endNode) {
+                pushToHistory(graph)
+                let patternNode = startNode
+                let blueprintNode = endNode
+                let pattern = collectNeighborhood(patternNode, Infinity)
+                if (pattern.has(blueprintNode)) {
+                    console.warn("pattern node is part of blueprint, explosion imminent")
+                    return
+                }
+                let orderedNodes = graph.nodes.filter(n => pattern.has(n))
+                let orderedEdges = graph.edges.filter(e => pattern.has(e.a) && pattern.has(e.b))
+                macroDuplicate(orderedNodes, orderedEdges, blueprintNode, patternNode, graph)
+            }
+        }
+    }
+}
 
 function getSvgColorForNode(node: GraphNode<NodeData>): string {
     let colors = [
@@ -279,6 +424,10 @@ function getSvgColorForNode(node: GraphNode<NodeData>): string {
     return colors[node.data.color] ?? "gray"
 }
 
+function hasCollapsedNeighbors(node: GraphNode<NodeData>): boolean {
+    return [...node.neighbors].some(n => n.data.collapsed)
+}
+
 class ColoredGraphPainter extends GraphPainter<NodeData> {
     getNodeRadius(small: boolean) {
         return small? this.nodeRadius*0.75 : this.nodeRadius
@@ -293,8 +442,7 @@ class ColoredGraphPainter extends GraphPainter<NodeData> {
     }
 
     isSmaller(node: GraphNode<NodeData>): boolean {
-        const hasCollapsedNeighbors = [...node.neighbors].some(n => n.data.collapsed)
-        return node.data.marked || node.data.collapsed || hasCollapsedNeighbors
+        return node.data.marked || node.data.collapsed || hasCollapsedNeighbors(node)
     }
 
     override drawEdge(ctx: CanvasRenderingContext2D, edge: GraphEdge<NodeData>) {
@@ -305,7 +453,6 @@ class ColoredGraphPainter extends GraphPainter<NodeData> {
         ctx.moveTo(edge.a.x, edge.a.y)
         ctx.lineTo(edge.b.x, edge.b.y)
         ctx.stroke()
-        ctx.closePath()
     }
 
     override drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>) {
@@ -318,7 +465,6 @@ class ColoredGraphPainter extends GraphPainter<NodeData> {
         ctx.arc(node.x, node.y, this.getNodeRadius(smaller), 0, 2 * Math.PI)
         ctx.fill()
         ctx.stroke()
-        ctx.closePath()
 
         // label
         ctx.fillStyle = ctx.strokeStyle // text in same color as outline
@@ -377,6 +523,7 @@ toolButton("tool_build", new BuildGraphInteraction())
 toolButton("tool_duplicate", new DuplicateInteraction())
 toolButton("tool_collapse", new CollapseInteraction())
 toolButton("tool_mark", new MarkInteraction())
+toolButton("tool_macro", new MacroDuplicateInteraction())
 
 sim.setInteractionMode(new BuildGraphInteraction())
 sim.run()

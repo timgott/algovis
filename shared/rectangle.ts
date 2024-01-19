@@ -1,3 +1,5 @@
+import { Vector } from "./vector"
+
 export class Rect {
     constructor(
         public readonly left: number,
@@ -12,6 +14,20 @@ export class Rect {
 
     static fromCenter(x: number, y: number, width: number, height: number) {
         return new Rect(x - width/2, y - height/2, x + width/2, y + height/2)
+    }
+
+    static fromPoints(points: Iterable<Vector>) {
+        let left = Infinity
+        let top = Infinity
+        let right = -Infinity
+        let bottom = -Infinity
+        for (let point of points) {
+            left = Math.min(left, point.x)
+            top = Math.min(top, point.y)
+            right = Math.max(right, point.x)
+            bottom = Math.max(bottom, point.y)
+        }
+        return new Rect(left, top, right, bottom)
     }
 
     static readonly Empty = new Rect(Infinity, Infinity, -Infinity, -Infinity)
