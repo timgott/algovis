@@ -57,6 +57,10 @@ export function ensured<T>(value: T | null | undefined): T {
     return value
 }
 
+export function unreachable(value: never): never {
+    throw new Error(`Unreachable reached, value ${value}`)
+}
+
 export function min<T>(items: Iterable<T>, key: (item: T) => number): T | undefined {
     let minItem: T | undefined = undefined
     let minValue = Infinity

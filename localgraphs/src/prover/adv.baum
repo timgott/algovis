@@ -1,0 +1,17 @@
+(Template single (node))
+(Template halfpath (root n1) (n1 n2) (n2 leaf))
+
+(Build halfpath (root leftRoot) (leaf leftLeaf))
+(Build halfpath (root rightRoot) (leaf rightLeaf))
+
+(Decide colorA a1)
+(Decide colorB b1)
+
+(Assert (neighborsFree leftLeaf) (neighborsFree rightLeaf))
+(Edge leftLeaf rightLeaf)
+
+(Assert (not (neighborsFree leftLeaf)) (not (neighborsFree rightLeaf)))
+
+
+(if (eq colorA colorB)
+    
