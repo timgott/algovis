@@ -73,3 +73,36 @@ export function computeDistances<T>(center: GraphNode<T>, nodes: Iterable<GraphN
     })
     return distances
 }
+
+// find connected components, given by the component id each node belongs to
+export type Component = number
+export function findConnectedComponents<T>(seeds: Iterable<GraphNode<T>>, skip: (node: GraphNode<T>) => boolean): [number, Map<GraphNode<T>, Component>] {
+    let components = new Map<GraphNode<T>, Component>()
+    let componentIndex = 0
+    for (let seed of seeds) {
+        if (!components.has(seed) && !skip(seed)) {
+            bfs(seed, (node, distance) => {
+                if (skip(node)) {
+                    return SearchState.Skip
+                }
+                components.set(node, componentIndex)
+                return SearchState.Continue
+            })
+            componentIndex++
+        }
+    }
+    return [componentIndex, components]
+}
+
+export function getNodesByComponent<T>(components: Map<GraphNode<T>, Component>, nodes: Iterable<GraphNode<T>>): Map<Component, GraphNode<T>[]> {
+    let result = new Map<Component, GraphNode<T>[]>()
+
+    for (let node of nodes) {
+        let c = components.get(node)
+        if (c !== undefined) {
+            result.set(c, [...(result.get(c) ?? []), node])
+        }
+    }
+    return result
+}
+

@@ -3,7 +3,7 @@ import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSi
 import { initFullscreenCanvas } from "../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, MappedNode, copyGraph, copyGraphTo, copySubgraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, filteredGraphView, mapGraph, mapGraphLazy } from "./graph.js";
 import { assert, assertExists, degToRad, ensured, invertMap, min } from "../../shared/utils.js";
-import { collectNeighborhood } from "./graphalgos.js";
+import { collectNeighborhood, computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js";
 import { Vector } from "../../shared/vector.js";
 import { Rect } from "../../shared/rectangle.js";
 import { DynamicLocal } from "./partialgrid.js";
@@ -351,7 +351,7 @@ class MacroDuplicateInteraction implements GraphInteractionMode<NodeData> {
     state: {
         startNode: GraphNode<NodeData>,
     } | null = null
-    painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
+    painter = new ColoredGraphPainter(layoutStyle.nodeRadius, true)
 
     onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
         let rootNode = findClosestNode(mouseX, mouseY, visible)
@@ -402,8 +402,8 @@ class MacroDuplicateInteraction implements GraphInteractionMode<NodeData> {
     }
 }
 
-function getSvgColorForNode(node: GraphNode<NodeData>): string {
-    let colors = [
+function getSvgColorForNode(node: GraphNode<NodeData>, altColor: boolean): string {
+    const normalColors = [
         "#CDFAD5",
         "#F6FDC3",
         "#F3B67A",
@@ -413,6 +413,14 @@ function getSvgColorForNode(node: GraphNode<NodeData>): string {
         "yellow",
         "orange",
     ]
+
+    const alternativeColors = [
+        "#B2C5FF",
+        "#D6E4FF",
+        "#BF91FB",
+    ]
+
+    let colors = altColor? alternativeColors : normalColors
 
     const errorColor = "red"
     for (let neighbor of node.neighbors) {
@@ -428,7 +436,26 @@ function hasCollapsedNeighbors(node: GraphNode<NodeData>): boolean {
     return [...node.neighbors].some(n => n.data.collapsed)
 }
 
-class ColoredGraphPainter extends GraphPainter<NodeData> {
+// TODO: render parities?
+class ColoredGraphPainter implements GraphPainter<NodeData> {
+    constructor(private nodeRadius: number, public showParities: boolean = false) { }
+
+    public drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<NodeData>): void {
+        for (let edge of graph.edges) {
+            this.drawEdge(ctx, edge)
+        }
+        let [componentCount, components] = findConnectedComponents(graph.nodes, (node) => false)
+        let nodesByComponent = getNodesByComponent(components, graph.nodes)
+        for (let [component, nodes] of nodesByComponent) {
+            let distances = computeDistances(nodes[0], nodes)
+            for (let node of nodes) {
+                let dist = distances.get(node)!
+                let altColor = this.showParities && (dist + node.data.color) % 2 === 1
+                this.drawNode(ctx, node, altColor)
+            }
+        }
+    }
+
     getNodeRadius(small: boolean) {
         return small? this.nodeRadius*0.75 : this.nodeRadius
     }
@@ -445,7 +472,7 @@ class ColoredGraphPainter extends GraphPainter<NodeData> {
         return node.data.marked || node.data.collapsed || hasCollapsedNeighbors(node)
     }
 
-    override drawEdge(ctx: CanvasRenderingContext2D, edge: GraphEdge<NodeData>) {
+    drawEdge(ctx: CanvasRenderingContext2D, edge: GraphEdge<NodeData>) {
         const thin = this.isSmaller(edge.a) || this.isSmaller(edge.b)
         ctx.beginPath()
         ctx.lineWidth = this.getStrokeWidth(thin, false)*1.25
@@ -455,10 +482,10 @@ class ColoredGraphPainter extends GraphPainter<NodeData> {
         ctx.stroke()
     }
 
-    override drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>) {
+    drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>, altColor: boolean) {
         const smaller = this.isSmaller(node)
         const highlight = false
-        ctx.fillStyle = getSvgColorForNode(node)
+        ctx.fillStyle = getSvgColorForNode(node, altColor)
         ctx.strokeStyle = smaller ? "gray" : "black"
         ctx.lineWidth = this.getStrokeWidth(smaller, highlight)
         ctx.beginPath()

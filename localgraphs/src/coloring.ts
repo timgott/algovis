@@ -1,6 +1,6 @@
 import { assert, assertExists, min, randInt, range } from "../../shared/utils.js"
 import { Graph, GraphNode } from "./graph.js"
-import { SearchState, bfs, bfsFold, collectNeighborhood, computeDistances } from "./graphalgos.js"
+import { Component, SearchState, bfs, bfsFold, collectNeighborhood, computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js"
 import { DynamicLocal, OnlineAlgorithm, PartialGrid } from "./partialgrid.js"
 
 
@@ -235,24 +235,6 @@ function findDistanceTo(node: Node, predicate: (node: Node, distance: number) =>
     return result
 }
 
-type Component = number
-function findConnectedComponents(seeds: Iterable<Node>, skip: (node: Node) => boolean): [number, Map<Node, Component>] {
-    let components = new Map<Node, Component>()
-    let componentIndex = 0
-    for (let seed of seeds) {
-        if (!components.has(seed) && !skip(seed)) {
-            bfs(seed, (node, distance) => {
-                if (skip(node)) {
-                    return SearchState.Skip
-                }
-                components.set(node, componentIndex)
-                return SearchState.Continue
-            })
-            componentIndex++
-        }
-    }
-    return [componentIndex, components]
-}
 
 function findSharedBorders(components: Map<Node, Component>): Map<Node, Set<Component>> {
     let borders = new Map<Node, Set<number>>()
@@ -307,18 +289,6 @@ function findMajorityBorderParity(source: Node, offset: number, wallPredicate: (
         return null
     }
     return parityCount[0] > parityCount[1] ? 0 : 1
-}
-
-function getNodesByComponent(components: Map<Node, Component>, nodes: Iterable<Node>): Map<Component, Node[]> {
-    let result = new Map<Component, Node[]>()
-
-    for (let node of nodes) {
-        let c = components.get(node)
-        if (c !== undefined) {
-            result.set(c, [...(result.get(c) ?? []), node])
-        }
-    }
-    return result
 }
 
 function getComponentSizes(components: Map<Node, Component>): Map<Component, number> {

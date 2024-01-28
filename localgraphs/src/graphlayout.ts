@@ -196,7 +196,11 @@ export class DragNodeInteraction<T> implements GraphInteractionMode<T> {
     }
 }
 
-export class GraphPainter<T> {
+export interface GraphPainter<T> {
+    drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<T>): void
+}
+
+export class SimpleGraphPainter<T> implements GraphPainter<T> {
     constructor(protected nodeRadius: number) {}
 
     public drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<unknown>) {
