@@ -30,6 +30,11 @@ describe('tokenizer', () => {
         expect(lexer.next()).toEqual({ type: "symbol", value: "welt" });
         expect(lexer.next()).toEqual({ type: "EOF" });
     })
+    test('comment', () => {
+        let lexer = new Tokenizer("hallo;kommentar()\nwelt");
+        expect(lexer.next()).toEqual({ type: "symbol", value: "hallo" });
+        expect(lexer.next()).toEqual({ type: "symbol", value: "welt" });
+    })
 })
 
 describe('parser', () => {

@@ -1,0 +1,9 @@
+(define (path-coloring n)
+    (define half-path
+        (graph
+            ("left" 1)
+            (n "right")
+            (expand-for n (- n 1))
+        )
+    )
+)

@@ -8,7 +8,13 @@
 (Decide colorB b1)
 
 (Assert (neighborsFree leftLeaf) (neighborsFree rightLeaf))
-(Edge leftLeaf rightLeaf)
+(Cond
+    ((eq colorA colorB)
+        (Path leftLeaf rightLeaf)
+    )
+    (t (Path leftLeaf middle rightLeaf))
+)
+(Assert (exists ))
 
 (Assert (not (neighborsFree leftLeaf)) (not (neighborsFree rightLeaf)))
 

@@ -1,0 +1,33 @@
+const loc := 2
+global neighborsFixed := empty nodemap
+global colors := empty nodemap
+global lisp car
+
+# make primitive
+reveal a col:
+- forall nodes
+    (if (< (distance node a) loc)
+      (set (neighborsFixed node) true)
+    )
+- set (colors a) col
+
+# primitive
+duplicate node newName
+
+path node:
+- local
+- duplicate node as node2
+- duplicate node as node3
+- duplicate node as node4
+- duplicate node as node5
+- duplicate node as node6
+- duplicate node as node7
+- duplicate node as node8
+- add edges
+
+(let
+  (
+    ('graph (make-graph ('a 'center) ('b 'center) ('c 'd) ('d 'e)))
+  )
+  (path )
+)
