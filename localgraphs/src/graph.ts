@@ -38,7 +38,7 @@ export function createNode<T>(graph: Graph<T>, data: T, x: number = 0, y: number
     return node
 }
 
-export function createEdge(graph: Graph<unknown>, a: GraphNode<unknown>, b: GraphNode<unknown>) {
+export function createEdge<T>(graph: Graph<T>, a: GraphNode<T>, b: GraphNode<T>) {
     console.assert(!a.neighbors.has(b))
     console.assert(!b.neighbors.has(a))
     const edge = {

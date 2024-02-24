@@ -100,9 +100,9 @@ export function applyLayoutForces(graph: Graph<unknown>, layout: LayoutConfig, w
     return activeNodes.size
 }
 
-export function findClosestNode<T>(x: number, y: number, nodes: Iterable<GraphNode<T>>): GraphNode<T> | null {
+export function findClosestNode<T>(x: number, y: number, nodes: Iterable<GraphNode<T>>, limit: number = Infinity): GraphNode<T> | null {
     let result = null
-    let minDistance = Number.POSITIVE_INFINITY
+    let minDistance = limit*limit
     for (let node of nodes) {
         let dx = (node.x - x)
         let dy = (node.y - y)
@@ -120,6 +120,12 @@ export function shuffleGraphPositions(graph: Graph<unknown>, width: number, heig
         node.x = Math.random() * width
         node.y = Math.random() * height
     }
+}
+
+export function moveSlightly(node: GraphNode<unknown>, strength: number = 3) {
+    // prevents nodes on same position and wakes them from sleep
+    node.vx += (Math.random()*2.-1.) * strength
+    node.vy += (Math.random()*2.-1.) * strength
 }
 
 export function dragNodes(nodes: Iterable<GraphNode<unknown>>, dx: number, dy: number, deltaTime: number) {
@@ -295,7 +301,6 @@ export class GraphPhysicsSimulator<T> {
         if (dt < 0) {
             console.log("Negative dt", dt)
         }
-        console.log("dt", dt)
 
         const width = this.canvas.clientWidth
         const height = this.canvas.clientHeight

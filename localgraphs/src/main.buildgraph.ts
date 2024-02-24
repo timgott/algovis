@@ -1,18 +1,20 @@
 import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring } from "./coloring.js";
-import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode, dragNodes, offsetNodes } from "./graphlayout.js";
+import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode, dragNodes, offsetNodes, moveSlightly } from "./graphlayout.js";
 import { initFullscreenCanvas } from "../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, MappedNode, copyGraph, copyGraphTo, copySubgraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, filteredGraphView, mapGraph, mapGraphLazy } from "./graph.js";
-import { assert, assertExists, degToRad, ensured, invertMap, min } from "../../shared/utils.js";
+import { assert, assertExists, degToRad, ensured, invertMap, min, sleep } from "../../shared/utils.js";
 import { collectNeighborhood, computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js";
 import { Vector } from "../../shared/vector.js";
 import { Rect } from "../../shared/rectangle.js";
 import { DynamicLocal } from "./partialgrid.js";
+import { CommandTreeAdversary, executeEdgeCommand, makePathAdversary, runAdversary } from "./adversary.js";
 
 let algorithmSelect = document.getElementById("select_algorithm") as HTMLSelectElement
 let localityInput = document.getElementById("locality") as HTMLInputElement
 let undoButton = document.getElementById("undo") as HTMLButtonElement
 let resetButton = document.getElementById("reset") as HTMLButtonElement
 let pruneButton = document.getElementById("prune") as HTMLButtonElement
+let adversaryButton = document.getElementById("run_adversary") as HTMLButtonElement
 let undoHistory: Graph<NodeData>[] = []
 const historyLimit = 100
 
@@ -52,7 +54,7 @@ function getAlgorithm(): DynamicLocal<NodeColor> {
 }
 
 function algoStep(graph: Graph<NodeData>, pointOfChange: GraphNode<NodeData>): void {
-    if (graph.nodes.length > 1000) {
+    if (graph.nodes.length > 100) {
         return algoStepFast(graph, pointOfChange)
     }
 
@@ -91,20 +93,17 @@ function algoStepFast(graph: Graph<NodeData>, pointOfChange: GraphNode<NodeData>
     }
 }
 
+function algoStepEdge(graph: Graph<NodeData>, changedEdge: GraphEdge<NodeData>): void {
+    algoStep(graph, changedEdge.a)
+    algoStep(graph, changedEdge.b)
+}
+
 function pushToHistory(graph: Graph<NodeData>) {
     undoHistory.push(structuredClone(graph))
     undoHistory = undoHistory.slice(-historyLimit)
 }
 
-function moveSlightly(node: GraphNode<unknown>) {
-    // prevents nodes on same position and wakes them from sleep
-    let strength = 3
-    assert(strength > layoutStyle.sleepVelocity, "push strength cannot overcome sleep threshold")
-    node.vx += (Math.random()*2.-1.) * strength
-    node.vy += (Math.random()*2.-1.) * strength
-}
-
-function putNewNode(graph: Graph<NodeData>, x: number, y: number) {
+function putNewNode(graph: Graph<NodeData>, x: number, y: number): GraphNode<NodeData> {
     let node = createNode(graph, {
         color: undefined as any,
         marked: false,
@@ -113,12 +112,12 @@ function putNewNode(graph: Graph<NodeData>, x: number, y: number) {
     moveSlightly(node)
     algoStep(graph, node)
     assertExists(node.data.color)
+    return node
 }
 
 function putNewEdge(graph: Graph<NodeData>, a: GraphNode<NodeData>, b: GraphNode<NodeData>) {
-    createEdge(graph, a, b)
-    algoStep(graph, b)
-    algoStep(graph, a)
+    const edge = createEdge(graph, a, b)
+    algoStepEdge(graph, edge)
 }
 
 class BuildGraphInteraction<T> implements GraphInteractionMode<NodeData> {
@@ -551,6 +550,21 @@ toolButton("tool_duplicate", new DuplicateInteraction())
 toolButton("tool_collapse", new CollapseInteraction())
 toolButton("tool_mark", new MarkInteraction())
 toolButton("tool_macro", new MacroDuplicateInteraction())
+
+adversaryButton.addEventListener("click", () => {
+    let graph = sim.getGraph()
+    pushToHistory(graph)
+    const adversary = makePathAdversary(2)
+    const offset = graph.nodes.length
+    let cmd = adversary.step(graph)
+    while (cmd !== "exit") {
+        let newEdge = executeEdgeCommand(cmd.map(i => i + offset) as [number, number], graph, (graph) => putNewNode(graph, 100, 100))
+        algoStepEdge(graph, newEdge)
+        cmd = adversary.step(graph)
+        sim.requestFrame()
+        //await sleep(1000)
+    }
+})
 
 sim.setInteractionMode(new BuildGraphInteraction())
 sim.run()

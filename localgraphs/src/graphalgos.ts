@@ -61,7 +61,7 @@ export function collectNeighborhood<T>(node: GraphNode<T>, radius: number): Set<
 }
 
 // compute the distance of the nodes from center by BFS
-export function computeDistances<T>(center: GraphNode<T>, nodes: Iterable<GraphNode<T>>): Map<GraphNode<T>, number> {
+export function computeDistances<T>(center: GraphNode<T>|GraphNode<T>[], nodes: Iterable<GraphNode<T>>): Map<GraphNode<T>, number> {
     let remaining = new Set<GraphNode<T>>(nodes)
     let distances = new Map<GraphNode<T>, number>()
     bfs(center, (node, distance) => {
