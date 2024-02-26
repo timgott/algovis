@@ -1,14 +1,11 @@
-import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring } from "./coloring.js";
-import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode, dragNodes, offsetNodes, moveSlightly } from "./graphlayout.js";
+import { NodeColor } from "./coloring.js";
+import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode } from "./graphlayout.js";
 import { initFullscreenCanvas } from "../../shared/canvas.js"
-import { Graph, GraphEdge, GraphNode, MappedNode, copyGraph, copyGraphTo, copySubgraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, filteredGraphView, mapGraph, mapGraphLazy } from "./graph.js";
-import { assert, assertExists, degToRad, ensured, invertMap, min, sleep } from "../../shared/utils.js";
-import { collectNeighborhood, computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js";
-import { Vector } from "../../shared/vector.js";
-import { Rect } from "../../shared/rectangle.js";
-import { DynamicLocal } from "./partialgrid.js";
-import { Adversary, CommandTreeAdversary, executeEdgeCommand, makePathAdversary, runAdversary } from "./adversary.js";
+import { Graph, GraphEdge, GraphNode, createEmptyGraph, createNode } from "./graph.js";
+import { computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js";
+import { Adversary, CommandTree, CommandTreeAdversary, executeEdgeCommand, make3Tree, pathAdv2 } from "./adversary.js";
 
+let adversarySelect = document.getElementById("select_adversary") as HTMLSelectElement
 let localityInput = document.getElementById("locality") as HTMLInputElement
 let colorInput = document.getElementById("color_input") as HTMLInputElement
 let undoButton = document.getElementById("undo") as HTMLButtonElement
@@ -64,6 +61,23 @@ function pushToHistory(state: State) {
     undoHistory = undoHistory.slice(-historyLimit)
 }
 
+function isLocalColoring(node: GraphNode<NodeData>): boolean {
+    for (let neighbor of node.neighbors) {
+        if (neighbor.data.color == node.data.color) {
+            return false
+        }
+    }
+    return true
+}
+
+function isGlobalColoring(graph: Graph<NodeData>): boolean {
+    for (let node of graph.nodes) {
+        if (!isLocalColoring(node)) {
+            return false
+        }
+    }
+    return true
+}
 
 function getSvgColorForNode(node: GraphNode<NodeData>, altColor: boolean): string {
     const normalColors = [
@@ -86,10 +100,8 @@ function getSvgColorForNode(node: GraphNode<NodeData>, altColor: boolean): strin
     let colors = altColor? alternativeColors : normalColors
 
     const errorColor = "red"
-    for (let neighbor of node.neighbors) {
-        if (neighbor.data.color == node.data.color) {
-            return errorColor
-        }
+    if (!isLocalColoring(node)) {
+        return errorColor
     }
 
     return colors[node.data.color] ?? "gray"
@@ -254,6 +266,10 @@ function findUnsetNode(state: State): GraphNode<NodeData> | undefined {
     return state.graph.nodes.findLast(isUnset)
 }
 
+function findErrorNode(state: State): GraphNode<NodeData> | undefined {
+    return state.graph.nodes.findLast((node) => !isLocalColoring(node))
+}
+
 class ColoringController {
     selectInteraction = new SelectNodeInteraction(
         (node) => this.selectNode(node),
@@ -261,7 +277,7 @@ class ColoringController {
     )
 
     constructor(private inputField: HTMLInputElement) {
-        inputField.addEventListener("change", () => {
+        inputField.addEventListener("input", () => {
             let color = parseInt(inputField.value) - 1
             if (color >= 0 && color < 8) {
                 this.setColor(color)
@@ -288,12 +304,12 @@ class ColoringController {
 
             node.data.color = color
 
-            if (allNodesSet(state)) {
+            if (allNodesSet(state) && isGlobalColoring(state.graph)) {
                 advStep(state)
             }
             globalCtx.redraw()
 
-            let nextSelected = findUnsetNode(state)
+            let nextSelected = findUnsetNode(state) ?? findErrorNode(state)
             if (nextSelected === undefined) {
                 this.unselect()
             } else {
@@ -324,9 +340,21 @@ toolButton("tool_drag", new DragNodeInteraction())
 toolButton("tool_select", colorController.selectInteraction)
 sim.setInteractionMode(colorController.selectInteraction) // default tool
 
+function createSelectedAdversary(): Adversary<NodeData> {
+    let tree: CommandTree<NodeData>
+    if (adversarySelect.value == "path") {
+        tree = pathAdv2
+    } else if (adversarySelect.value == "tree3") {
+        tree = make3Tree(2)
+    } else {
+        throw "Unknown adversary type"
+    }
+    return new CommandTreeAdversary(tree)
+}
+
 function makeInitialState(): State {
     let state: State = {
-        adversary: makePathAdversary(2),
+        adversary: createSelectedAdversary(),
         graph: createEmptyGraph(),
         selectedNode: null
     }

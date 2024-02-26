@@ -7,7 +7,7 @@ import { collectNeighborhood, computeDistances, findConnectedComponents, getNode
 import { Vector } from "../../shared/vector.js";
 import { Rect } from "../../shared/rectangle.js";
 import { DynamicLocal } from "./partialgrid.js";
-import { CommandTreeAdversary, executeEdgeCommand, makePathAdversary, runAdversary } from "./adversary.js";
+import { CommandTreeAdversary, executeEdgeCommand, make3Tree, runAdversary } from "./adversary.js";
 
 let algorithmSelect = document.getElementById("select_algorithm") as HTMLSelectElement
 let localityInput = document.getElementById("locality") as HTMLInputElement
@@ -554,11 +554,12 @@ toolButton("tool_macro", new MacroDuplicateInteraction())
 adversaryButton.addEventListener("click", () => {
     let graph = sim.getGraph()
     pushToHistory(graph)
-    const adversary = makePathAdversary(2)
+    const adversary = new CommandTreeAdversary(make3Tree(1))
     const offset = graph.nodes.length
     let cmd = adversary.step(graph)
     while (cmd !== "exit") {
-        let newEdge = executeEdgeCommand(cmd.map(i => i + offset) as [number, number], graph, (graph) => putNewNode(graph, 100, 100))
+        let newEdge = executeEdgeCommand(cmd.map(i => i + offset) as [number, number], graph, (graph) => putNewNode(graph, canvas.width/2, canvas.height/2))
+        newEdge.length = layoutStyle.minEdgeLength * 2
         algoStepEdge(graph, newEdge)
         cmd = adversary.step(graph)
         sim.requestFrame()

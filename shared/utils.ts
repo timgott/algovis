@@ -74,8 +74,21 @@ export function min<T>(items: Iterable<T>, key: (item: T) => number): T | undefi
     return minItem
 }
 
-export function range(limit: number): Iterable<number> {
-    return Array(limit).keys()
+export function range(limit: number): Iterable<number>;
+export function range(start: number, limit: number): Iterable<number>;
+export function* range(a: number, b?: number): Iterable<number> {
+    let start: number
+    let limit: number
+    if (b === undefined) {
+        start = 0
+        limit = a
+    } else {
+        start = a
+        limit = b
+    }
+    for (let i = start; i < limit; i++) {
+        yield i
+    }
 }
 
 declare global {
