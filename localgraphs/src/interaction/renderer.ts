@@ -1,5 +1,5 @@
-import { getCursorPosition } from "../../shared/canvas"
-import { unreachable } from "../../shared/utils"
+import { getCursorPosition } from "../../../shared/canvas"
+import { unreachable } from "../../../shared/utils"
 
 export type SleepState = "Running" | "Sleeping"
 
@@ -20,9 +20,8 @@ export type AnimationFrame = {
 export type MouseDownResponse = "Click" | "Drag" | "Ignore"
 
 export interface InteractiveSystem {
-    animate(frame: AnimationFrame): SleepState;
-
-    onMouseDown(x: number, y: number): MouseDownResponse;
+    animate?(frame: AnimationFrame): SleepState;
+    onMouseDown?(x: number, y: number): MouseDownResponse;
     onDragEnd?(x: number, y: number): void;
 }
 
@@ -81,6 +80,10 @@ export class InteractionController {
 
         // run animation step on all systems
         const sleepStates = this.systems.map((system) => {
+            if (system.animate === undefined) {
+                return "Sleeping"
+            }
+
             // only system that has captured mouse gets drag info
             const dragState = {
                 mouseX: this.mouseX,
@@ -130,13 +133,15 @@ export class InteractionController {
         this.mouseY = y
         this.mouseCapture = null
         for (const system of this.systems) {
-            const result = system.onMouseDown(x, y)
-            if (result !== "Ignore") {
-                if (result === "Drag") {
-                    this.mouseCapture = system
+            if (system.onMouseDown !== undefined) {
+                const result = system.onMouseDown(x, y)
+                if (result !== "Ignore") {
+                    if (result === "Drag") {
+                        this.mouseCapture = system
+                    }
+                    this.requestFrame()
+                    break // do not propagate event
                 }
-                this.requestFrame()
-                break // do not propagate event
             }
         }
     }

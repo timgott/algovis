@@ -1,5 +1,5 @@
-import { getCursorPosition } from "../../shared/canvas"
-import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode, filteredGraphView } from "./graph"
+import { getCursorPosition } from "../../../shared/canvas"
+import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode, filteredGraphView } from "../graph"
 import { AnimationFrame, InteractiveSystem, MouseDownResponse, SleepState } from "./renderer"
 
 
@@ -222,10 +222,8 @@ export class SimpleGraphPainter<T> implements GraphPainter<T> {
     }
 
     protected drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<unknown>) {
-        ctx.beginPath()
-        ctx.arc(node.x, node.y, this.nodeRadius, 0, Math.PI * 2)
+        ctx.circle(node.x, node.y, this.nodeRadius)
         ctx.fill()
-        ctx.closePath()
     }
 
     protected drawEdge(ctx: CanvasRenderingContext2D, edge: GraphEdge<unknown>) {
@@ -234,7 +232,6 @@ export class SimpleGraphPainter<T> implements GraphPainter<T> {
         ctx.moveTo(edge.a.x, edge.a.y)
         ctx.lineTo(edge.b.x, edge.b.y)
         ctx.stroke()
-        ctx.closePath()
     }
 }
 

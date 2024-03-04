@@ -1,5 +1,5 @@
 import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring } from "./coloring.js";
-import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode, dragNodes, offsetNodes, moveSlightly } from "./graphlayout.js";
+import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode, dragNodes, offsetNodes, moveSlightly } from "./interaction/graphlayout.js";
 import { initFullscreenCanvas } from "../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, MappedNode, copyGraph, copyGraphTo, copySubgraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, filteredGraphView, mapGraph, mapGraphLazy } from "./graph.js";
 import { assert, assertExists, degToRad, ensured, invertMap, min, sleep } from "../../shared/utils.js";
@@ -8,7 +8,9 @@ import { Vector } from "../../shared/vector.js";
 import { Rect } from "../../shared/rectangle.js";
 import { DynamicLocal } from "./partialgrid.js";
 import { CommandTreeAdversary, executeEdgeCommand, make3Tree, runAdversary } from "./adversary.js";
-import { InteractionController } from "./renderer.js";
+import { InteractionController } from "./interaction/renderer.js";
+import { ClickNodeInteraction, BuildGraphInteraction, MoveComponentInteraction } from "./interaction/tools.js";
+import { UndoHistory } from "./interaction/undo.js";
 
 let algorithmSelect = document.getElementById("select_algorithm") as HTMLSelectElement
 let localityInput = document.getElementById("locality") as HTMLInputElement
@@ -16,8 +18,7 @@ let undoButton = document.getElementById("undo") as HTMLButtonElement
 let resetButton = document.getElementById("reset") as HTMLButtonElement
 let pruneButton = document.getElementById("prune") as HTMLButtonElement
 let adversaryButton = document.getElementById("run_adversary") as HTMLButtonElement
-let undoHistory: Graph<NodeData>[] = []
-const historyLimit = 100
+let undoHistory = new UndoHistory<Graph<NodeData>>(100)
 
 const layoutStyle: LayoutConfig = {
     nodeRadius: 14,
@@ -100,8 +101,7 @@ function algoStepEdge(graph: Graph<NodeData>, changedEdge: GraphEdge<NodeData>):
 }
 
 function pushToHistory(graph: Graph<NodeData>) {
-    undoHistory.push(structuredClone(graph))
-    undoHistory = undoHistory.slice(-historyLimit)
+    undoHistory.push(graph)
 }
 
 function putNewNode(graph: Graph<NodeData>, x: number, y: number): GraphNode<NodeData> {
@@ -119,58 +119,6 @@ function putNewNode(graph: Graph<NodeData>, x: number, y: number): GraphNode<Nod
 function putNewEdge(graph: Graph<NodeData>, a: GraphNode<NodeData>, b: GraphNode<NodeData>) {
     const edge = createEdge(graph, a, b)
     algoStepEdge(graph, edge)
-}
-
-class BuildGraphInteraction<T> implements GraphInteractionMode<NodeData> {
-    edgeThreshold: number = 20
-
-    startNode: GraphNode<NodeData> | null = null
-    startX: number = 0
-    startY: number = 0
-
-    onMouseDown(graph: Graph<NodeData>, visible: GraphNode<NodeData>[], mouseX: number, mouseY: number): void {
-        this.startX = mouseX
-        this.startY = mouseY
-        this.startNode = findClosestNode(mouseX, mouseY, visible)
-    }
-    shouldCreateEdge(mouseX: number, mouseY: number): boolean {
-        let distance = Math.hypot(mouseX - this.startX, mouseY - this.startY)
-        return distance >= this.edgeThreshold
-    }
-    onDragStep(graph: Graph<NodeData>, visible: Iterable<GraphNode<unknown>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D): void {
-        // TODO: draw edge
-        if (this.startNode !== null && this.shouldCreateEdge(mouseX, mouseY)) {
-            drawCtx.lineWidth = 2
-            drawCtx.beginPath()
-            let endNode = findClosestNode(mouseX, mouseY, visible)
-            if (endNode !== null && this.startNode !== endNode) {
-                drawCtx.moveTo(endNode.x, endNode.y)
-                drawCtx.quadraticCurveTo(mouseX, mouseY, this.startNode.x, this.startNode.y)
-            } else {
-                drawCtx.setLineDash([6, 5])
-                drawCtx.moveTo(mouseX, mouseY)
-                drawCtx.lineTo(this.startNode.x, this.startNode.y)
-            }
-            drawCtx.stroke()
-            drawCtx.setLineDash([]) 
-        }
-    }
-    onMouseUp(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, endX: number, endY: number): void {
-        if (this.shouldCreateEdge(endX, endY)) {
-            let endNode = findClosestNode(endX, endY, visible)
-            if (this.startNode !== null && endNode !== null && this.startNode !== endNode && !this.startNode.neighbors.has(endNode)) {
-                // create new edge
-                pushToHistory(graph)
-                putNewEdge(graph, this.startNode, endNode)
-            }
-        }
-        else {
-            // create new node
-            pushToHistory(graph)
-            putNewNode(graph, endX, endY)
-        }
-
-    }
 }
 
 function duplicateSubgraph<T>(rootNode: GraphNode<T>): [Graph<T>, GraphNode<T>] {
@@ -219,69 +167,29 @@ class DuplicateInteraction implements GraphInteractionMode<NodeData> {
     }
 }
 
-export class MoveComponentInteraction<T> implements GraphInteractionMode<T> {
-    draggedNode: GraphNode<T> | null = null
-
-    onMouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number) {
-        this.draggedNode = findClosestNode(mouseX, mouseY, visible)
-    }
-
-    onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number, ctx: unknown, dt: number) {
-        if (this.draggedNode) {
-            let nodes = collectNeighborhood(this.draggedNode, Infinity)
-            dragNodes(nodes, mouseX - this.draggedNode.x, mouseY - this.draggedNode.y, dt)
-            console.log("Move dt", dt)
+function collapse(node: GraphNode<NodeData>) {
+    const radius = localityInput.valueAsNumber + 1
+    const neighborhood = collectNeighborhood(node, radius)
+    const allConnected = [...collectNeighborhood(node, Infinity)]
+    const remaining = allConnected.filter(n => !neighborhood.has(n))
+    const shouldCollapse = remaining.some(n => !n.data.collapsed) || [...neighborhood].some(n => n.data.collapsed)
+    if (shouldCollapse) {
+        for (let n of remaining) {
+            n.data.collapsed = true
         }
-    }
-
-    onMouseUp() {
-        this.draggedNode = null
-    }
-}
-
-export class MarkInteraction implements GraphInteractionMode<NodeData> {
-    onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number) {
-        let node = findClosestNode(mouseX, mouseY, visible)
-        if (node !== null) {
-            pushToHistory(graph)
-            node.data.marked = !node.data.marked
+        for (let n of neighborhood) {
+            n.data.collapsed = false
         }
-    }
-    onDragStep() {}
-    onMouseUp() {}
-}
-
-export class CollapseInteraction implements GraphInteractionMode<NodeData> {
-    onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number) {
-        let node = findClosestNode(mouseX, mouseY, visible)
-        if (node !== null) {
-            pushToHistory(graph)
-            const radius = localityInput.valueAsNumber + 1
-            const neighborhood = collectNeighborhood(node, radius)
-            const allConnected = [...collectNeighborhood(node, Infinity)]
-            const remaining = allConnected.filter(n => !neighborhood.has(n))
-            const shouldCollapse = remaining.some(n => !n.data.collapsed) || [...neighborhood].some(n => n.data.collapsed)
-            if (shouldCollapse) {
-                for (let n of remaining) {
-                    n.data.collapsed = true
-                }
-                for (let n of neighborhood) {
-                    n.data.collapsed = false
-                }
-            } else {
-                if (allConnected.length > 500) {
-                    if (!confirm(`This will uncollapse ${allConnected.length} nodes. Are you sure?`)) {
-                        return
-                    }
-                }
-                for (let n of allConnected) {
-                    n.data.collapsed = false
-                }
+    } else {
+        if (allConnected.length > 500) {
+            if (!confirm(`This will uncollapse ${allConnected.length} nodes. Are you sure?`)) {
+                return
             }
         }
+        for (let n of allConnected) {
+            n.data.collapsed = false
+        }
     }
-    onDragStep() {}
-    onMouseUp() {}
 }
 
 function drawArrowTip(cpx: number, cpy: number, x: number, y: number, size: number, ctx: CanvasRenderingContext2D) {
@@ -490,6 +398,7 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
         ctx.lineWidth = this.getStrokeWidth(smaller, highlight)
         ctx.beginPath()
         ctx.arc(node.x, node.y, this.getNodeRadius(smaller), 0, 2 * Math.PI)
+        ctx.closePath()
         ctx.fill()
         ctx.stroke()
 
@@ -529,7 +438,7 @@ resetButton.addEventListener("click", reset)
 
 
 undoButton.addEventListener("click", () => {
-    let last = undoHistory.pop()
+    let last = undoHistory.undo()
     if (last) {
         replaceGlobalGraph(last)
         renderer.requestFrame()
@@ -555,12 +464,25 @@ function toolButton(id: string, tool: GraphInteractionMode<NodeData>) {
     })
 }
 
+function makeUndoable<T extends (...args: any) => any>(f: T): T {
+    return function(this: any, ...args: Parameters<T>): ReturnType<T> {
+        pushToHistory(sim.getGraph())
+        return f.apply(this, args)
+    } as T
+}
+
+const buildInteraction = new BuildGraphInteraction(makeUndoable(putNewNode), makeUndoable(putNewEdge))
+const markInteraction = new ClickNodeInteraction<NodeData>(
+    makeUndoable(node => { node.data.marked = !node.data.marked })
+)
+const collapseInteraction = new ClickNodeInteraction<NodeData>(makeUndoable(collapse))
+
 toolButton("tool_move", new MoveComponentInteraction())
 toolButton("tool_drag", new DragNodeInteraction())
-toolButton("tool_build", new BuildGraphInteraction())
+toolButton("tool_build", buildInteraction)
 toolButton("tool_duplicate", new DuplicateInteraction())
-toolButton("tool_collapse", new CollapseInteraction())
-toolButton("tool_mark", new MarkInteraction())
+toolButton("tool_collapse", collapseInteraction)
+toolButton("tool_mark", markInteraction)
 toolButton("tool_macro", new MacroDuplicateInteraction())
 
 adversaryButton.addEventListener("click", () => {
@@ -579,6 +501,6 @@ adversaryButton.addEventListener("click", () => {
     }
 })
 
-sim.setInteractionMode(new BuildGraphInteraction())
+sim.setInteractionMode(buildInteraction)
 
 renderer.requestFrame()

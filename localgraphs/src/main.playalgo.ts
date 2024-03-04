@@ -1,18 +1,18 @@
 import { NodeColor } from "./coloring.js";
-import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode } from "./graphlayout.js";
+import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode } from "./interaction/graphlayout.js";
 import { initFullscreenCanvas } from "../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, createEmptyGraph, createNode } from "./graph.js";
 import { computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js";
 import { Adversary, CommandTree, CommandTreeAdversary, executeEdgeCommand, make3Tree, pathAdv2 } from "./adversary.js";
-import { InteractionController } from "./renderer.js";
+import { InteractionController } from "./interaction/renderer.js";
+import { UndoHistory } from "./interaction/undo.js";
 
 let adversarySelect = document.getElementById("select_adversary") as HTMLSelectElement
 let localityInput = document.getElementById("locality") as HTMLInputElement
 let colorInput = document.getElementById("color_input") as HTMLInputElement
 let undoButton = document.getElementById("undo") as HTMLButtonElement
 let resetButton = document.getElementById("reset") as HTMLButtonElement
-let undoHistory: State[] = []
-const historyLimit = 100
+let undoHistory = new UndoHistory<State>(100, cloneState)
 
 const UnsetColor = -1
 
@@ -58,8 +58,7 @@ function cloneState(state: State): State {
 }
 
 function pushToHistory(state: State) {
-    undoHistory.push(cloneState(state))
-    undoHistory = undoHistory.slice(-historyLimit)
+    undoHistory.push(state)
 }
 
 function isLocalColoring(node: GraphNode<NodeData>): boolean {
@@ -182,15 +181,8 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
     }
 }
 
-
-const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
-initFullscreenCanvas(canvas)
-
-const painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
-const sim = new GraphPhysicsSimulator(createEmptyGraph<NodeData>(), layoutStyle, painter)
-
 undoButton.addEventListener("click", () => {
-    let last = undoHistory.pop()
+    let last = undoHistory.undo()
     if (last) {
         globalCtx.state = last
         globalCtx.redraw()
@@ -336,11 +328,6 @@ function toolButton(id: string, tool: GraphInteractionMode<NodeData>) {
     })
 }
 
-let colorController = new ColoringController(colorInput, globalCtx)
-toolButton("tool_drag", new DragNodeInteraction())
-toolButton("tool_select", colorController.selectInteraction)
-sim.setInteractionMode(colorController.selectInteraction) // default tool
-
 function createSelectedAdversary(): Adversary<NodeData> {
     let tree: CommandTree<NodeData>
     if (adversarySelect.value == "path") {
@@ -363,6 +350,20 @@ function makeInitialState(): State {
     return state
 }
 
+function reset() {
+    pushToHistory(globalCtx.state)
+    globalCtx.state = makeInitialState()
+    globalCtx.redraw()
+}
+resetButton.addEventListener("click", reset)
+
+
+const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
+initFullscreenCanvas(canvas)
+
+const painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
+const sim = new GraphPhysicsSimulator(createEmptyGraph<NodeData>(), layoutStyle, painter)
+
 const renderer = new InteractionController(canvas, [sim])
 const globalCtx: Context = {
     state: makeInitialState(),
@@ -372,11 +373,9 @@ const globalCtx: Context = {
     }
 }
 
-function reset() {
-    pushToHistory(globalCtx.state)
-    globalCtx.state = makeInitialState()
-    globalCtx.redraw()
-}
-resetButton.addEventListener("click", reset)
+let colorController = new ColoringController(colorInput, globalCtx)
+toolButton("tool_drag", new DragNodeInteraction())
+toolButton("tool_select", colorController.selectInteraction)
+sim.setInteractionMode(colorController.selectInteraction) // default tool
 
 globalCtx.redraw()

@@ -52,6 +52,10 @@ export function assertExists<T>(value: T | null | undefined, message: string = "
     }
 }
 
+export function hasStaticType<T>(value: T): T {
+    return value
+}
+
 export function ensured<T>(value: T | null | undefined): T {
     assertExists(value)
     return value

@@ -27,3 +27,15 @@ export function getCursorPosition(canvas: HTMLCanvasElement, event: MouseEvent):
     const y = event.clientY - rect.top
     return [x, y]
 }
+
+declare global {
+    interface CanvasRenderingContext2D {
+        circle(x: number, y: number, radius: number): void
+    }
+}
+
+CanvasRenderingContext2D.prototype.circle = function (x: number, y: number, radius: number) {
+    this.beginPath()
+    this.arc(x, y, radius, 0, 2 * Math.PI)
+    this.closePath()
+}

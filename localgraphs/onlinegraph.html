@@ -28,22 +28,19 @@
 <body>
     <canvas id="graph_canvas"></canvas>
     <div id="control_bar" class="control_bar">
-        <select id="select_adversary">
-            <option value="path">Path</option>
-            <option value="tree3">3-Tree</option>
-        </select>
-        <button id="reset">Reset</button>
-
         <label for="locality">Locality</label>
         <input type="number" id="locality" min="0" max="10" value="2"/>
 
-        <button id="tool_select">Select</button>
+        <button id="tool_build">Build</button>
         <button id="tool_drag">Drag</button>
-
+        <button id="tool_move">Move</button>
+        <button id="tool_pin">Reveal</button>
+        <button id="tool_transfer">Transfer</button>
+        <button id="reset">Reset</button>
         <button id="undo">Undo</button>
-        <input type="number" id="color_input" />
     </div>
+    
 
-    <script type="module" src="src/main.playalgo.ts"></script>
+    <script type="module" src="src/main.online.ts"></script>
 </body>
 </html>
