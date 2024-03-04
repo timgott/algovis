@@ -1,5 +1,6 @@
 import { getCursorPosition } from "../../shared/canvas"
 import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode, filteredGraphView } from "./graph"
+import { AnimationFrame, InteractiveSystem, MouseDownResponse, SleepState } from "./renderer"
 
 
 export type LayoutConfig = {
@@ -240,45 +241,18 @@ export class SimpleGraphPainter<T> implements GraphPainter<T> {
 // Returns whether something has been updated
 export type PhysicsStep<T> = (obj: T, width: number, height: number, dt: number) => boolean
 
-export class GraphPhysicsSimulator<T> {
-    private mouseX: number = 0
-    private mouseY: number = 0
-    private isMouseDown: boolean = false
-
-    private previousTimeStamp: number | null = null
-    private hasRequestedFrame: boolean = false
-    
+export class GraphPhysicsSimulator<T> implements InteractiveSystem {
     private graph: Graph<T>
     private layoutStyle: LayoutConfig
-    private canvas: HTMLCanvasElement
-    private ctx: CanvasRenderingContext2D
     private painter: GraphPainter<T>
     public visibleFilter: (node: GraphNode<T>) => boolean = () => true
 
     private interactionMode: GraphInteractionMode<T> | null = null
 
-    constructor(canvas: HTMLCanvasElement, graph: Graph<T>, layoutStyle: LayoutConfig, painter: GraphPainter<T>) {
+    constructor(graph: Graph<T>, layoutStyle: LayoutConfig, painter: GraphPainter<T>) {
         this.graph = graph
         this.layoutStyle = layoutStyle
-        this.canvas = canvas
         this.painter = painter
-        this.ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
-
-        canvas.addEventListener("pointerdown", (ev) => {
-            const [x, y] = getCursorPosition(canvas, ev)
-            this.onMouseDown(x, y)
-        })
-        window.addEventListener("pointermove", (ev) => {
-            const [x, y] = getCursorPosition(canvas, ev)
-            this.onMouseMoved(x, y)
-        })
-        window.addEventListener("pointerup", (ev) => {
-            const [x, y] = getCursorPosition(canvas, ev)
-            this.onMouseUp(x, y)
-        })
-        window.addEventListener("resize", () => {
-            this.requestFrame()
-        })
     }
 
     setInteractionMode(mode: GraphInteractionMode<T> | null) {
@@ -293,102 +267,47 @@ export class GraphPhysicsSimulator<T> {
         return this.graph.nodes.filter(this.visibleFilter)
     }
 
-    animate(timeStamp: number) {
-        if (this.previousTimeStamp === null) {
-            this.previousTimeStamp = timeStamp
-        }
-        const dt = Math.min(timeStamp - this.previousTimeStamp, 1. / 30.)
-        if (dt < 0) {
-            console.log("Negative dt", dt)
-        }
-
-        const width = this.canvas.clientWidth
-        const height = this.canvas.clientHeight
-        this.ctx.clearRect(0, 0, width, height);
-
+    animate({dt, width, height, ctx, dragState}: AnimationFrame): SleepState {
         let visibleGraph = this.getVisibleGraph()
-        if (this.interactionMode !== null && this.isMouseDown) {
-            this.interactionMode.onDragStep(this.graph, visibleGraph.nodes, this.mouseX, this.mouseY, this.ctx, dt)
+        if (this.interactionMode !== null && dragState !== null) {
+            this.interactionMode.onDragStep(this.graph, visibleGraph.nodes,
+                dragState.mouseX, dragState.mouseY, ctx, dt)
         }
-        
+
         // physics
         applyVelocityStep(this.graph, this.layoutStyle, dt)
         applyLayoutForces(visibleGraph, this.layoutStyle, width, height, dt)
         const activeCount = findActiveNodes(this.graph, this.layoutStyle).size // active in next step
 
         // render
-        this.painter.drawGraph(this.ctx, visibleGraph)
-
-        this.previousTimeStamp = timeStamp
+        this.painter.drawGraph(ctx, visibleGraph)
 
         if (activeCount > 0 || dt == 0) {
-            this.requestFrame()
+            return "Running"
         } else {
-            console.log("Physics settled, sleeping")
+            return "Sleeping"
         }
     }
 
-    requestFrame() {
-        if (!this.hasRequestedFrame) {
-            this.hasRequestedFrame = true
-            if (this.previousTimeStamp === null) {
-                this.previousTimeStamp = document.timeline.currentTime as number | null
-            }
-            requestAnimationFrame((timeStamp) => {
-                this.hasRequestedFrame = false
-                this.animate(timeStamp)
-            })
-        }
-    }
-
-    onMouseDown(x: number, y: number) {
+    onMouseDown(x: number, y: number): MouseDownResponse {
         // start dragging node
-        this.isMouseDown = true
-        this.mouseX = x
-        this.mouseY = y
         if (this.interactionMode !== null) {
             this.interactionMode.onMouseDown(this.graph, this.getVisibleNodes(), x, y)
-            this.requestFrame()
+            return "Drag"
         }
+        return "Ignore"
     }
 
-    onMouseMoved(x: number, y: number) {
-        this.mouseX = x
-        this.mouseY = y
-
-        if (this.interactionMode !== null && this.isMouseDown) {
-            // drag event sent in animate step
-            this.requestFrame()
-        }
-    }
-
-    onMouseUp(x: number, y: number) {
+    onDragEnd(x: number, y: number): void {
         // stop dragging node
-        if (this.isMouseDown) {
-            this.isMouseDown = false
-            if (this.interactionMode !== null) {
-                this.interactionMode.onMouseUp(this.graph, this.getVisibleNodes(), x, y)
-                this.requestFrame()
-            }
+        if (this.interactionMode !== null) {
+            this.interactionMode.onMouseUp(this.graph, this.getVisibleNodes(), x, y)
         }
-    }
-
-    run() {
-        // settle physics
-        const PreIterations = 0
-        for (let i = 0; i < PreIterations; i++) {
-            const dt = 1 / 30
-            applyVelocityStep(this.graph, this.layoutStyle, dt)
-            applyLayoutForces(this.graph, this.layoutStyle, this.canvas.width, this.canvas.height, dt)
-        }
-        // start frame loop
-        this.requestFrame()
     }
 
     changeGraph(graph: Graph<T>) {
         // setter to enforce repaint
         this.graph = graph
-        this.requestFrame()
     }
 
     getGraph() {

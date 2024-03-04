@@ -8,6 +8,7 @@ import { Vector } from "../../shared/vector.js";
 import { Rect } from "../../shared/rectangle.js";
 import { DynamicLocal } from "./partialgrid.js";
 import { CommandTreeAdversary, executeEdgeCommand, make3Tree, runAdversary } from "./adversary.js";
+import { InteractionController } from "./renderer.js";
 
 let algorithmSelect = document.getElementById("select_algorithm") as HTMLSelectElement
 let localityInput = document.getElementById("locality") as HTMLInputElement
@@ -509,18 +510,29 @@ const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
 initFullscreenCanvas(canvas)
 
 const painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
-const sim = new GraphPhysicsSimulator(canvas, createEmptyGraph<NodeData>(), layoutStyle, painter)
+const sim = new GraphPhysicsSimulator(createEmptyGraph<NodeData>(), layoutStyle, painter)
 sim.visibleFilter = (node) => !node.data.collapsed
+
+const renderer = new InteractionController(canvas, [sim])
+
+function replaceGlobalGraph(graph: Graph<NodeData>) {
+    sim.changeGraph(graph)
+    renderer.requestFrame()
+}
 
 function reset() {
     pushToHistory(sim.getGraph())
-    sim.changeGraph(createEmptyGraph())
+    replaceGlobalGraph(createEmptyGraph())
+    renderer.requestFrame()
 }
+resetButton.addEventListener("click", reset)
+
 
 undoButton.addEventListener("click", () => {
     let last = undoHistory.pop()
     if (last) {
-        sim.changeGraph(last)
+        replaceGlobalGraph(last)
+        renderer.requestFrame()
     } else {
         console.error("End of undo history")
     }
@@ -534,7 +546,7 @@ pruneButton.addEventListener("click", () => {
     for (const node of nodeSet) {
         node.neighbors = new Set([...node.neighbors].filter(n => nodeSet.has(n)))
     }
-    sim.changeGraph(prunedGraph)
+    replaceGlobalGraph(prunedGraph)
 })
 
 function toolButton(id: string, tool: GraphInteractionMode<NodeData>) {
@@ -562,12 +574,11 @@ adversaryButton.addEventListener("click", () => {
         newEdge.length = layoutStyle.minEdgeLength * 2
         algoStepEdge(graph, newEdge)
         cmd = adversary.step(graph)
-        sim.requestFrame()
+        renderer.requestFrame()
         //await sleep(1000)
     }
 })
 
 sim.setInteractionMode(new BuildGraphInteraction())
-sim.run()
 
-resetButton.addEventListener("click", reset)
+renderer.requestFrame()

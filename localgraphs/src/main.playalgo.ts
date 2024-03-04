@@ -4,6 +4,7 @@ import { initFullscreenCanvas } from "../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, createEmptyGraph, createNode } from "./graph.js";
 import { computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js";
 import { Adversary, CommandTree, CommandTreeAdversary, executeEdgeCommand, make3Tree, pathAdv2 } from "./adversary.js";
+import { InteractionController } from "./renderer.js";
 
 let adversarySelect = document.getElementById("select_adversary") as HTMLSelectElement
 let localityInput = document.getElementById("locality") as HTMLInputElement
@@ -186,7 +187,7 @@ const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
 initFullscreenCanvas(canvas)
 
 const painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
-const sim = new GraphPhysicsSimulator(canvas, createEmptyGraph<NodeData>(), layoutStyle, painter)
+const sim = new GraphPhysicsSimulator(createEmptyGraph<NodeData>(), layoutStyle, painter)
 
 undoButton.addEventListener("click", () => {
     let last = undoHistory.pop()
@@ -276,7 +277,7 @@ class ColoringController {
         () => this.unselect()
     )
 
-    constructor(private inputField: HTMLInputElement) {
+    constructor(private inputField: HTMLInputElement, private context: Context) {
         inputField.addEventListener("input", () => {
             let color = parseInt(inputField.value) - 1
             if (color >= 0 && color < 8) {
@@ -288,18 +289,18 @@ class ColoringController {
 
     selectNode(node: GraphNode<NodeData>) {
         this.unselect()
-        globalCtx.state.selectedNode = node
+        this.context.state.selectedNode = node
         this.inputField.focus() // to allow entering a color immediately
     }
 
     unselect() {
-        globalCtx.state.selectedNode = null
+        this.context.state.selectedNode = null
     }
 
     setColor(color: NodeColor) {
-        let node = globalCtx.state.selectedNode
+        let node = this.context.state.selectedNode
         if (node) {
-            let state = globalCtx.state
+            let state = this.context.state
             pushToHistory(state)
 
             node.data.color = color
@@ -307,7 +308,7 @@ class ColoringController {
             if (allNodesSet(state) && isGlobalColoring(state.graph)) {
                 advStep(state)
             }
-            globalCtx.redraw()
+            this.context.redraw()
 
             let nextSelected = findUnsetNode(state) ?? findErrorNode(state)
             if (nextSelected === undefined) {
@@ -335,7 +336,7 @@ function toolButton(id: string, tool: GraphInteractionMode<NodeData>) {
     })
 }
 
-let colorController = new ColoringController(colorInput)
+let colorController = new ColoringController(colorInput, globalCtx)
 toolButton("tool_drag", new DragNodeInteraction())
 toolButton("tool_select", colorController.selectInteraction)
 sim.setInteractionMode(colorController.selectInteraction) // default tool
@@ -362,10 +363,12 @@ function makeInitialState(): State {
     return state
 }
 
+const renderer = new InteractionController(canvas, [sim])
 const globalCtx: Context = {
     state: makeInitialState(),
     redraw: () => {
         sim.changeGraph(globalCtx.state.graph)
+        renderer.requestFrame()
     }
 }
 
@@ -376,5 +379,4 @@ function reset() {
 }
 resetButton.addEventListener("click", reset)
 
-sim.run()
 globalCtx.redraw()
