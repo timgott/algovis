@@ -106,3 +106,15 @@ export function getNodesByComponent<T>(components: Map<GraphNode<T>, Component>,
     return result
 }
 
+// searches for closest node that matches and returns distance
+export function findDistanceTo<T>(node: GraphNode<T>, predicate: (node: GraphNode<T>, distance: number) => boolean): number | null {
+    let result: number | null = null
+    bfs(node, (node, distance) => {
+        if (predicate(node, distance)) {
+            result = distance
+            return SearchState.Terminate
+        }
+        return SearchState.Continue
+    })
+    return result
+}

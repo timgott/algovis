@@ -1,3 +1,5 @@
+import { ensured } from "../../../shared/utils"
+
 export class UndoHistory<T> {
     private history: T[] = []
     private index: number = 0
@@ -6,22 +8,28 @@ export class UndoHistory<T> {
     }
 
     push(state: T) {
-        this.history = this.history.slice(this.index - this.limit, this.index)
-        this.history.push(this.clone(state))
+        const newEnd = this.index + 1
+        this.history = this.history.slice(newEnd - this.limit, newEnd)
+        const copy = this.clone(state)
+        this.history.push(copy)
         this.index = this.history.length
     }
-    undo(): T | undefined {
+    undo(currentState: T): T | null {
+        if (this.index == this.history.length) {
+            this.push(currentState)
+            this.index--
+        }
         if (this.index > 0) {
             this.index--
-            return this.history[this.index]
+            return ensured(this.history[this.index])
         }
-        return undefined
+        return null
     }
-    redo(): T | undefined {
+    redo(): T | null {
         if (this.index < this.history.length - 1) {
             this.index++
-            return this.history[this.index]
+            return ensured(this.history[this.index])
         }
-        return undefined
+        return null
     }
 }

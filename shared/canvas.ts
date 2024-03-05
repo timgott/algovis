@@ -1,4 +1,7 @@
 // Set size while respecting screen DPI
+
+import { degToRad } from "./utils";
+
 // necessary because canvas is unscaled by default
 export function setCanvasSize(canvas: HTMLCanvasElement, width: number, height: number) {
     const dpiRatio = window.devicePixelRatio || 1;
@@ -38,4 +41,15 @@ CanvasRenderingContext2D.prototype.circle = function (x: number, y: number, radi
     this.beginPath()
     this.arc(x, y, radius, 0, 2 * Math.PI)
     this.closePath()
+}
+
+export function drawArrowTip(cpx: number, cpy: number, x: number, y: number, size: number, ctx: CanvasRenderingContext2D) {
+    let angle = Math.atan2(y - cpy, x - cpx)
+    let spread = degToRad(35)
+    let left = angle - spread
+    let right = angle + spread
+    ctx.moveTo(x, y)
+    ctx.lineTo(x - size * Math.cos(left), y - size * Math.sin(left))
+    ctx.moveTo(x, y)
+    ctx.lineTo(x - size * Math.cos(right), y - size * Math.sin(right))
 }

@@ -26,4 +26,8 @@ export class Vector {
     length(): number {
         return Math.hypot(this.x, this.y);
     }
+
+    normalize(): Vector {
+        return this.scale(1 / this.length());
+    }
 }

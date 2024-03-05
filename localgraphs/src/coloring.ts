@@ -222,19 +222,6 @@ export function randomColoring(distance: number): DynamicLocal<NodeColor> {
     }
 }
 
-// searches for closest node with given value and returns distance
-function findDistanceTo(node: Node, predicate: (node: Node, distance: number) => boolean): number | null {
-    let result: number | null = null
-    bfs(node, (node, distance) => {
-        if (predicate(node, distance)) {
-            result = distance
-            return SearchState.Terminate
-        }
-        return SearchState.Continue
-    })
-    return result
-}
-
 
 function findSharedBorders(components: Map<Node, Component>): Map<Node, Set<Component>> {
     let borders = new Map<Node, Set<number>>()

@@ -76,7 +76,8 @@ export class InteractionController {
 
         const width = this.canvas.clientWidth
         const height = this.canvas.clientHeight
-        this.ctx.clearRect(0, 0, width, height);
+        this.ctx.reset()
+        
 
         // run animation step on all systems
         const sleepStates = this.systems.map((system) => {
@@ -99,7 +100,10 @@ export class InteractionController {
                 dragState: (this.mouseCapture == system)? dragState : null,
             }
 
-            return system.animate(frame)
+            this.ctx.save()
+            let state = system.animate(frame)
+            this.ctx.restore()
+            return state
         })
 
         // find if a system is running
@@ -132,7 +136,8 @@ export class InteractionController {
         this.mouseX = x
         this.mouseY = y
         this.mouseCapture = null
-        for (const system of this.systems) {
+        // reverse order to give priority to what is drawn on top
+        for (const system of this.systems.toReversed()) {
             if (system.onMouseDown !== undefined) {
                 const result = system.onMouseDown(x, y)
                 if (result !== "Ignore") {

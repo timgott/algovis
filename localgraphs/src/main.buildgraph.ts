@@ -1,6 +1,6 @@
 import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring } from "./coloring.js";
 import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode, dragNodes, offsetNodes, moveSlightly } from "./interaction/graphlayout.js";
-import { initFullscreenCanvas } from "../../shared/canvas.js"
+import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, MappedNode, copyGraph, copyGraphTo, copySubgraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, filteredGraphView, mapGraph, mapGraphLazy } from "./graph.js";
 import { assert, assertExists, degToRad, ensured, invertMap, min, sleep } from "../../shared/utils.js";
 import { collectNeighborhood, computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js";
@@ -190,17 +190,6 @@ function collapse(node: GraphNode<NodeData>) {
             n.data.collapsed = false
         }
     }
-}
-
-function drawArrowTip(cpx: number, cpy: number, x: number, y: number, size: number, ctx: CanvasRenderingContext2D) {
-    let angle = Math.atan2(y - cpy, x - cpx)
-    let spread = degToRad(35)
-    let left = angle - spread
-    let right = angle + spread
-    ctx.moveTo(x, y)
-    ctx.lineTo(x - size * Math.cos(left), y - size * Math.sin(left))
-    ctx.moveTo(x, y)
-    ctx.lineTo(x - size * Math.cos(right), y - size * Math.sin(right))
 }
 
 function nodePos(node: GraphNode<NodeData>) {
@@ -438,7 +427,7 @@ resetButton.addEventListener("click", reset)
 
 
 undoButton.addEventListener("click", () => {
-    let last = undoHistory.undo()
+    let last = undoHistory.undo(sim.getGraph())
     if (last) {
         replaceGlobalGraph(last)
         renderer.requestFrame()

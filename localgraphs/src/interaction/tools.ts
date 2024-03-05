@@ -25,7 +25,7 @@ export class BuildGraphInteraction<T> implements GraphInteractionMode<T> {
         // TODO: draw edge
         if (this.startNode !== null && this.shouldCreateEdge(mouseX, mouseY)) {
             drawCtx.strokeStyle = "black"
-            drawCtx.lineWidth = 2
+            drawCtx.lineWidth = 1
             drawCtx.beginPath()
             let endNode = findClosestNode(mouseX, mouseY, visible)
             if (endNode !== null && this.startNode !== endNode) {
