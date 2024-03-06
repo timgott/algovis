@@ -8,8 +8,8 @@ export class UndoHistory<T> {
     }
 
     push(state: T) {
-        const newEnd = this.index + 1
-        this.history = this.history.slice(newEnd - this.limit, newEnd)
+        const newEnd = this.index
+        this.history = this.history.slice(-this.limit, newEnd)
         const copy = this.clone(state)
         this.history.push(copy)
         this.index = this.history.length

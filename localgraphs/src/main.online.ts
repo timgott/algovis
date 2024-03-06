@@ -1,14 +1,13 @@
-import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, SimpleGraphPainter, createGridGraph, createRandomGraph, findClosestNode, offsetNodes, shuffleGraphPositions } from "./interaction/graphlayout.js";
+import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, distanceToPointSqr, findClosestNode, offsetNodes } from "./interaction/graphlayout.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
-import { InteractionController } from "./interaction/renderer.js";
-import { Graph, GraphEdge, GraphNode, copySubgraphTo, createEdge, createEmptyGraph, createNode, mapGraph, mapSubgraphTo } from "./graph.js";
+import { InteractionController, UiStack as UiStack } from "./interaction/renderer.js";
+import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode, mapSubgraphTo } from "./graph.js";
 import { assert, hasStaticType } from "../../shared/utils.js";
 import { UndoHistory } from "./interaction/undo.js";
 import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction } from "./interaction/tools.js";
-import { SearchState, bfs, collectNeighborhood, computeDistances, findDistanceTo } from "./graphalgos.js";
+import { SearchState, bfs, computeDistances, findDistanceTo } from "./graphalgos.js";
 import { Vector } from "../../shared/vector.js";
-import { Window, WindowContents, drawWindowTitle } from "./interaction/windows.js";
-import { Rect } from "../../shared/rectangle.js";
+import { InputNode, OperatorNode, OutputNode, createOperatorNode, createOperatorWindow, getInputs, getOutputs } from "./interaction/operators.js";
 
 // "Online" refers to the online local computation model, unrelated to networking
 
@@ -43,12 +42,14 @@ type Node = GraphNode<NodeData>
 
 // Everything that can be undone, possibly derived data to save recomputation
 type State = {
-    graph: MainGraph
+    graph: MainGraph,
+    operators: OperatorNode[],
 }
 
 function makeInitialState(): State {
     let state: State = {
         graph: createEmptyGraph(),
+        operators: [ createOperatorNode("equality", 100, 100) ]
     }
     return state
 }
@@ -77,11 +78,11 @@ function isIndependent(node: Node, locality: number, pinDistance: number): boole
     return oldDist+pinDistance >= (locality+1)*2
 }
 
-function canTransfer(from: Node, to: Node, locality: number): boolean {
+function canDuplicateTransfer(from: Node, to: Node, locality: number): boolean {
     // Conditions:
-    // - `from` must be constrained
+    // - `from` must be constrained (visible to the algorithm)
     let pinDist = findDistanceTo(from, n => n.data.pinned) ?? Infinity
-    if (pinDist > locality) {
+    if (pinDist > locality + 1) {
         return false // unconstrained
     }
 
@@ -155,20 +156,43 @@ function transferNode(source: Node, target: Node, graph: MainGraph): void {
 
 class TransferTool implements GraphInteractionMode<NodeData> {
     state: {
+        mode: "duplicate"
         startNode: GraphNode<NodeData>,
+        candidates: GraphNode<NodeData>[],
+    } | {
+        mode: "output"
+        startNode: OutputNode,
         candidates: GraphNode<NodeData>[],
     } | null = null
 
-    constructor(private pushUndoPoint: (graph: Graph<NodeData>) => void) {
+    constructor(
+        private pushUndoPoint: (graph: Graph<NodeData>) => void,
+        private getInputNodes: () => InputNode[],
+        private getOutputNodes: () => OutputNode[],
+    ) {
     }
 
     onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
         let node = findClosestNode(mouseX, mouseY, visible)
-        if (node !== null) {
-            const source = node
-            const locality = localityInput.valueAsNumber
-            const candidates = [...visible].filter(n => canTransfer(source, n, locality))
+        let opOutput = findClosestNode(mouseX, mouseY, this.getOutputNodes())
+        const distNode = node !== null ? distanceToPointSqr(mouseX, mouseY, node) : Infinity
+        const distOp = opOutput !== null ? distanceToPointSqr(mouseX, mouseY, opOutput) : Infinity
+        const locality = localityInput.valueAsNumber
+        if (opOutput !== null && distOp < distNode) {
+            const source = opOutput
+            // TODO! follow aliases back to next real node, then do canDuplicateTransfer
+            // Or better: do not only check while transferring but mark bad transfers in red
+            const candidates = [...visible]
             this.state = {
+                mode: "output",
+                startNode: source,
+                candidates
+            }
+        } else if (node !== null) {
+            const source = node
+            const candidates = [...visible].filter(n => canDuplicateTransfer(source, n, locality))
+            this.state = {
+                mode: "duplicate",
                 startNode: source,
                 candidates: candidates,
             }
@@ -179,7 +203,7 @@ class TransferTool implements GraphInteractionMode<NodeData> {
         if (state !== null) {
             const startNode = state.startNode
             const endNode = findClosestNode(mouseX, mouseY, state.candidates)
-            if (endNode !== null && startNode !== endNode) {
+            if (endNode !== null) {
                 drawCtx.lineWidth = 2
                 drawCtx.strokeStyle = "black"
                 drawCtx.beginPath()
@@ -200,78 +224,17 @@ class TransferTool implements GraphInteractionMode<NodeData> {
     onMouseUp(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
         let state = this.state
         if (state !== null) {
-            const startNode = state.startNode
-            const endNode = findClosestNode(mouseX, mouseY, state.candidates)
-            if (endNode !== null && startNode !== endNode) {
-                this.pushUndoPoint(graph)
-                transferNode(startNode, endNode, graph)
+            if (state.mode === "duplicate") {
+                const startNode = state.startNode
+                const endNode = findClosestNode(mouseX, mouseY, state.candidates)
+                if (endNode !== null && startNode !== endNode) {
+                    this.pushUndoPoint(graph)
+                    transferNode(startNode, endNode, graph)
+                }
+            } else if (state.mode === "output") {
+                console.error("Connecting output nodes is not implemented")
             }
         }
-    }
-}
-
-/* Decision operator */
-
-type AttachmentPoint = {
-    node: GraphNode<NodeData>,
-}
-
-function createInputPoint(): AttachmentPoint {
-    return {
-        node: {
-            data: {
-                pinned: false,
-                impliedFrom: null,
-                transferFrom: null,
-                transferTo: new Set()
-            },
-            x: 0, y: 0, vx: 0, vy: 0,
-            neighbors: new Set(),
-        }
-    }
-}
-
-class EqualityOperatorWindow implements WindowContents {
-    width: number = 200;
-    height: number = 80;
-
-    radius = 10
-    opOffset = 25
-    argOffset = 30
-
-    argA: AttachmentPoint = createInputPoint()
-    argB: AttachmentPoint = createInputPoint()
-
-    drawAttachPoint(ctx: CanvasRenderingContext2D, x: number, y: number) {
-        ctx.fillStyle = "black"
-        ctx.circle(x, y, this.radius)
-        ctx.fill()
-    }
-
-    drawBinOp(ctx: CanvasRenderingContext2D, x: number, y: number, operator: string, offset: number) {
-        this.drawAttachPoint(ctx, x + offset, y)
-        this.drawAttachPoint(ctx, x - offset, y)
-        ctx.fillText(operator, x, y)
-    }
-    
-    draw(ctx: CanvasRenderingContext2D, bounds: Rect, titleArea: Rect): void {
-        ctx.font = "bold 12pt monospace"
-        ctx.textAlign = "center"
-        ctx.textBaseline = "middle"
-
-        this.drawBinOp(ctx, titleArea.center.x, titleArea.center.y, "?", this.argOffset)
-
-        const [trueBox, falseBox] = bounds.splitHorizontal(0.5)
-
-        ctx.beginPath()
-        ctx.strokeStyle = `rgba(0,0,0,0.3)`
-        ctx.fillStyle = "black"
-        ctx.lineWidth = 1
-        ctx.moveTo(falseBox.left, falseBox.top)
-        ctx.lineTo(falseBox.left, falseBox.bottom)
-        ctx.stroke()
-        this.drawBinOp(ctx, trueBox.center.x, trueBox.center.y, "=", this.opOffset)
-        this.drawBinOp(ctx, falseBox.center.x, falseBox.center.y, "≠", this.opOffset)
     }
 }
 
@@ -429,6 +392,14 @@ function makeUndoable<T extends (...args: any) => any>(f: T): T {
     } as T
 }
 
+function collectGlobalInputs(): InputNode[] {
+    return globalState.operators.flatMap(getInputs)
+}
+
+function collectGlobalOutputs(): OutputNode[] {
+    return globalState.operators.flatMap(getOutputs)
+}
+
 const buildInteraction = new BuildGraphInteraction<NodeData>(makeUndoable(putNewNode), makeUndoable(createEdge))
 const pinInteraction = new ClickNodeInteraction<NodeData>(makeUndoable(toggleNodePin))
 
@@ -436,11 +407,12 @@ toolButton("tool_move", new MoveComponentInteraction())
 toolButton("tool_drag", new DragNodeInteraction())
 toolButton("tool_build", buildInteraction)
 toolButton("tool_pin", pinInteraction)
-toolButton("tool_transfer", new TransferTool(pushUndoPoint))
+toolButton("tool_transfer", new TransferTool(pushUndoPoint, collectGlobalInputs, collectGlobalOutputs))
 
 function replaceGlobalState(newState: State) {
     globalState = newState
     globalSim.changeGraph(newState.graph)
+    globalWindows.systems = newState.operators.map(createOperatorWindow)
     controller.requestFrame()
 }
 
@@ -449,7 +421,7 @@ undoButton.addEventListener("click", () => {
     if (last !== null) {
         replaceGlobalState(last)
     } else {
-        throw "End of history"
+        console.error("End of history")
     }
 })
 redoButton.addEventListener("click", () => {
@@ -466,9 +438,12 @@ let globalState = makeInitialState()
 const globalSim = new GraphPhysicsSimulator<NodeData>(globalState.graph, layoutStyle, new OurGraphPainter(layoutStyle.nodeRadius))
 globalSim.setInteractionMode(buildInteraction)
 
+const globalWindows = new UiStack(globalState.operators.map(createOperatorWindow))
+
 const controller = new InteractionController(canvas,
-    [
-        globalSim, new Window(100, 100, new EqualityOperatorWindow())
-    ]
+    new UiStack([
+        globalSim, 
+        globalWindows,
+    ])
 )
 controller.requestFrame()

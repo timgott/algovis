@@ -1,4 +1,9 @@
-export class Vector {
+export type Positioned = {
+    x: number;
+    y: number;
+}
+
+export class Vector implements Positioned {
     constructor(public x: number, public y: number) {}
 
     // 0 is up, clockwise rotation in radians

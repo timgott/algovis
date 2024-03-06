@@ -411,7 +411,7 @@ const painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
 const sim = new GraphPhysicsSimulator(createEmptyGraph<NodeData>(), layoutStyle, painter)
 sim.visibleFilter = (node) => !node.data.collapsed
 
-const renderer = new InteractionController(canvas, [sim])
+const renderer = new InteractionController(canvas, sim)
 
 function replaceGlobalGraph(graph: Graph<NodeData>) {
     sim.changeGraph(graph)

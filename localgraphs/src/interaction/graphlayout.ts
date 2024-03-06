@@ -1,4 +1,5 @@
 import { getCursorPosition } from "../../../shared/canvas"
+import { Positioned } from "../../../shared/vector"
 import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode, filteredGraphView } from "../graph"
 import { AnimationFrame, InteractiveSystem, MouseDownResponse, SleepState } from "./renderer"
 
@@ -101,13 +102,17 @@ export function applyLayoutForces(graph: Graph<unknown>, layout: LayoutConfig, w
     return activeNodes.size
 }
 
-export function findClosestNode<T>(x: number, y: number, nodes: Iterable<GraphNode<T>>, limit: number = Infinity): GraphNode<T> | null {
+export function distanceToPointSqr(x: number, y: number, node: Positioned) {
+    let dx = node.x - x
+    let dy = node.y - y
+    return dx * dx + dy * dy
+}
+
+export function findClosestNode<T extends Positioned>(x: number, y: number, nodes: Iterable<T>, limit: number = Infinity): T | null {
     let result = null
     let minDistance = limit*limit
     for (let node of nodes) {
-        let dx = (node.x - x)
-        let dy = (node.y - y)
-        let dist = dx * dx + dy * dy
+        let dist = distanceToPointSqr(x, y, node)
         if (dist < minDistance) {
             result = node
             minDistance = dist

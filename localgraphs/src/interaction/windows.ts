@@ -1,18 +1,6 @@
 import { Rect } from "../../../shared/rectangle";
+import { Positioned } from "../../../shared/vector";
 import { AnimationFrame, InteractiveSystem, MouseDownResponse, SleepState } from "./renderer";
-
-export interface WindowContents {
-    width: number;
-    height: number;
-    draw(ctx: CanvasRenderingContext2D, contentArea: Rect, titleArea: Rect): void;
-}
-
-export const emptyWindowContents = {
-    draw: (ctx: CanvasRenderingContext2D, bounds: Rect) => {},
-    width: 200,
-    height: 300,
-    title: "Empty Window"
-}
 
 function drawWindowFrame(ctx: CanvasRenderingContext2D, bounds: Rect, headerHeight: number) {
     const cornerRadius = 4
@@ -40,8 +28,13 @@ export function drawWindowTitle(ctx: CanvasRenderingContext2D, titleBounds: Rect
 }
 
 const titleHeight = 40
-export class Window implements InteractiveSystem {
-    constructor(private x: number, private y: number, private contents: WindowContents) {
+
+// contains only input related data
+export class WindowController implements InteractiveSystem {
+    constructor(
+        public contentArea: Rect,
+        public drawContents: (ctx: CanvasRenderingContext2D, contentArea: Rect, titleArea: Rect) => unknown,
+    ) {
     }
 
     dragState: null | {
@@ -53,36 +46,28 @@ export class Window implements InteractiveSystem {
         if (frame.dragState && this.dragState) {
             const dx = frame.dragState.mouseX - this.dragState.lastX
             const dy = frame.dragState.mouseY - this.dragState.lastY
-            this.x += dx
-            this.y += dy
+            this.contentArea = this.contentArea.addOffset(dx, dy)
             this.dragState.lastX = frame.dragState.mouseX
             this.dragState.lastY = frame.dragState.mouseY
         }
         drawWindowFrame(frame.ctx, this.bounds, titleHeight);
-        this.contents.draw(frame.ctx, this.contentArea, this.titleArea)
+        this.drawContents(frame.ctx, this.contentArea, this.titleArea)
         return "Sleeping"
     }
 
     get bounds(): Rect {
-        return Rect.fromSize(
-            this.x, this.y, this.contents.width, this.contents.height + titleHeight
+        return new Rect(
+            this.contentArea.left, this.contentArea.top - titleHeight, this.contentArea.right, this.contentArea.bottom
         )
     }
 
     get titleArea(): Rect {
-        return Rect.fromSize(
-            this.x, this.y, this.contents.width, titleHeight
-        )
-    }
-
-    get contentArea(): Rect {
-        return Rect.fromSize(
-            this.x, this.y + titleHeight, this.contents.width, this.contents.height
+        return new Rect(
+            this.bounds.left, this.bounds.top, this.bounds.right, this.contentArea.top
         )
     }
 
     onMouseDown(x: number, y: number): MouseDownResponse {
-        // TODO: only in title bar
         if (this.titleArea.contains(x, y)) {
             this.dragState = {
                 lastX: x,
@@ -93,7 +78,7 @@ export class Window implements InteractiveSystem {
         return "Ignore"
     }
 
-    onMouseUp(x: number, y: number): void {
+    onDragEnd(x: number, y: number): void {
         this.dragState = null
     }
 }
