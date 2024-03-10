@@ -182,7 +182,7 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
 }
 
 undoButton.addEventListener("click", () => {
-    let last = undoHistory.undo()
+    let last = undoHistory.undo(globalCtx.state)
     if (last) {
         globalCtx.state = last
         globalCtx.redraw()
@@ -364,7 +364,7 @@ initFullscreenCanvas(canvas)
 const painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
 const sim = new GraphPhysicsSimulator(createEmptyGraph<NodeData>(), layoutStyle, painter)
 
-const renderer = new InteractionController(canvas, [sim])
+const renderer = new InteractionController(canvas, sim)
 const globalCtx: Context = {
     state: makeInitialState(),
     redraw: () => {
