@@ -497,6 +497,10 @@ resetButton.addEventListener("click", () => {
     replaceGlobalState(makeInitialState())
 })
 
+localityInput.addEventListener("input", () => {
+    controller.requestFrame()
+})
+
 /* Global init */
 const history = new UndoHistory<State>()
 let globalState = makeInitialState()
