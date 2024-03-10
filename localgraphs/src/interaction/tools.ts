@@ -1,54 +1,74 @@
+import { Positioned, distance } from "../../../shared/vector"
 import { Graph, GraphNode } from "../graph"
 import { collectNeighborhood } from "../graphalgos"
 import { GraphInteractionMode, dragNodes, findClosestNode } from "./graphlayout"
 
 export class BuildGraphInteraction<T> implements GraphInteractionMode<T> {
-    edgeThreshold: number = 20
+    moveThreshold: number = 20
+    connectConeFactor: number = 0.7 // weight factor for connecting existing nodes instead of adding a new node
 
     startNode: GraphNode<T> | null = null
     startX: number = 0
     startY: number = 0
+    hasMoved: boolean = false
 
-    constructor(private buildNode: (graph: Graph<T>, x: number, y: number) => unknown, private buildEdge: (graph: Graph<T>, a: GraphNode<T>, b: GraphNode<T>) => unknown) {
+    constructor(private buildNode: (graph: Graph<T>, x: number, y: number) => GraphNode<T>, private buildEdge: (graph: Graph<T>, a: GraphNode<T>, b: GraphNode<T>) => unknown) {
     }
 
     onMouseDown(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number): void {
         this.startX = mouseX
         this.startY = mouseY
         this.startNode = findClosestNode(mouseX, mouseY, visible)
+        this.hasMoved = false
     }
-    shouldCreateEdge(mouseX: number, mouseY: number): boolean {
+    checkHasMoved(mouseX: number, mouseY: number): boolean {
         let distance = Math.hypot(mouseX - this.startX, mouseY - this.startY)
-        return distance >= this.edgeThreshold
+        return distance >= this.moveThreshold
     }
-    onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<unknown>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D): void {
-        // TODO: draw edge
-        if (this.startNode !== null && this.shouldCreateEdge(mouseX, mouseY)) {
+    shouldCreateEndpoint(mouseX: number, mouseY: number, closestNode: GraphNode<T>): boolean {
+        if (this.startNode === closestNode
+            || this.startNode?.neighbors.has(closestNode)) {
+            return true
+        }
+        const mouse = { x: mouseX, y: mouseY }
+        const node = { x: closestNode.x, y: closestNode.y }
+        const start = { x: this.startX, y: this.startY}
+        return distance(start, mouse)*this.connectConeFactor < distance(mouse, node)
+    }
+    onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D): void {
+        if (!this.hasMoved && this.checkHasMoved(mouseX, mouseY)) {
+            this.hasMoved = true
+        }
+        if (this.startNode !== null && this.hasMoved) {
             drawCtx.strokeStyle = "black"
             drawCtx.lineWidth = 1
             drawCtx.beginPath()
             let endNode = findClosestNode(mouseX, mouseY, visible)
-            if (endNode !== null && this.startNode !== endNode) {
+            if (endNode !== null && !this.shouldCreateEndpoint(mouseX, mouseY, endNode)) {
                 drawCtx.moveTo(endNode.x, endNode.y)
                 drawCtx.quadraticCurveTo(mouseX, mouseY, this.startNode.x, this.startNode.y)
+                drawCtx.stroke()
             } else {
                 drawCtx.setLineDash([6, 5])
                 drawCtx.moveTo(mouseX, mouseY)
                 drawCtx.lineTo(this.startNode.x, this.startNode.y)
+                drawCtx.stroke()
+                drawCtx.setLineDash([]) 
+                drawCtx.circle(mouseX, mouseY, 5)
+                drawCtx.stroke()
             }
-            drawCtx.stroke()
-            drawCtx.setLineDash([]) 
         }
     }
     onMouseUp(graph: Graph<T>, visible: Iterable<GraphNode<T>>, endX: number, endY: number): void {
-        if (this.shouldCreateEdge(endX, endY)) {
+        if (this.startNode !== null && this.hasMoved) {
             let endNode = findClosestNode(endX, endY, visible)
-            if (this.startNode !== null && endNode !== null && this.startNode !== endNode && !this.startNode.neighbors.has(endNode)) {
-                // create new edge
-                //pushToHistory(graph)
-                //putNewEdge(graph, this.startNode, endNode)
-                this.buildEdge(graph, this.startNode, endNode)
+            if (endNode === null || this.shouldCreateEndpoint(endX, endY, endNode)) {
+                endNode = this.buildNode(graph, endX, endY)
             }
+            // create new edge
+            //pushToHistory(graph)
+            //putNewEdge(graph, this.startNode, endNode)
+            this.buildEdge(graph, this.startNode, endNode)
         }
         else {
             // create new node

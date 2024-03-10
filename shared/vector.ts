@@ -36,3 +36,7 @@ export class Vector implements Positioned {
         return this.scale(1 / this.length());
     }
 }
+
+export function distance(a: Positioned, b: Positioned): number {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+}
