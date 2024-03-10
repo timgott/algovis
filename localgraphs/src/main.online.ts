@@ -32,6 +32,7 @@ hasStaticType<LayoutConfig>(layoutStyle)
 
 type NodeData = {
     pinned: boolean,
+    label: string,
     impliedFrom: Node | null, // transferred node
     transferFrom: Node | null // TODO: multiple from disjoint paths
     transferTo: Set<Node> // must not go to disjoint paths (only decision nodes create disjoint paths)
@@ -49,7 +50,7 @@ type State = {
 function makeInitialState(): State {
     let state: State = {
         graph: createEmptyGraph(),
-        operators: [ createOperatorNode("equality", 100, 100) ]
+        operators: [ /*createOperatorNode("equality", 100, 100)*/ ]
     }
     return state
 }
@@ -57,6 +58,7 @@ function makeInitialState(): State {
 function putNewNode(graph: MainGraph, x: number, y: number): Node {
     const data: NodeData = {
         pinned: false,
+        label: "",
         impliedFrom: null,
         transferFrom: null,
         transferTo: new Set(),
@@ -124,16 +126,19 @@ function addTransferEdge(from: Node, to: Node) {
 function applyDataTransfer(from: Node, to: Node) {
     // TODO: propagate automatically
     to.data.pinned = from.data.pinned
+    to.data.label = from.data.label
 }
 
 function copyImpliedNeighbors(oldRoot: Node, newRoot: Node, neighbors: Iterable<Node>, graph: MainGraph): void {
     const mapping = mapSubgraphTo(neighbors, graph, (oldData) => {
-        return <NodeData>{
+        const data: NodeData = {
             impliedFrom: newRoot,
             pinned: oldData.pinned,
+            label: oldData.label,
             transferFrom: null,
             transferTo: new Set(),
         }
+        return data
     })
     offsetNodes(mapping.values(), newRoot.x - oldRoot.x, newRoot.y - oldRoot.y)
     for (let neighbor of oldRoot.neighbors) {
@@ -148,6 +153,7 @@ function copyImpliedNeighbors(oldRoot: Node, newRoot: Node, neighbors: Iterable<
 }
 
 function transferNode(source: Node, target: Node, graph: MainGraph): void {
+    // TODO: only copy implied nodes when target is a single node. Or only on direct transfer
     const nodesToTransfer = collectUsefulNeighbors(source)
     copyImpliedNeighbors(source, target, nodesToTransfer, graph)
     addTransferEdge(source, target)
@@ -190,7 +196,8 @@ class TransferTool implements GraphInteractionMode<NodeData> {
             }
         } else if (node !== null) {
             const source = node
-            const candidates = [...visible].filter(n => canDuplicateTransfer(source, n, locality))
+            //const candidates = [...visible].filter(n => canDuplicateTransfer(source, n, locality))
+            const candidates = [...visible]
             this.state = {
                 mode: "duplicate",
                 startNode: source,
@@ -203,7 +210,7 @@ class TransferTool implements GraphInteractionMode<NodeData> {
         if (state !== null) {
             const startNode = state.startNode
             const endNode = findClosestNode(mouseX, mouseY, state.candidates)
-            if (endNode !== null) {
+            if (endNode !== null && startNode !== endNode) {
                 drawCtx.lineWidth = 2
                 drawCtx.strokeStyle = "black"
                 drawCtx.beginPath()
@@ -252,6 +259,15 @@ function computePinLevel(nodes: Node[], radius: number): Map<Node, number> {
     )
 }
 
+function drawLineBetweenCircles(ctx: CanvasRenderingContext2D, a: Vector, b: Vector, radiusA: number, radiusB: number = radiusA) {
+    const dir = b.sub(a).normalize()
+    const newA = a.add(dir.scale(radiusA))
+    const newB = b.sub(dir.scale(radiusB))
+    ctx.beginPath()
+    ctx.moveTo(newA.x, newA.y)
+    ctx.lineTo(newB.x, newB.y)
+}
+
 export class OurGraphPainter implements GraphPainter<NodeData> {
     strokeWidth: number = this.nodeRadius / 3
     arrowWidth: number = 1
@@ -282,17 +298,32 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
             this.drawNode(ctx, node, pinLevel.get(node)!)
         }
     }
+
+    private calcLineWidth(node: Node): number {
+        return this.strokeWidth * 0.75
+    }
+
+    private calcRadius(node: Node): number {
+        return this.nodeRadius + (node.data.pinned? this.calcLineWidth(node)*2 : 0)
+    }
+
+    private isImpliedNode(node: Node): boolean {
+        return node.data.transferFrom !== null && node.data.transferFrom.data.pinned === node.data.pinned
+    }
     
     protected drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>, level: number) {
         const pinned = node.data.pinned
         const free = level === 0
-        const implied = node.data.impliedFrom !== null
-        const lineWidth = this.strokeWidth * 0.75
+        const hasHint = node.data.label.length > 0 && !pinned
+        const implied = this.isImpliedNode(node)
         const blackV = implied ? 160 : 0
         const whiteV = implied ? 240 : 255
         const black = `rgba(${blackV}, ${blackV}, ${blackV}, 1)`
         const white = `rgba(${whiteV}, ${whiteV}, ${whiteV}, 1)`
-        let radius = this.nodeRadius + (pinned? lineWidth*2 : 0)
+
+        const lineWidth = this.calcLineWidth(node)
+        const radius = this.calcRadius(node)
+
         ctx.lineWidth = lineWidth
         for (let i = level; i > 0; i--) {
             const offset = lineWidth * 2 * i + 0.5*lineWidth
@@ -301,19 +332,19 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
             ctx.circle(node.x, node.y, radius + offset)
             ctx.stroke()
         }
-        if (free) {
+        if (pinned) {
+            // filled circle
+            ctx.strokeStyle = black
+            ctx.fillStyle = white
+        } else if (!free) {
+            // black circle
+            ctx.fillStyle = black
+            ctx.strokeStyle = black
+        } else {
             // empty circle
             ctx.fillStyle = "transparent"
             ctx.strokeStyle = black
             //ctx.lineWidth = this.strokeWidth * 0.5
-        } else if (pinned) {
-            // filled circle
-            ctx.strokeStyle = black
-            ctx.fillStyle = white
-        } else {
-            // black circle
-            ctx.fillStyle = black
-            ctx.strokeStyle = black
         }
         ctx.circle(node.x, node.y, radius)
         ctx.fill()
@@ -321,6 +352,8 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         if (pinned) {
             ctx.fillStyle = black
             this.drawLabel(ctx, node)
+        } else if (hasHint) {
+            this.drawHint(ctx, node)
         }
     }
 
@@ -329,10 +362,28 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         ctx.textAlign = "center"
         ctx.textBaseline = "middle"
         const fontWeight = "normal"
-        const fontSize = "12pt"
-        ctx.font = `${fontWeight} ${fontSize} sans-serif`
-        let label = "1"
+        const fontSize = this.nodeRadius * 1.5
+        ctx.font = `${fontWeight} ${fontSize}px sans-serif`
+        let label = node.data.label
         ctx.fillText(label, node.x, node.y)
+    }
+
+    protected drawHint(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>) {
+        // label
+        ctx.textAlign = "left"
+        ctx.textBaseline = "top"
+        const fontWeight = "normal"
+        const fontSize = this.nodeRadius * 1.5
+        ctx.font = `${fontWeight} ${fontSize}px sans-serif`
+        let label = node.data.label
+        const textX = node.x + this.nodeRadius * 0.2
+        const textY = node.y + this.nodeRadius * 0.2
+        const textWidth = ctx.measureText(label).width
+        const pad = 2
+        ctx.fillStyle = "black"
+        ctx.fillRect(textX - pad, textY - pad, textWidth + 2*pad, fontSize + 2*pad)
+        ctx.fillStyle = "white"
+        ctx.fillText(label, textX, textY)
     }
 
     protected drawEdge(ctx: CanvasRenderingContext2D, edge: GraphEdge<NodeData>, free: boolean, implied: boolean) {
@@ -346,9 +397,9 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         }
         ctx.lineWidth = linewidth
         ctx.strokeStyle = `rgba(0, 0, 0, ${alpha})`
-        ctx.beginPath()
-        ctx.moveTo(edge.a.x, edge.a.y)
-        ctx.lineTo(edge.b.x, edge.b.y)
+        const posA = new Vector(edge.a.x, edge.a.y)
+        const posB = new Vector(edge.b.x, edge.b.y)
+        drawLineBetweenCircles(ctx, posA, posB, this.calcRadius(edge.a), this.calcRadius(edge.b))
         ctx.stroke()
     }
 
@@ -400,13 +451,28 @@ function collectGlobalOutputs(): OutputNode[] {
     return globalState.operators.flatMap(getOutputs)
 }
 
+function askNodeLabel(node: Node): void {
+    const newLabel = prompt("Node label")
+    if (newLabel !== null) {
+        node.data.label = newLabel
+    }
+}
+
 const buildInteraction = new BuildGraphInteraction<NodeData>(makeUndoable(putNewNode), makeUndoable(createEdge))
-const pinInteraction = new ClickNodeInteraction<NodeData>(makeUndoable(toggleNodePin))
+const pinInteraction = new ClickNodeInteraction<NodeData>(makeUndoable(node => {
+    toggleNodePin(node)
+    if (node.data.pinned)
+        askNodeLabel(node)
+    else
+        node.data.label = ""
+}))
+const labelInteraction = new ClickNodeInteraction<NodeData>(makeUndoable(askNodeLabel))
 
 toolButton("tool_move", new MoveComponentInteraction())
 toolButton("tool_drag", new DragNodeInteraction())
 toolButton("tool_build", buildInteraction)
 toolButton("tool_pin", pinInteraction)
+toolButton("tool_label", labelInteraction)
 toolButton("tool_transfer", new TransferTool(pushUndoPoint, collectGlobalInputs, collectGlobalOutputs))
 
 function replaceGlobalState(newState: State) {
