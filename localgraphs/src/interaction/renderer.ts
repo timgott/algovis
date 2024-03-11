@@ -1,12 +1,14 @@
 import { getCursorPosition } from "../../../shared/canvas"
-import { unreachable } from "../../../shared/utils"
+import { invertBijectiveMap, unreachable } from "../../../shared/utils"
 
 export type SleepState = "Running" | "Sleeping"
 
 export type DragState = {
-    readonly mouseX: number
-    readonly mouseY: number
+    readonly x: number
+    readonly y: number
 }
+
+export type PointerId = number
 
 export type AnimationFrame = {
     readonly dt: number
@@ -14,15 +16,15 @@ export type AnimationFrame = {
     readonly width: number
     readonly height: number
     readonly ctx: CanvasRenderingContext2D
-    readonly dragState: DragState | null
+    readonly dragState: Map<PointerId, DragState>
 }
 
 export type MouseDownResponse = "Click" | "Drag" | "Ignore"
 
 export interface InteractiveSystem {
     animate(frame: AnimationFrame): SleepState;
-    onMouseDown(x: number, y: number): MouseDownResponse;
-    onDragEnd(x: number, y: number): void;
+    onMouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse;
+    onDragEnd(x: number, y: number, pointerId: PointerId): void;
 }
 
 export function aggregateSleeping(states: SleepState[]): SleepState {
@@ -34,21 +36,27 @@ export function aggregateSleeping(states: SleepState[]): SleepState {
 }
 
 export class UiStack implements InteractiveSystem {
-    private mouseCapture: InteractiveSystem | null = null
+    private pointerCaptures: Map<PointerId, InteractiveSystem> = new Map()
 
     constructor(public systems: InteractiveSystem[]) {
     }
 
     animate(frame: AnimationFrame): SleepState {
+        const activePointers = [...frame.dragState.keys()]
+
         // run animation step on all systems
         const sleepStates = this.systems.map((system) => {
             if (system.animate === undefined) {
                 return "Sleeping"
             }
 
+            // find pointers that are captured by this system
+            const capturedDrags = frame.dragState.filter(
+                (pointerId, _) => this.pointerCaptures.get(pointerId) === system
+            )
             const dragFrame: AnimationFrame = {
                 ...frame,
-                dragState: (this.mouseCapture == system)? frame.dragState : null,
+                dragState: capturedDrags,
             }
 
             frame.ctx.save()
@@ -57,19 +65,18 @@ export class UiStack implements InteractiveSystem {
             return state
         })
 
-        // running if any system is running
+        // running if any subsystem is running
         return aggregateSleeping(sleepStates)
     }
 
-    onMouseDown(x: number, y: number): MouseDownResponse {
-        this.mouseCapture = null
+    onMouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {
         // reverse order to give priority to what is drawn on top
         for (const system of this.systems.toReversed()) {
             if (system.onMouseDown !== undefined) {
-                const result = system.onMouseDown(x, y)
+                const result = system.onMouseDown(x, y, pointerId)
                 if (result !== "Ignore") {
                     if (result === "Drag") {
-                        this.mouseCapture = system
+                        this.pointerCaptures.set(pointerId, system)
                     }
                     return result
                 }
@@ -78,17 +85,16 @@ export class UiStack implements InteractiveSystem {
         return "Ignore"
     }
 
-    onDragEnd(x: number, y: number): void {
-        if (this.mouseCapture !== null && this.mouseCapture.onDragEnd !== undefined) {
-            this.mouseCapture.onDragEnd(x, y)
+    onDragEnd(x: number, y: number, pointerId: PointerId): void {
+        const s = this.pointerCaptures.pop(pointerId)
+        if (s !== undefined && s.onDragEnd !== undefined) {
+            s.onDragEnd(x, y, pointerId)
         }
     }
 }
 
 export class InteractionController {
-    private mouseX: number = 0
-    private mouseY: number = 0
-    private dragging: boolean = false
+    private dragState: Map<PointerId, DragState> = new Map()
 
     private previousTimeStamp: number | null = null
     private hasRequestedFrame: boolean = false
@@ -102,15 +108,15 @@ export class InteractionController {
 
         canvas.addEventListener("pointerdown", (ev) => {
             const [x, y] = getCursorPosition(canvas, ev)
-            this.onMouseDown(x, y)
+            this.onMouseDown(x, y, ev.pointerId)
         })
-        window.addEventListener("pointermove", (ev) => {
+        canvas.addEventListener("pointermove", (ev) => {
             const [x, y] = getCursorPosition(canvas, ev)
-            this.onMouseMoved(x, y)
+            this.onMouseMoved(x, y, ev.pointerId)
         })
-        window.addEventListener("pointerup", (ev) => {
+        canvas.addEventListener("lostpointercapture", (ev) => {
             const [x, y] = getCursorPosition(canvas, ev)
-            this.onMouseUp(x, y)
+            this.onMouseUp(x, y, ev.pointerId)
         })
         window.addEventListener("resize", () => {
             this.requestFrame()
@@ -130,14 +136,13 @@ export class InteractionController {
         const height = this.canvas.clientHeight
         this.ctx.reset()
 
-        const dragState = this.dragging ? { mouseX: this.mouseX, mouseY: this.mouseY } : null
         const sleepState = this.system.animate({
             dt,
             totalTime: timeStamp,
             width,
             height,
             ctx: this.ctx,
-            dragState,
+            dragState: this.dragState,
         })
 
         this.previousTimeStamp = timeStamp
@@ -162,36 +167,33 @@ export class InteractionController {
         }
     }
 
-    onMouseDown(x: number, y: number) {
+    onMouseDown(x: number, y: number, pointerId: PointerId) {
         // start dragging node
-        this.mouseX = x
-        this.mouseY = y
-        this.dragging = true
-        const result = this.system.onMouseDown(x, y)
+        const result = this.system.onMouseDown(x, y, pointerId)
         if (result !== "Ignore") {
             console.log(result)
             if (result === "Drag") {
-                this.dragging = true
+                this.dragState.set(pointerId, { x, y })
+                this.canvas.setPointerCapture(pointerId) // capture drag events
             }
             this.requestFrame()
         }
     }
 
-    onMouseMoved(x: number, y: number) {
-        this.mouseX = x
-        this.mouseY = y
-
-        if (this.dragging) {
+    onMouseMoved(x: number, y: number, pointerId: PointerId) {
+        const state = this.dragState.get(pointerId)
+        if (state !== undefined) {
+            this.dragState.set(pointerId, { x, y })
             this.requestFrame()
         }
     }
 
-    onMouseUp(x: number, y: number) {
+    onMouseUp(x: number, y: number, pointerId: PointerId) {
         // stop dragging node
-        if (this.dragging) {
-            this.system.onDragEnd(x, y)
+        if (this.dragState.has(pointerId)) {
+            this.system.onDragEnd(x, y, pointerId)
             this.requestFrame()
+            this.dragState.delete(pointerId) // release mouse capture
         }
-        this.dragging = false // release mouse capture
     }
 }

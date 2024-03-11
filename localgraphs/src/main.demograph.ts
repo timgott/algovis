@@ -22,7 +22,7 @@ shuffleGraphPositions(graph, canvas.width, canvas.height)
 graph = createGridGraph(10, layoutStyle)
 
 const sim = new GraphPhysicsSimulator(graph, layoutStyle, new SimpleGraphPainter(layoutStyle.nodeRadius))
-sim.setInteractionMode(new DragNodeInteraction())
+sim.setInteractionMode(() => new DragNodeInteraction())
 
-const controller = new InteractionController(canvas, [sim])
+const controller = new InteractionController(canvas, sim)
 controller.requestFrame()

@@ -119,13 +119,37 @@ Set.prototype.find = function<T>(this: Set<T>, predicate: (item: T) => boolean):
     return undefined
 }
 
+declare global {
+    interface Map<K, V> {
+        filter(predicate: (key: K, value: V) => boolean): Map<K, V>
+        pop(key: K): V | undefined
+    }
+}
+
+Map.prototype.filter = function<K, V>(this: Map<K, V>, predicate: (key: K, value: V) => boolean): Map<K, V> {
+    let result = new Map<K, V>()
+    for (let [key, value] of this) {
+        if (predicate(key, value)) {
+            result.set(key, value)
+        }
+    }
+    return result
+}
+
+Map.prototype.pop = function<K, V>(this: Map<K, V>, key: K): V | undefined {
+    let value = this.get(key)
+    this.delete(key)
+    return value
+}
+
 export function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export function invertMap<K, V>(map: Map<K, V>): Map<V, K> {
+export function invertBijectiveMap<K, V>(map: Map<K, V>): Map<V, K> {
     let result = new Map<V, K>()
     for (let [key, value] of map) {
+        assert(!result.has(value), `Value ${value} is not unique in the map`)
         result.set(value, key)
     }
     return result

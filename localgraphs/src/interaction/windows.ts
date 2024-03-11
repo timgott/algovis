@@ -1,6 +1,7 @@
 import { Rect } from "../../../shared/rectangle";
+import { assertExists, ensured } from "../../../shared/utils";
 import { Positioned } from "../../../shared/vector";
-import { AnimationFrame, InteractiveSystem, MouseDownResponse, SleepState } from "./renderer";
+import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "./renderer";
 
 function drawWindowFrame(ctx: CanvasRenderingContext2D, bounds: Rect, headerHeight: number) {
     const cornerRadius = 4
@@ -39,16 +40,18 @@ export class WindowController implements InteractiveSystem {
 
     dragState: null | {
         lastX: number,
-        lastY: number
+        lastY: number,
+        pointerId: PointerId
     } = null;
 
     animate(frame: AnimationFrame): SleepState {
-        if (frame.dragState && this.dragState) {
-            const dx = frame.dragState.mouseX - this.dragState.lastX
-            const dy = frame.dragState.mouseY - this.dragState.lastY
+        if (this.dragState) {
+            const mouse = ensured(frame.dragState.get(this.dragState.pointerId))
+            const dx = mouse.x - this.dragState.lastX
+            const dy = mouse.y - this.dragState.lastY
             this.contentArea = this.contentArea.addOffset(dx, dy)
-            this.dragState.lastX = frame.dragState.mouseX
-            this.dragState.lastY = frame.dragState.mouseY
+            this.dragState.lastX = mouse.x
+            this.dragState.lastY = mouse.y
         }
         drawWindowFrame(frame.ctx, this.bounds, titleHeight);
         this.drawContents(frame.ctx, this.contentArea, this.titleArea)
@@ -67,11 +70,12 @@ export class WindowController implements InteractiveSystem {
         )
     }
 
-    onMouseDown(x: number, y: number): MouseDownResponse {
+    onMouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {
         if (this.titleArea.contains(x, y)) {
             this.dragState = {
                 lastX: x,
-                lastY: y
+                lastY: y,
+                pointerId
             }
             return "Drag"
         }

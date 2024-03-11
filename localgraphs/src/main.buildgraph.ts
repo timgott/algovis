@@ -1,8 +1,8 @@
 import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring } from "./coloring.js";
-import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode, dragNodes, offsetNodes, moveSlightly } from "./interaction/graphlayout.js";
+import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode, dragNodes, offsetNodes, moveSlightly } from "./interaction/graphlayout.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, MappedNode, copyGraph, copyGraphTo, copySubgraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, filteredGraphView, mapGraph, mapGraphLazy } from "./graph.js";
-import { assert, assertExists, degToRad, ensured, invertMap, min, sleep } from "../../shared/utils.js";
+import { assert, assertExists, degToRad, ensured, invertBijectiveMap, min, sleep } from "../../shared/utils.js";
 import { collectNeighborhood, computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js";
 import { Vector } from "../../shared/vector.js";
 import { Rect } from "../../shared/rectangle.js";
@@ -64,7 +64,7 @@ function algoStep(graph: Graph<NodeData>, pointOfChange: GraphNode<NodeData>): v
 
     // get graph with NodeColor type
     let [rawGraph, rawNodes] = mapGraph(graph, (data) => data.color)
-    let originalNodes = invertMap(rawNodes)
+    let originalNodes = invertBijectiveMap(rawNodes)
 
     // run algorithm to get changed nodes
     let updates = algo.step(rawGraph, ensured(rawNodes.get(pointOfChange)))
@@ -127,7 +127,7 @@ function duplicateSubgraph<T>(rootNode: GraphNode<T>): [Graph<T>, GraphNode<T>] 
     return [subgraph, ensured(nodeMap.get(rootNode))]
 }
 
-class DuplicateInteraction implements GraphInteractionMode<NodeData> {
+class DuplicateInteraction implements GraphInteraction<NodeData> {
     state: {
         subgraph: Graph<NodeData>,
         root: GraphNode<NodeData>,
@@ -244,7 +244,7 @@ function macroDuplicate(nodeOrder: GraphNode<NodeData>[], edgeOrder: GraphEdge<N
     }
 }
 
-class MacroDuplicateInteraction implements GraphInteractionMode<NodeData> {
+class MacroDuplicateInteraction implements GraphInteraction<NodeData> {
     state: {
         startNode: GraphNode<NodeData>,
     } | null = null
@@ -447,7 +447,7 @@ pruneButton.addEventListener("click", () => {
     replaceGlobalGraph(prunedGraph)
 })
 
-function toolButton(id: string, tool: GraphInteractionMode<NodeData>) {
+function toolButton(id: string, tool: () => GraphInteraction<NodeData>) {
     document.getElementById(id)!.addEventListener("click", () => {
         sim.setInteractionMode(tool)
     })
@@ -460,19 +460,19 @@ function makeUndoable<T extends (...args: any) => any>(f: T): T {
     } as T
 }
 
-const buildInteraction = new BuildGraphInteraction(makeUndoable(putNewNode), makeUndoable(putNewEdge))
-const markInteraction = new ClickNodeInteraction<NodeData>(
+const buildInteraction = () => new BuildGraphInteraction(makeUndoable(putNewNode), makeUndoable(putNewEdge))
+const markInteraction = () => new ClickNodeInteraction<NodeData>(
     makeUndoable(node => { node.data.marked = !node.data.marked })
 )
-const collapseInteraction = new ClickNodeInteraction<NodeData>(makeUndoable(collapse))
+const collapseInteraction = () => new ClickNodeInteraction<NodeData>(makeUndoable(collapse))
 
-toolButton("tool_move", new MoveComponentInteraction())
-toolButton("tool_drag", new DragNodeInteraction())
+toolButton("tool_move", () => new MoveComponentInteraction())
+toolButton("tool_drag", () => new DragNodeInteraction())
 toolButton("tool_build", buildInteraction)
-toolButton("tool_duplicate", new DuplicateInteraction())
+toolButton("tool_duplicate", () => new DuplicateInteraction())
 toolButton("tool_collapse", collapseInteraction)
 toolButton("tool_mark", markInteraction)
-toolButton("tool_macro", new MacroDuplicateInteraction())
+toolButton("tool_macro",  () => new MacroDuplicateInteraction())
 
 adversaryButton.addEventListener("click", () => {
     let graph = sim.getGraph()

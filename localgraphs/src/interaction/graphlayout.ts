@@ -1,7 +1,7 @@
 import { getCursorPosition } from "../../../shared/canvas"
 import { Positioned } from "../../../shared/vector"
 import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode, filteredGraphView } from "../graph"
-import { AnimationFrame, InteractiveSystem, MouseDownResponse, SleepState } from "./renderer"
+import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "./renderer"
 
 
 export type LayoutConfig = {
@@ -182,13 +182,13 @@ export function createGridGraph(size: number, layout: LayoutConfig): Graph<null>
 }
 
 
-export interface GraphInteractionMode<T> {
+export interface GraphInteraction<T> {
     onMouseDown(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number): void
     onDragStep(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void
     onMouseUp(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number): void
 }
 
-export class DragNodeInteraction<T> implements GraphInteractionMode<T> {
+export class DragNodeInteraction<T> implements GraphInteraction<T> {
     draggedNode: GraphNode<T> | null = null
 
     onMouseDown(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number) {
@@ -249,7 +249,8 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
     private painter: GraphPainter<T>
     public visibleFilter: (node: GraphNode<T>) => boolean = () => true
 
-    private interactionMode: GraphInteractionMode<T> | null = null
+    private interactionMode: (() => GraphInteraction<T>) | null = null
+    private interactions: Map<PointerId, GraphInteraction<T>> = new Map()
 
     constructor(graph: Graph<T>, layoutStyle: LayoutConfig, painter: GraphPainter<T>) {
         this.graph = graph
@@ -257,7 +258,8 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
         this.painter = painter
     }
 
-    setInteractionMode(mode: GraphInteractionMode<T> | null) {
+    // mode is a constructor to enable multitouch
+    setInteractionMode(mode: (() => GraphInteraction<T>) | null) {
         this.interactionMode = mode
     }
 
@@ -271,9 +273,12 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
 
     animate({dt, width, height, ctx, dragState}: AnimationFrame): SleepState {
         let visibleGraph = this.getVisibleGraph()
-        if (this.interactionMode !== null && dragState !== null) {
-            this.interactionMode.onDragStep(this.graph, visibleGraph.nodes,
-                dragState.mouseX, dragState.mouseY, ctx, dt)
+        for (let [id, pointerState] of dragState) {
+            const drag = this.interactions.get(id)
+            if (drag !== undefined) {
+                drag.onDragStep(this.graph, visibleGraph.nodes,
+                    pointerState.x, pointerState.y, ctx, dt)
+            }
         }
 
         // physics
@@ -291,19 +296,22 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
         }
     }
 
-    onMouseDown(x: number, y: number): MouseDownResponse {
+    onMouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {
         // start dragging node
         if (this.interactionMode !== null) {
-            this.interactionMode.onMouseDown(this.graph, this.getVisibleNodes(), x, y)
+            const drag = this.interactionMode()
+            drag.onMouseDown(this.graph, this.getVisibleNodes(), x, y)
+            this.interactions.set(pointerId, drag)
             return "Drag"
         }
         return "Ignore"
     }
 
-    onDragEnd(x: number, y: number): void {
+    onDragEnd(x: number, y: number, pointerId: PointerId): void {
         // stop dragging node
-        if (this.interactionMode !== null) {
-            this.interactionMode.onMouseUp(this.graph, this.getVisibleNodes(), x, y)
+        const drag = this.interactions.pop(pointerId)
+        if (drag !== undefined) {
+            drag.onMouseUp(this.graph, this.getVisibleNodes(), x, y)
         }
     }
 

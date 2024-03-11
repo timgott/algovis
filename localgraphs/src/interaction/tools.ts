@@ -1,9 +1,9 @@
 import { Positioned, distance } from "../../../shared/vector"
 import { Graph, GraphNode } from "../graph"
 import { collectNeighborhood } from "../graphalgos"
-import { GraphInteractionMode, dragNodes, findClosestNode } from "./graphlayout"
+import { GraphInteraction, dragNodes, findClosestNode } from "./graphlayout"
 
-export class BuildGraphInteraction<T> implements GraphInteractionMode<T> {
+export class BuildGraphInteraction<T> implements GraphInteraction<T> {
     moveThreshold: number = 20
     connectConeFactor: number = 0.7 // weight factor for connecting existing nodes instead of adding a new node
 
@@ -80,7 +80,7 @@ export class BuildGraphInteraction<T> implements GraphInteractionMode<T> {
     }
 }
 
-export class MoveComponentInteraction<T> implements GraphInteractionMode<T> {
+export class MoveComponentInteraction<T> implements GraphInteraction<T> {
     draggedNode: GraphNode<T> | null = null
 
     onMouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number) {
@@ -99,7 +99,7 @@ export class MoveComponentInteraction<T> implements GraphInteractionMode<T> {
     }
 }
 
-export class ClickNodeInteraction<T> implements GraphInteractionMode<T> {
+export class ClickNodeInteraction<T> implements GraphInteraction<T> {
     constructor(private callback: (node: GraphNode<T>, graph: Graph<T>) => void) {}
 
     onMouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number) {

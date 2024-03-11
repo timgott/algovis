@@ -1,4 +1,4 @@
-import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, distanceToPointSqr, findClosestNode, offsetNodes } from "./interaction/graphlayout.js";
+import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, LayoutConfig, distanceToPointSqr, findClosestNode, offsetNodes } from "./interaction/graphlayout.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
 import { InteractionController, UiStack as UiStack } from "./interaction/renderer.js";
 import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode, mapSubgraphTo } from "./graph.js";
@@ -160,7 +160,7 @@ function transferNode(source: Node, target: Node, graph: MainGraph): void {
     applyDataTransfer(source, target)
 }
 
-class TransferTool implements GraphInteractionMode<NodeData> {
+class TransferTool implements GraphInteraction<NodeData> {
     state: {
         mode: "duplicate"
         startNode: GraphNode<NodeData>,
@@ -426,7 +426,7 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
 
 /* Global procedures */
 
-function toolButton(id: string, tool: GraphInteractionMode<NodeData>) {
+function toolButton(id: string, tool: () => GraphInteraction<NodeData>) {
     document.getElementById(id)!.addEventListener("click", () => {
         globalSim.setInteractionMode(tool)
     })
@@ -458,22 +458,22 @@ function askNodeLabel(node: Node): void {
     }
 }
 
-const buildInteraction = new BuildGraphInteraction<NodeData>(makeUndoable(putNewNode), makeUndoable(createEdge))
-const pinInteraction = new ClickNodeInteraction<NodeData>(makeUndoable(node => {
+const buildInteraction = () => new BuildGraphInteraction<NodeData>(makeUndoable(putNewNode), makeUndoable(createEdge))
+const pinInteraction = () => new ClickNodeInteraction<NodeData>(makeUndoable(node => {
     toggleNodePin(node)
     if (node.data.pinned)
         askNodeLabel(node)
     else
         node.data.label = ""
 }))
-const labelInteraction = new ClickNodeInteraction<NodeData>(makeUndoable(askNodeLabel))
+const labelInteraction = () => new ClickNodeInteraction<NodeData>(makeUndoable(askNodeLabel))
 
-toolButton("tool_move", new MoveComponentInteraction())
-toolButton("tool_drag", new DragNodeInteraction())
+toolButton("tool_move", () => new MoveComponentInteraction())
+toolButton("tool_drag", () => new DragNodeInteraction())
 toolButton("tool_build", buildInteraction)
 toolButton("tool_pin", pinInteraction)
 toolButton("tool_label", labelInteraction)
-toolButton("tool_transfer", new TransferTool(pushUndoPoint, collectGlobalInputs, collectGlobalOutputs))
+toolButton("tool_transfer", () => new TransferTool(pushUndoPoint, collectGlobalInputs, collectGlobalOutputs))
 
 function replaceGlobalState(newState: State) {
     globalState = newState

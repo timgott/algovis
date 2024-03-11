@@ -1,5 +1,5 @@
 import { NodeColor } from "./coloring.js";
-import { DragNodeInteraction, GraphInteractionMode, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode } from "./interaction/graphlayout.js";
+import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode } from "./interaction/graphlayout.js";
 import { initFullscreenCanvas } from "../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, createEmptyGraph, createNode } from "./graph.js";
 import { computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js";
@@ -221,7 +221,7 @@ function advStep(state: State) {
     }
 }
 
-class SelectNodeInteraction implements GraphInteractionMode<NodeData> {
+class SelectNodeInteraction implements GraphInteraction<NodeData> {
     constructor(
         private onSelect: (node: GraphNode<NodeData>) => unknown,
         private onUnselect: () => unknown,
@@ -264,7 +264,7 @@ function findErrorNode(state: State): GraphNode<NodeData> | undefined {
 }
 
 class ColoringController {
-    selectInteraction = new SelectNodeInteraction(
+    selectInteraction = () => new SelectNodeInteraction(
         (node) => this.selectNode(node),
         () => this.unselect()
     )
@@ -322,7 +322,7 @@ function registerKeyboardInput() {
 
 
 // Tool selectors
-function toolButton(id: string, tool: GraphInteractionMode<NodeData>) {
+function toolButton(id: string, tool: () => GraphInteraction<NodeData>) {
     document.getElementById(id)!.addEventListener("click", () => {
         sim.setInteractionMode(tool)
     })
@@ -374,7 +374,7 @@ const globalCtx: Context = {
 }
 
 let colorController = new ColoringController(colorInput, globalCtx)
-toolButton("tool_drag", new DragNodeInteraction())
+toolButton("tool_drag", () => new DragNodeInteraction())
 toolButton("tool_select", colorController.selectInteraction)
 sim.setInteractionMode(colorController.selectInteraction) // default tool
 
