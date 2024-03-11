@@ -8,8 +8,8 @@
     "p5": "^1.9.0"
   },
   "scripts": {
-    "build": "parcel build index.html",
-    "serve": "parcel serve index.html",
+    "build": "parcel build index.html --no-cache",
+    "serve": "parcel serve index.html --no-cache",
     "test": "jest",
     "check": "tsc --noEmit"
   }
