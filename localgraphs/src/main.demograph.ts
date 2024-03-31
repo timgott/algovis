@@ -7,19 +7,19 @@ initFullscreenCanvas(canvas)
 
 const layoutStyle: LayoutConfig = {
     nodeRadius: 10,
-    pushDistance: 40,
+    pushDistance: 50,
     minEdgeLength: 200,
-    pushForce: 9,
-    edgeForce: 60,
-    centeringForce: 1.0,
-    dampening: 1.0,
+    pushForce: 30,
+    edgeForce: 10,
+    centeringForce: 0.03,
+    dampening: 0.5,
     sleepVelocity: 0.1,
 }
 
 let graph = createRandomGraph(20, 3)
 shuffleGraphPositions(graph, canvas.width, canvas.height)
 
-graph = createGridGraph(10, layoutStyle)
+graph = createGridGraph(9, layoutStyle)
 
 const sim = new GraphPhysicsSimulator(graph, layoutStyle, new SimpleGraphPainter(layoutStyle.nodeRadius))
 sim.setInteractionMode(() => new DragNodeInteraction())
