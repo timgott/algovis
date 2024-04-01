@@ -1,4 +1,6 @@
 import * as p5 from 'p5';
+import { MCTS, SeenMCTSNode, createMctsRoot, propagateAverageValue, propagateMaxValue, propagateDecay, runMcts, treePolicyEpsilonGreedy, treePolicyUct } from './mcts';
+import { randomChoice, range } from '../shared/utils';
 
 let t = 0
 
@@ -16,18 +18,20 @@ const GRAVITY = 0.0002;
 const MOTOR_FORCE = 0.001;
 const LIMB_DAMPENING = 0.0001;
 
-const PHYSICS_STEP = 5
-const PLAN_EVERY = 2
-const PLAN_STEP = 20
+const PHYSICS_STEP = 30
+const PLAN_EVERY = 1
+const PLAN_STEP = 30 // ideally, PHYSICS_STEP*PLAN_EVERY
 const PLAN_ITERATIONS = 1 // how often to iterate over all limbs
 const TWO_STEP_PLANNING = true // consider second step in planning
 const PREFER_RELAXING = false // relax all limbs before planning
 const PROPAGATE_GROUND_CONSTRAINTS = true // more realistic energy transfer? better jumping?
 const LOOKAHEAD_EVALUATION = false // don't enable
 const GRIP_SURFACE_HEIGHT = 0.08 // surface friction, can be negative
-const RANDOM_SAMPLED_PREPLANNING = false
-const RANDOM_SAMPLES = 200
-const RANDOM_SAMPLING_STEPS = 5
+const RANDOM_SAMPLED_PREPLANNING = true
+const RANDOM_SAMPLES = 50
+const RANDOM_SAMPLING_STEPS = 1
+const MCTS_PLANNING = true
+const MCTS_DRAW_NEW_NODES = false
 
 type Node = {
   x: number,
@@ -108,8 +112,9 @@ function createStickman(x, y): Stickman {
 }
 
 function copyStickman(stickman: Stickman): Stickman {
+  // faster than structuredClone (at least on firefox)
   const newNodes = stickman.nodes.map(node => ({ copy: true, ...node }))
-  function mapNode(oldNode) {
+  function mapNode(oldNode: Node) {
     return newNodes[stickman.nodes.indexOf(oldNode)]
   }
   return {
@@ -124,6 +129,7 @@ function simulateStep(sketch: p5, stickman: Stickman, dt, lastDt) {
   applyPhysics(stickman, dt, lastDt)
   forceConstraints(stickman)
 
+  // propagate through all limbs -> ~5 iterations
   for (let index = 0; index < 5; index++) {
     satisfyConstraints(stickman)
     groundConstraints(stickman, sketch.width, sketch.height)
@@ -148,6 +154,9 @@ function evaluate(sketch, stickman) {
   let stability = -stickman.limbs.reduce((sum, limb) => sum + sq(limb.start.velX - limb.end.velX) + sq(limb.start.velY - limb.end.velY), 0)
   return (
     -headMouseDistSqr - handMouseDistSqr
+    //+ headRight + headUp
+    //+ spreadArms
+    + 0.1 * stability
   )
 }
 
@@ -271,15 +280,27 @@ function planMotorsIndividual(sketch: p5, stickman: Stickman, dt, lastDt, evalua
   return bestScore
 }
 
+function randomMotors(stickman: Stickman) {
+  for (let index = 0; index < stickman.limbs.length; index++) {
+    stickman.limbs[index].motor = randomChoice([0, -1, 1])
+  }
+}
+
+function randomMotorsRelaxed(stickman: Stickman, temperature: number) {
+  for (let index = 0; index < stickman.limbs.length; index++) {
+    if (Math.random() < temperature) {
+      stickman.limbs[index].motor = randomChoice([0, -1, 1])
+    }
+  }
+}
+
 function planMotorsSampling(sketch: p5, stickman: Stickman, dt: number, lastDt: number, evaluationFunction, scoreToBeat: number | undefined): void {
   const bestMotorAssignment = stickman.limbs.map(limb => limb.motor)
   let bestScore = scoreToBeat || evaluateAfterSteps(sketch, copyStickman(stickman), evaluationFunction, dt, lastDt, RANDOM_SAMPLING_STEPS)
 
   for (let i = 0; i < RANDOM_SAMPLES; i++) {
     const copiedStickman = copyStickman(stickman)
-    for (let index = 0; index < stickman.limbs.length; index++) {
-      copiedStickman.limbs[index].motor = sketch.random([0, -1, 1])
-    }
+    randomMotors(copiedStickman)
 
     const score = evaluateAfterSteps(sketch, copiedStickman, evaluationFunction, dt, lastDt, RANDOM_SAMPLING_STEPS)
     if (score > bestScore) {
@@ -530,15 +551,89 @@ function forceConstraints(stickman) {
   }
 }
 
-function drawStickman(sketch, x, y, stickman) {
+type EvaluationFunction = (sketch: p5, stickman: Stickman) => number
+
+interface Planner {
+  planMotors(sketch: p5, stickman: Stickman, evaluate: EvaluationFunction)
+}
+
+class GreedyPlanner implements Planner {
+  scoreToBeat: number = -Infinity
+  planMotors(sketch: p5, stickman: Stickman, evaluate: EvaluationFunction) {
+    if (RANDOM_SAMPLED_PREPLANNING)
+      planMotorsSampling(sketch, stickman, PLAN_STEP, PHYSICS_STEP, evaluate, this.scoreToBeat)
+    this.scoreToBeat = planMotorsIndividual(sketch, stickman, PLAN_STEP, PHYSICS_STEP, evaluate)
+  }
+}
+
+function transferMotorAssignment(source: Stickman, target: Stickman) {
+  for (let index = 0; index < source.limbs.length; index++) {
+    target.limbs[index].motor = source.limbs[index].motor
+  }
+}
+
+type MctsActions = number
+class MctsPlanner implements Planner {
+  lastBest: SeenMCTSNode<Stickman, MctsActions> | null = null
+
+  planMotors(sketch: p5, stickman: Stickman, evaluate: EvaluationFunction) {
+    // sample 10 random motor assignments as actions
+    const actions = [...range(50)]
+    const rolloutDepth = 5
+
+    // setup mcts
+    const mcts: MCTS<Stickman, MctsActions> = {
+      actions: (s) => actions,
+      expand(s, a) {
+        const copiedStickman = copyStickman(s)
+        randomMotorsRelaxed(copiedStickman, 0.5)
+        simulateStep(sketch, copiedStickman, PLAN_STEP, PLAN_STEP)
+        return copiedStickman
+      },
+      rollout(state, depth) {
+        if (MCTS_DRAW_NEW_NODES) {
+          drawStickman(sketch, 0, 0, state, 5)
+        }
+        let evaluatedStickman = state
+        if (rolloutDepth > 0) {
+          evaluatedStickman = copyStickman(state)
+          for (let i = depth; i < rolloutDepth; i++) {
+            randomMotorsRelaxed(evaluatedStickman, 0.1)
+            simulateStep(sketch, evaluatedStickman, PLAN_STEP, PLAN_STEP)
+          }
+        }
+        return evaluate(sketch, evaluatedStickman)
+      },
+      //treePolicy: treePolicyEpsilonGreedy(0.5),
+      treePolicy: treePolicyUct(100000.0),
+      propagation: propagateAverageValue,
+      //propagation: propagateMaxValue,
+      //propagation: propagateDecay,
+    }
+
+    const root = this.lastBest !== null? this.lastBest : createMctsRoot(stickman, mcts)
+    /*if (this.lastBest) {
+      diffStickman(stickman, root.state)
+      throw "End"
+    }*/
+    const best = runMcts(root, mcts, 200)
+    this.lastBest = best
+    transferMotorAssignment(best.state, stickman)
+  }
+
+}
+
+function drawStickman(sketch, x, y, stickman, alpha: number = 255) {
   for (const limb of stickman.limbs) {
+    sketch.stroke(0,0,0, alpha)
     sketch.line(limb.start.x + x, limb.start.y + y, limb.end.x + x, limb.end.y + y)
   }
   for (const node of stickman.nodes) {
-    sketch.stroke(255, 100, 0, 100)
-    //line(node.x, node.y, node.x + node.forceX * 10000, node.y + node.forceY * 10000)
-    sketch.stroke("black")
+    //sketch.stroke(255, 100, 0, 100)
+    //sketch.line(node.x, node.y, node.x + node.forceX * 1000, node.y + node.forceY * 1000)
+    sketch.stroke(0,0,0, alpha)
     if (node.nodeType == "head") {
+      sketch.fill(255,255,255,alpha)
       sketch.circle(node.x + x, node.y + y, head_radius * 2)
     }
   }
@@ -546,10 +641,12 @@ function drawStickman(sketch, x, y, stickman) {
 
 function initSketch(sketch) {
   let globalStickman
+  let planner: Planner
 
   sketch.setup = function setup() {
     sketch.createCanvas(sketch.min(sketch.windowWidth, 1000), sketch.min(sketch.windowHeight, 400));
     globalStickman = createStickman(100, 200)
+    planner = MCTS_PLANNING ? new MctsPlanner() : new GreedyPlanner()
   }
   sketch.windowResized = function windowResized() {
     sketch.resizeCanvas(sketch.min(sketch.windowWidth, 1000), sketch.min(sketch.windowHeight, 400));
@@ -565,20 +662,17 @@ function initSketch(sketch) {
     globalTimeRemainder += sketch.deltaTime
     globalTimeRemainder = sketch.min(globalTimeRemainder, PHYSICS_STEP * 10)
 
-    sketch.background(220);
-    drawStickman(sketch, 0, 0, globalStickman)
-
-    let scoreToBeat = -Infinity
-    while (globalTimeRemainder >= PHYSICS_STEP) {
+    
+    if (globalTimeRemainder >= PHYSICS_STEP) {
+      sketch.background(220);
       globalPlanningCounter = (globalPlanningCounter + 1) % PLAN_EVERY
       if (globalPlanningCounter == 0) {
         const evaluationFunction = LOOKAHEAD_EVALUATION ? evaluateLookahead : evaluate
-        if (RANDOM_SAMPLED_PREPLANNING)
-          planMotorsSampling(sketch, globalStickman, PLAN_STEP, PHYSICS_STEP, evaluationFunction, scoreToBeat)
-        scoreToBeat = planMotorsIndividual(sketch, globalStickman, PLAN_STEP, PHYSICS_STEP, evaluationFunction)
+        planner.planMotors(sketch, globalStickman, evaluationFunction)
       }
       let dt = PHYSICS_STEP
-      reorderLimbsRandomly(globalStickman)
+      //reorderLimbsRandomly(globalStickman) // confuses cached motor assignments (e.g. MCTS)
+      drawStickman(sketch, 0, 0, globalStickman)
       simulateStep(sketch, globalStickman, dt, dt)
       globalTimeRemainder -= dt
     }

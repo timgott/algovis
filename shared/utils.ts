@@ -78,6 +78,19 @@ export function min<T>(items: Iterable<T>, key: (item: T) => number): T | undefi
     return minItem
 }
 
+export function max<T>(items: Iterable<T>, key: (item: T) => number): T | undefined {
+    let maxItem: T | undefined = undefined
+    let maxValue = -Infinity
+    for (let item of items) {
+        let value = key(item)
+        if (value > maxValue) {
+            maxValue = value
+            maxItem = item
+        }
+    }
+    return maxItem
+}
+
 export function range(limit: number): Iterable<number>;
 export function range(start: number, limit: number): Iterable<number>;
 export function* range(a: number, b?: number): Iterable<number> {
