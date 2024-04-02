@@ -1,5 +1,5 @@
 import * as p5 from 'p5';
-import { MCTS, SeenMCTSNode, createMctsRoot, propagateAverageValue, propagateMaxValue, propagateDecay, runMcts, treePolicyEpsilonGreedy, treePolicyUct, runMctsTimeout } from './mcts';
+import { MCTS, SeenMCTSNode, createMctsRoot, propagateAverageValue, treePolicyUct, runMctsTimeout, treePolicyEpsilonGreedy } from './mcts';
 import { randomChoice, range } from '../shared/utils';
 
 let t = 0
@@ -34,9 +34,10 @@ const RANDOM_SAMPLING_STEPS = 1
 const MCTS_PLANNING = true // Use MCTS instead of the greedy/sampling planner
 const MCTS_DRAW_NEW_NODES = true // Show newly explored candidates
 const MCTS_TIMEOUT = 25 // ms
-const MCTS_MIN_STEPS = 100 // exact step count depends on time budget
-const MCTS_MAX_STEPS = 5000
-const MCTS_UCT_C = 50000.0 // exploration/exploitation tradeoff, depends on evaluation scale (fix this?)
+const MCTS_MIN_STEPS = 50 // exact step count depends on time budget
+const MCTS_MAX_STEPS = 10000
+const MCTS_EPSILON = 0.05 // Take random actions with this probability
+const MCTS_UCT_C = 1000.0 // exploration/exploitation tradeoff, depends on evaluation scale (fix this?). Look ahead vs find local best option
 const MCTS_ACTIONS = 30 // number of movement alternatives per node, higher increases movement precision
 const MCTS_ROLLOUT_DEPTH = 10 // how many steps to simulate in the rollout (max depth relative to root), regularizes with random future actions
 
@@ -597,7 +598,7 @@ class MctsPlanner implements Planner {
         return copiedStickman
       },
       rollout(state, depth) {
-        if (MCTS_DRAW_NEW_NODES && Math.random() < 0.5 / depth) {
+        if (MCTS_DRAW_NEW_NODES && Math.random() < 1.0 / depth) {
           drawStickman(sketch, 0, 0, state, 5)
         }
         if (rolloutDepth > 0) {
@@ -612,8 +613,8 @@ class MctsPlanner implements Planner {
           return evaluate(sketch, state)
         }
       },
-      //treePolicy: treePolicyEpsilonGreedy(0.5),
-      treePolicy: treePolicyUct(MCTS_UCT_C),
+      treePolicy: treePolicyEpsilonGreedy(MCTS_EPSILON, treePolicyUct(MCTS_UCT_C)),
+      //treePolicy: treePolicyEpsilonGreedy(MCTS_EPSILON),
       propagation: propagateAverageValue,
       //propagation: propagateMaxValue,
       //propagation: propagateDecay,
@@ -625,8 +626,9 @@ class MctsPlanner implements Planner {
       throw "End"
     }*/
     const best = runMctsTimeout(root, mcts, MCTS_MIN_STEPS, MCTS_MAX_STEPS, MCTS_TIMEOUT)
-    this.lastBest = best
     transferMotorAssignment(best.state, stickman)
+    best.parent = null
+    this.lastBest = best
   }
 
 }

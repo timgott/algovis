@@ -41,18 +41,21 @@ export function treePolicyUct<T,A>(c: number): TreePolicy<T,A> {
     }
 }
 
-function findBestChild<T,A>(node: SeenMCTSNode<T,A>) {
+export function findBestChild<T,A>(node: SeenMCTSNode<T,A>): MCTSNode<T,A> {
     return max(node.children, (child) => {
         return (child.visits !== null)? child.score : -Infinity;
     }) ?? randomChoice(node.children) // none has been visited
 }
 
-export function treePolicyEpsilonGreedy<T,A>(epsilon: number): TreePolicy<T,A> {
+export function treePolicyEpsilonGreedy<T,A>(epsilon: number, fallback: TreePolicy<T,A> = findBestChild): TreePolicy<T,A> {
+    if (epsilon == 0) {
+        return fallback
+    }
     return (node: SeenMCTSNode<T,A>): MCTSNode<T,A> => {
         if (Math.random() < epsilon) {
             return randomChoice(node.children)
         } else {
-            return findBestChild(node)
+            return fallback(node)
         }
     }
 }
