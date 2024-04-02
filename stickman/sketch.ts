@@ -1,5 +1,5 @@
 import * as p5 from 'p5';
-import { MCTS, SeenMCTSNode, createMctsRoot, propagateAverageValue, propagateMaxValue, propagateDecay, runMcts, treePolicyEpsilonGreedy, treePolicyUct } from './mcts';
+import { MCTS, SeenMCTSNode, createMctsRoot, propagateAverageValue, propagateMaxValue, propagateDecay, runMcts, treePolicyEpsilonGreedy, treePolicyUct, runMctsTimeout } from './mcts';
 import { randomChoice, range } from '../shared/utils';
 
 let t = 0
@@ -15,8 +15,8 @@ const elbow_ratio = 2/5;
 
 
 const GRAVITY = 0.0002;
-const MOTOR_FORCE = 0.001;
-const LIMB_DAMPENING = 0.0001;
+const MOTOR_FORCE = 0.0008;
+const LIMB_DAMPENING = 0.0000;
 
 const PHYSICS_STEP = 30
 const PLAN_EVERY = 1
@@ -26,12 +26,19 @@ const TWO_STEP_PLANNING = true // consider second step in planning
 const PREFER_RELAXING = false // relax all limbs before planning
 const PROPAGATE_GROUND_CONSTRAINTS = true // more realistic energy transfer? better jumping?
 const LOOKAHEAD_EVALUATION = false // don't enable
-const GRIP_SURFACE_HEIGHT = 0.08 // surface friction, can be negative
+const GRIP_SURFACE_HEIGHT = 0.00 // surface friction, can be negative
 const RANDOM_SAMPLED_PREPLANNING = true
 const RANDOM_SAMPLES = 50
 const RANDOM_SAMPLING_STEPS = 1
-const MCTS_PLANNING = true
-const MCTS_DRAW_NEW_NODES = false
+
+const MCTS_PLANNING = true // Use MCTS instead of the greedy/sampling planner
+const MCTS_DRAW_NEW_NODES = true // Show newly explored candidates
+const MCTS_TIMEOUT = 25 // ms
+const MCTS_MIN_STEPS = 100 // exact step count depends on time budget
+const MCTS_MAX_STEPS = 5000
+const MCTS_UCT_C = 50000.0 // exploration/exploitation tradeoff, depends on evaluation scale (fix this?)
+const MCTS_ACTIONS = 30 // number of movement alternatives per node, higher increases movement precision
+const MCTS_ROLLOUT_DEPTH = 10 // how many steps to simulate in the rollout (max depth relative to root), regularizes with random future actions
 
 type Node = {
   x: number,
@@ -155,7 +162,6 @@ function evaluate(sketch, stickman) {
   return (
     -headMouseDistSqr - handMouseDistSqr
     //+ headRight + headUp
-    //+ spreadArms
     + 0.1 * stability
   )
 }
@@ -578,8 +584,8 @@ class MctsPlanner implements Planner {
 
   planMotors(sketch: p5, stickman: Stickman, evaluate: EvaluationFunction) {
     // sample 10 random motor assignments as actions
-    const actions = [...range(50)]
-    const rolloutDepth = 5
+    const actions = [...range(MCTS_ACTIONS)]
+    const rolloutDepth = MCTS_ROLLOUT_DEPTH
 
     // setup mcts
     const mcts: MCTS<Stickman, MctsActions> = {
@@ -591,21 +597,23 @@ class MctsPlanner implements Planner {
         return copiedStickman
       },
       rollout(state, depth) {
-        if (MCTS_DRAW_NEW_NODES) {
+        if (MCTS_DRAW_NEW_NODES && Math.random() < 0.5 / depth) {
           drawStickman(sketch, 0, 0, state, 5)
         }
-        let evaluatedStickman = state
         if (rolloutDepth > 0) {
-          evaluatedStickman = copyStickman(state)
-          for (let i = depth; i < rolloutDepth; i++) {
+          const evaluatedStickman = copyStickman(state)
+          let evaluateStart = evaluate(sketch, evaluatedStickman)
+          for (let i = 0; i < rolloutDepth; i++) {
             randomMotorsRelaxed(evaluatedStickman, 0.1)
             simulateStep(sketch, evaluatedStickman, PLAN_STEP, PLAN_STEP)
           }
+          return (evaluateStart + evaluate(sketch, evaluatedStickman)) / 2
+        } else {
+          return evaluate(sketch, state)
         }
-        return evaluate(sketch, evaluatedStickman)
       },
       //treePolicy: treePolicyEpsilonGreedy(0.5),
-      treePolicy: treePolicyUct(100000.0),
+      treePolicy: treePolicyUct(MCTS_UCT_C),
       propagation: propagateAverageValue,
       //propagation: propagateMaxValue,
       //propagation: propagateDecay,
@@ -616,7 +624,7 @@ class MctsPlanner implements Planner {
       diffStickman(stickman, root.state)
       throw "End"
     }*/
-    const best = runMcts(root, mcts, 200)
+    const best = runMctsTimeout(root, mcts, MCTS_MIN_STEPS, MCTS_MAX_STEPS, MCTS_TIMEOUT)
     this.lastBest = best
     transferMotorAssignment(best.state, stickman)
   }
@@ -656,7 +664,7 @@ function initSketch(sketch) {
   let globalPlanningCounter = 0
 
   function draw() {
-    if (sketch.keyIsPressed || sketch.mouseIsPressed) {
+    if (sketch.keyIsPressed) {
       sketch.deltaTime = sketch.deltaTime * 0.1
     }
     globalTimeRemainder += sketch.deltaTime

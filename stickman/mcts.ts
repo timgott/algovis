@@ -150,3 +150,19 @@ export function runMcts<T,A>(
 
     return findBestChild(root) as SeenMCTSNode<T,A> // at least one must be seen because of iterations > 0
 }
+
+export function runMctsTimeout<T,A>(
+    root: SeenMCTSNode<T,A>, mcts: MCTS<T,A>, minIterations: number, maxIterations: number, time: number
+): SeenMCTSNode<T,A> {
+    const start = performance.now()
+
+    for (let i = 0; i < maxIterations; i++) {
+        mctsStep(root, mcts)
+        if (i > minIterations && performance.now() - start > time) {
+            console.log(i, "iterations")
+            break
+        }
+    }
+
+    return findBestChild(root) as SeenMCTSNode<T,A> // at least one must be seen because of iterations > 0
+}
