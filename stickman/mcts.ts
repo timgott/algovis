@@ -158,7 +158,7 @@ export function runMctsTimeout<T,A>(
 
     for (let i = 0; i < maxIterations; i++) {
         mctsStep(root, mcts)
-        if (i > minIterations && performance.now() - start > time) {
+        if (i >= minIterations && performance.now() - start > time) {
             console.log(i, "iterations")
             break
         }
