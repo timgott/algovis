@@ -134,7 +134,10 @@ export class InteractionController {
 
         const width = this.canvas.clientWidth
         const height = this.canvas.clientHeight
-        this.ctx.reset()
+
+        this.ctx.save() // do not reset, since the scale has to be preserved
+        this.ctx.fillStyle = "transparent"
+        this.ctx.clearRect(0, 0, width, height)
 
         const sleepState = this.system.animate({
             dt,
@@ -144,6 +147,8 @@ export class InteractionController {
             ctx: this.ctx,
             dragState: this.dragState,
         })
+
+        this.ctx.restore()
 
         this.previousTimeStamp = timeStamp
 
