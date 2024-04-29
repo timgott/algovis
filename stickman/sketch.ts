@@ -628,7 +628,12 @@ class MctsPlanner implements Planner {
     const best = runMctsTimeout(root, mcts, MCTS_MIN_STEPS, MCTS_MAX_STEPS, MCTS_TIMEOUT)
     transferMotorAssignment(best.state, stickman)
     best.parent = null
-    this.lastBest = best
+
+    if (PLAN_STEP === PHYSICS_STEP && PLAN_EVERY === 1) {
+      this.lastBest = best
+    } else {
+      this.lastBest = null
+    }
   }
 
 }
