@@ -10,7 +10,7 @@
   "scripts": {
     "build": "parcel build index.html --no-cache",
     "serve": "parcel serve index.html --no-cache",
-    "test": "jest",
+    "test": "jest --verbose",
     "check": "tsc --noEmit"
   }
 }

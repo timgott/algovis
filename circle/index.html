@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bounding circle algorithm</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: sans-serif;
+            padding: 8px 16px;
+        }
+        canvas {
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            z-index: -1;
+            background-color: #f0f0f0;
+        }
+        #description {
+            font-style: italic;
+            opacity: 0.5;
+        }
+        #control_bar {
+            position: absolute;
+            top: 0px;
+            pointer-events: none;
+            margin: 16px 0px;
+        }
+        #control_bar * {
+            pointer-events: auto;
+            margin: 8px 0px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="circle_canvas"></canvas>
+    <!--<button id="btn_options_toggle">Hide</button>-->
+    <span id="control_bar" class="control_bar">
+        <div id="description">
+            Tap to add points 
+        </div>
+        <button id="btn_reset">Reset</button>
+    </span>
+    
+    <!-- Include the compiled JavaScript file -->
+    <script type="module" src="./main.circle.ts" class="mini_button"></script>
+</body>
+</html>

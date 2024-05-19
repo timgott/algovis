@@ -15,9 +15,10 @@ export function setCanvasSize(canvas: HTMLCanvasElement, width: number, height: 
     ctx.scale(dpiRatio, dpiRatio);
 }
 
-export function initFullscreenCanvas(canvas: HTMLCanvasElement) {
+export function initFullscreenCanvas(canvas: HTMLCanvasElement, repaint?: () => void): void {
     function resize() {
         setCanvasSize(canvas, window.innerWidth, window.innerHeight)
+        repaint?.()
     }
     window.addEventListener('resize', resize);
     resize()
@@ -48,8 +49,7 @@ export function drawArrowTip(cpx: number, cpy: number, x: number, y: number, siz
     let spread = degToRad(35)
     let left = angle - spread
     let right = angle + spread
-    ctx.moveTo(x, y)
-    ctx.lineTo(x - size * Math.cos(left), y - size * Math.sin(left))
-    ctx.moveTo(x, y)
+    ctx.moveTo(x - size * Math.cos(left), y - size * Math.sin(left))
+    ctx.lineTo(x, y)
     ctx.lineTo(x - size * Math.cos(right), y - size * Math.sin(right))
 }

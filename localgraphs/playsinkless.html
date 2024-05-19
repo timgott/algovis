@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unrooted Tree</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <canvas id="graph_canvas"></canvas>
+    <div id="control_bar" class="control_bar">
+        <button id="reset">Reset</button>
+
+        <label for="locality">Locality</label>
+        <input type="number" id="locality" min="0" max="10" value="2"/>
+
+        <button id="tool_flip">Flip</button>
+        <button id="tool_drag">Drag</button>
+        <button id="finish_step">Finish</button>
+
+        <button id="undo">Undo</button>
+    </div>
+
+    <script type="module" src="src/sinkless/main.playsinkless.ts"></script>
+</body>
+</html>

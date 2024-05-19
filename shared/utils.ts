@@ -40,6 +40,15 @@ export function popRandomUnordered<T>(arr: T[]): T {
     return result
 }
 
+export function randomSubset<T>(arr: readonly T[], count: number): T[] {
+    const copy = [...arr]
+    let result = [];
+    while (result.length < count && copy.length > 0) {
+        result.push(popRandomUnordered(copy))
+    }
+    return result
+}
+
 export function assert(condition: boolean, message: string): asserts condition {
     if (!condition) {
         throw message
@@ -65,9 +74,9 @@ export function unreachable(value: never): never {
     throw new Error(`Unreachable reached, value ${value}`)
 }
 
-export function min<T>(items: Iterable<T>, key: (item: T) => number): T | undefined {
+export function min<T>(items: Iterable<T>, key: (item: T) => number, limit: number = Infinity): T | undefined {
     let minItem: T | undefined = undefined
-    let minValue = Infinity
+    let minValue = limit
     for (let item of items) {
         let value = key(item)
         if (value < minValue) {

@@ -1,4 +1,5 @@
 import { getCursorPosition } from "../../../shared/canvas"
+import { min } from "../../../shared/utils"
 import { Positioned } from "../../../shared/vector"
 import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode, filteredGraphView } from "../graph"
 import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "./renderer"
@@ -109,16 +110,23 @@ export function distanceToPointSqr(x: number, y: number, node: Positioned) {
 }
 
 export function findClosestNode<T extends Positioned>(x: number, y: number, nodes: Iterable<T>, limit: number = Infinity): T | null {
-    let result = null
-    let minDistance = limit*limit
-    for (let node of nodes) {
-        let dist = distanceToPointSqr(x, y, node)
-        if (dist < minDistance) {
-            result = node
-            minDistance = dist
-        }
-    }
-    return result
+    return min(nodes, (node) => distanceToPointSqr(x, y, node), limit*limit) ?? null
+}
+
+export function distanceToLineSqr(x: number, y: number, a: Positioned, b: Positioned) {
+    let dx = b.x - a.x
+    let dy = b.y - a.y
+    let lengthSqr = dx * dx + dy * dy
+    let dot = (x - a.x) * dx + (y - a.y) * dy
+    let t = Math.max(0, Math.min(1, dot / lengthSqr))
+    let closestX = a.x + t * dx
+    let closestY = a.y + t * dy
+    return distanceToPointSqr(x, y, { x: closestX, y: closestY })
+}
+
+export function findClosestEdge<T extends Positioned, E extends {a: T, b: T}>
+    (x: number, y: number, edges: Iterable<E>, limit: number = Infinity): E | null {
+    return min(edges, (edge) => distanceToLineSqr(x, y, edge.a, edge.b), limit*limit) ?? null
 }
 
 export function shuffleGraphPositions(graph: Graph<unknown>, width: number, height: number) {
@@ -213,7 +221,7 @@ export interface GraphPainter<T> {
 }
 
 export class SimpleGraphPainter<T> implements GraphPainter<T> {
-    constructor(protected nodeRadius: number) {}
+    constructor(protected nodeRadius: number, protected color: string = "black") {}
 
     public drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<unknown>) {
         // edges
@@ -228,6 +236,7 @@ export class SimpleGraphPainter<T> implements GraphPainter<T> {
 
     protected drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<unknown>) {
         ctx.circle(node.x, node.y, this.nodeRadius)
+        ctx.fillStyle = this.color
         ctx.fill()
     }
 
@@ -236,6 +245,7 @@ export class SimpleGraphPainter<T> implements GraphPainter<T> {
         ctx.lineWidth = this.nodeRadius / 3
         ctx.moveTo(edge.a.x, edge.a.y)
         ctx.lineTo(edge.b.x, edge.b.y)
+        ctx.strokeStyle = this.color
         ctx.stroke()
     }
 }

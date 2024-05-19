@@ -1,7 +1,7 @@
 import { Positioned, distance } from "../../../shared/vector"
-import { Graph, GraphNode } from "../graph"
+import { Graph, GraphEdge, GraphNode } from "../graph"
 import { collectNeighborhood } from "../graphalgos"
-import { GraphInteraction, dragNodes, findClosestNode } from "./graphlayout"
+import { GraphInteraction, dragNodes, findClosestEdge, findClosestNode } from "./graphlayout"
 
 export class BuildGraphInteraction<T> implements GraphInteraction<T> {
     moveThreshold: number = 20
@@ -106,6 +106,19 @@ export class ClickNodeInteraction<T> implements GraphInteraction<T> {
         let node = findClosestNode(mouseX, mouseY, visible)
         if (node !== null) {
             this.callback(node, graph)
+        }
+    }
+    onDragStep() {}
+    onMouseUp() {}
+}
+
+export class ClickEdgeInteraction<T> implements GraphInteraction<T> {
+    constructor(private callback: (node: GraphEdge<T>, graph: Graph<T>) => void) {}
+
+    onMouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number) {
+        let edge = findClosestEdge(mouseX, mouseY, graph.edges)
+        if (edge !== null) {
+            this.callback(edge, graph)
         }
     }
     onDragStep() {}
