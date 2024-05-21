@@ -1,4 +1,4 @@
-import { randomChoice, shuffle } from "../shared/utils";
+import { ensured, randomChoice, shuffle } from "../shared/utils";
 import { Positioned } from "../shared/vector";
 import { HashSet } from "../shared/hashset";
 
@@ -58,20 +58,22 @@ function trivialCircle(points: Positioned[]) {
     }
 }
 
-function isInside(point: Positioned, circle: Circle) {
+const defaultEpsilon = 1e-5
+function isInside(point: Positioned, circle: Circle, epsilon: number = defaultEpsilon) {
     const dx = point.x - circle.x
     const dy = point.y - circle.y
-    return dx*dx+dy*dy < circle.r*circle.r
+    const r = circle.r + epsilon
+    return dx*dx+dy*dy <= r*r
 }
 
-export function findSmallestCircleRec(points: Positioned[], anchors: Positioned[]): Circle {
+export function findSmallestCircleRec(points: Positioned[], anchors: Positioned[], epsilon: number = defaultEpsilon): Circle {
     if (points.length == 0 || anchors.length == 3) {
         return trivialCircle(anchors)
     }
     let p = points[0]
     let remaining = points.slice(1)
     let circle = findSmallestCircleRec(remaining, anchors)
-    if (isInside(p, circle)) {
+    if (isInside(p, circle, epsilon)) {
         return circle
     }
     shuffle(points)
@@ -79,8 +81,14 @@ export function findSmallestCircleRec(points: Positioned[], anchors: Positioned[
 }
 
 // Add one point and return the new smallest circle
-export function expandSmallestCircle(oldCircle: Circle, oldPoints: Positioned[], newPoint: Positioned, outerAnchors: Positioned[] = []): Circle {
-    if (isInside(newPoint, oldCircle)) {
+export function expandSmallestCircle(
+    oldCircle: Circle,
+    oldPoints: Positioned[],
+    newPoint: Positioned,
+    outerAnchors: Positioned[] = [],
+    epsilon: number = defaultEpsilon
+): Circle {
+    if (isInside(newPoint, oldCircle, epsilon)) {
         // the minimal circle contains this point too, it is still the minimal circle
         return oldCircle
     } else {
@@ -89,7 +97,11 @@ export function expandSmallestCircle(oldCircle: Circle, oldPoints: Positioned[],
     }
 }
 
-export function findSmallestCircleIncremental(points: Positioned[], outerAnchors: Positioned[]): Circle {
+export function findSmallestCircleIncremental(
+    points: Positioned[],
+    outerAnchors: Positioned[],
+    epsilon: number = defaultEpsilon
+): Circle {
     // start from existing circle
     // add one point
     // if inside: return old circle
@@ -99,10 +111,16 @@ export function findSmallestCircleIncremental(points: Positioned[], outerAnchors
     if (points.length == 0 || outerAnchors.length == 3) {
         return circle
     }
+
+    // shuffle avoids worst case in expectation
+    // (loop below is linear anyways)
+    points = points.slice()
+    shuffle(points)
+
     // invariant: circle is the smallest point containing points[0:i] and touching the outerAnchors
     for (let i = 0; i < points.length; i++) {
         const p = points[i]
-        if (isInside(p, circle)) {
+        if (isInside(p, circle, epsilon)) {
             continue
         } else {
             circle = findSmallestCircleIncremental(points.slice(0, i), [...outerAnchors, p])
@@ -113,9 +131,6 @@ export function findSmallestCircleIncremental(points: Positioned[], outerAnchors
 }
 
 // assumes unique points
-export function findSmallestCircle(points: Positioned[]): Circle {
-    // shuffle avoids worst case in expectation
-    points = points.slice()
-    shuffle(points)
-    return findSmallestCircleIncremental(points, [])
+export function findSmallestCircle(points: Positioned[], epsilon: number = defaultEpsilon): Circle {
+    return findSmallestCircleIncremental(points, [], epsilon)
 }

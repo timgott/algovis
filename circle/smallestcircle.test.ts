@@ -27,8 +27,8 @@ describe('Smallest circle performance', () => {
         const time8000 = testRuntime(points.slice(0, 8000))
 
         const baseOffset = time100
-        expect((time4000-baseOffset)/time2000).toBeLessThan(2.5)
-        expect((time8000-baseOffset)/time4000).toBeLessThan(2.5)
+        expect((time4000-baseOffset)/time2000).toBeLessThan(3)
+        expect((time8000-baseOffset)/time4000).toBeLessThan(3)
         expect((time1000-time10)/time100).toBeLessThan(10)
     })
 

@@ -2,7 +2,7 @@ import { getCursorPosition, initFullscreenCanvas } from "../shared/canvas.js"
 import { HashSet } from "../shared/hashset.js";
 import { shuffle } from "../shared/utils.js";
 import { Vector } from "../shared/vector.js";
-import { Circle, expandSmallestCircle, filterUniqueIntPoints, findSmallestCircle } from "./smallestcircle.js";
+import { Circle, expandSmallestCircle } from "./smallestcircle.js";
 
 const canvas = document.getElementById('circle_canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -30,7 +30,6 @@ function clicked(x: number, y: number) {
   let p = new Vector(x, y)
   globalCircle = expandSmallestCircle(globalCircle, globalPoints, p)
   globalPoints.push(p)
-  globalPoints = filterUniqueIntPoints(globalPoints)
   drawSolution(globalPoints, globalCircle)
 }
 
@@ -69,4 +68,4 @@ function setupControls() {
 
 
 setupControls()
-initFullscreenCanvas(canvas, () => drawSolution(globalPoints))
+initFullscreenCanvas(canvas, () => drawSolution(globalPoints, globalCircle))
