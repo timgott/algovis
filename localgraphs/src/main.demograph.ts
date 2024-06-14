@@ -1,5 +1,5 @@
 import { DragNodeInteraction, GraphPhysicsSimulator, LayoutConfig, SimpleGraphPainter, createGridGraph, createRandomGraph, shuffleGraphPositions } from "./interaction/graphlayout.js";
-import { initFullscreenCanvas } from "../../shared/canvas.js"
+import { initFullscreenCanvas } from "../../shared/canvas.js";
 import { InteractionController } from "./interaction/renderer.js";
 
 const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
@@ -17,7 +17,7 @@ const layoutStyle: LayoutConfig = {
 }
 
 let graph = createRandomGraph(20, 3)
-shuffleGraphPositions(graph, canvas.width, canvas.height)
+shuffleGraphPositions(graph, canvas.clientWidth, canvas.clientHeight)
 
 graph = createGridGraph(9, layoutStyle)
 

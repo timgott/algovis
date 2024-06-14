@@ -75,8 +75,8 @@ function isSinklessOrientation(graph: Graph<NodeData>): boolean {
 
 function putNewNode(graph: Graph<NodeData>): GraphNode<NodeData> {
     const offset = 10
-    const x = canvas.width/2 + (Math.random()*2-1)*offset
-    const y = canvas.height/2 + (Math.random()*2-1)*offset
+    const x = canvas.clientWidth/2 + (Math.random()*2-1)*offset
+    const y = canvas.clientHeight/2 + (Math.random()*2-1)*offset
     let node = createNode<NodeData>(graph, {
         outgoing: new Set(),
         id: graph.nodes.length
