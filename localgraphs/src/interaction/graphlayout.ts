@@ -250,19 +250,21 @@ export class SimpleGraphPainter<T> implements GraphPainter<T> {
     }
 }
 
-// Returns whether something has been updated
-export type PhysicsStep<T> = (obj: T, width: number, height: number, dt: number) => boolean
-
 export class GraphPhysicsSimulator<T> implements InteractiveSystem {
     private graph: Graph<T>
     private layoutStyle: LayoutConfig
     private painter: GraphPainter<T>
     public visibleFilter: (node: GraphNode<T>) => boolean = () => true
+    public substeps = 1
 
     private interactionMode: (() => GraphInteraction<T>) | null = null
     private interactions: Map<PointerId, GraphInteraction<T>> = new Map()
 
-    constructor(graph: Graph<T>, layoutStyle: LayoutConfig, painter: GraphPainter<T>) {
+    constructor(
+      graph: Graph<T>,
+      layoutStyle: LayoutConfig,
+      painter: GraphPainter<T>,
+    ) {
         this.graph = graph
         this.layoutStyle = layoutStyle
         this.painter = painter
@@ -283,17 +285,21 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
 
     animate({dt, width, height, ctx, dragState}: AnimationFrame): SleepState {
         let visibleGraph = this.getVisibleGraph()
-        for (let [id, pointerState] of dragState) {
-            const drag = this.interactions.get(id)
-            if (drag !== undefined) {
-                drag.onDragStep(this.graph, visibleGraph.nodes,
-                    pointerState.x, pointerState.y, ctx, dt)
-            }
+        for (let step = 0; step < this.substeps; step++) {
+          let subdt = dt / this.substeps;
+          for (let [id, pointerState] of dragState) {
+              const drag = this.interactions.get(id)
+              if (drag !== undefined) {
+                  drag.onDragStep(this.graph, visibleGraph.nodes,
+                      pointerState.x, pointerState.y, ctx, subdt)
+              }
+          }
+
+          // physics
+          applyVelocityStep(this.graph, this.layoutStyle, subdt)
+          applyLayoutForces(visibleGraph, this.layoutStyle, width, height, subdt)
         }
 
-        // physics
-        applyVelocityStep(this.graph, this.layoutStyle, dt)
-        applyLayoutForces(visibleGraph, this.layoutStyle, width, height, dt)
         const activeCount = findActiveNodes(this.graph, this.layoutStyle).size // active in next step
 
         // render

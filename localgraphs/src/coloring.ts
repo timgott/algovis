@@ -1,6 +1,6 @@
 import { assert, assertExists, min, randInt, range } from "../../shared/utils.js"
 import { Graph, GraphNode } from "./graph.js"
-import { Component, SearchState, bfs, bfsFold, collectNeighborhood, computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js"
+import { Component, SearchState, bfs, bfsFoldUniform, collectNeighborhood, computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js"
 import { DynamicLocal, OnlineAlgorithm, PartialGrid } from "./partialgrid.js"
 
 
@@ -782,7 +782,7 @@ function findDagLeaves<T>(adjacency: Map<T, Set<T>>): T[] {
 
 function computeDagDepth<T>(roots: T[], adjacency: Map<T, Set<T>>): Map<T, number> {
     let depths = new Map<T, number>()
-    bfsFold<T, number>(roots, () => 0, c => adjacency.get(c) ?? [], (node, depth) => {
+    bfsFoldUniform<T, number>(roots, () => 0, c => adjacency.get(c) ?? [], (node, depth) => {
         depths.set(node, depth)
         return [SearchState.Continue, depth + 1]
     })
@@ -948,7 +948,7 @@ export function antiCollisionColoring(radius: number): DynamicLocal<NodeColor> {
 
             // walk through all components in the bordering components tree,
             // from inside to outside
-            bfsFold(
+            bfsFoldUniform(
                 componentGraph.roots.filter(c => outsideNodesByComponent.has(c)),
                 (c) => outsideNodesByComponent.get(c)!,
                 (c) => componentGraph.adjacency.get(c)!,

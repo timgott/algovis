@@ -87,6 +87,17 @@ export function min<T>(items: Iterable<T>, key: (item: T) => number, limit: numb
     return minItem
 }
 
+export function minValue<T>(items: Iterable<T>, key: (item: T) => number, limit: number = Infinity): number {
+    let minValue = limit
+    for (let item of items) {
+        let value = key(item)
+        if (value < minValue) {
+            minValue = value
+        }
+    }
+    return minValue
+}
+
 export function max<T>(items: Iterable<T>, key: (item: T) => number): T | undefined {
     let maxItem: T | undefined = undefined
     let maxValue = -Infinity
@@ -98,6 +109,46 @@ export function max<T>(items: Iterable<T>, key: (item: T) => number): T | undefi
         }
     }
     return maxItem
+}
+
+export function maxValue<T>(items: Iterable<T>, key: (item: T) => number): number {
+    let maxValue = -Infinity
+    for (let item of items) {
+        let value = key(item)
+        if (value > maxValue) {
+            maxValue = value
+        }
+    }
+    return maxValue
+}
+
+export function maxSet<T>(
+  items: Iterable<T>,
+  key: (item: T) => number,
+  epsilon: number,
+): T[] {
+  let set: T[] = [];
+  let maxValue = -Infinity;
+
+  for (let item of items) {
+    let value = key(item);
+    if (value > maxValue + epsilon) {
+      set = [item];
+      maxValue = value;
+    } else if (value >= maxValue - epsilon) {
+      set.push(item);
+    }
+  }
+
+  return set;
+}
+
+export function minSet<T>(
+  items: Iterable<T>,
+  key: (item: T) => number,
+  epsilon: number,
+): T[] {
+  return maxSet(items, item => -key(item), epsilon)
 }
 
 export function range(limit: number): Iterable<number>;
@@ -177,6 +228,31 @@ export function invertBijectiveMap<K, V>(map: Map<K, V>): Map<V, K> {
     return result
 }
 
+export function invertMap<K, V>(map: Map<K, V>): Map<V, K[]> {
+    let result = new Map<V, K[]>()
+    for (let [key, value] of map) {
+        let old = result.get(value) ?? []
+        result.set(value, [...old, key])
+    }
+    return result
+}
+
 export function degToRad(degrees: number) {
     return degrees * Math.PI / 180
+}
+
+export function mapFromFunction<K,V>(keys: Iterable<K>, f: (key: K) => V) {
+    let result = new Map<K, V>()
+    for (let key of keys) {
+        result.set(key, f(key))
+    }
+    return result
+}
+
+export function sum(array: number[]) {
+    let result = 0;
+    for (let x of array) {
+        result += x;
+    }
+    return result;
 }

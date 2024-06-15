@@ -1,5 +1,4 @@
 import { getCursorPosition } from "../../../shared/canvas"
-import { invertBijectiveMap, unreachable } from "../../../shared/utils"
 
 export type SleepState = "Running" | "Sleeping"
 
@@ -42,8 +41,6 @@ export class UiStack implements InteractiveSystem {
     }
 
     animate(frame: AnimationFrame): SleepState {
-        const activePointers = [...frame.dragState.keys()]
-
         // run animation step on all systems
         const sleepStates = this.systems.map((system) => {
             if (system.animate === undefined) {
@@ -98,7 +95,7 @@ export class InteractionController {
 
     private previousTimeStamp: number | null = null
     private hasRequestedFrame: boolean = false
-    
+
     private canvas: HTMLCanvasElement
     private ctx: CanvasRenderingContext2D
 

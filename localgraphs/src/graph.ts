@@ -38,18 +38,25 @@ export function createNode<T>(graph: Graph<T>, data: T, x: number = 0, y: number
     return node
 }
 
-export function createEdge<T>(graph: Graph<T>, a: GraphNode<T>, b: GraphNode<T>) {
+export function createEdge<T>(graph: Graph<T>, a: GraphNode<T>, b: GraphNode<T>, length?: number) {
     console.assert(!a.neighbors.has(b))
     console.assert(!b.neighbors.has(a))
     const edge = {
         a: a,
         b: b,
-        length: Math.hypot(a.x - b.x, a.y - b.y)
+        length: length ?? Math.hypot(a.x - b.x, a.y - b.y)
     }
     graph.edges.push(edge)
     a.neighbors.add(b)
     b.neighbors.add(a)
     return edge
+}
+
+export function clearEdges<T>(graph: Graph<T>) {
+    for (let node of graph.nodes) {
+        node.neighbors.clear()
+    }
+    graph.edges = []
 }
 
 // copies the given nodes with data transformed by mapping and the edges between them to targetGraph

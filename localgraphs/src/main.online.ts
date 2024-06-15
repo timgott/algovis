@@ -310,7 +310,7 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
     private isImpliedNode(node: Node): boolean {
         return node.data.transferFrom !== null && node.data.transferFrom.data.pinned === node.data.pinned
     }
-    
+
     protected drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>, level: number) {
         const pinned = node.data.pinned
         const free = level === 0
@@ -512,7 +512,7 @@ const globalWindows = new UiStack(globalState.operators.map(createOperatorWindow
 
 const controller = new InteractionController(canvas,
     new UiStack([
-        globalSim, 
+        globalSim,
         globalWindows,
     ])
 )
