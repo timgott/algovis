@@ -28,7 +28,7 @@ import {
 } from "../../localgraphs/src/graph";
 import { UndoHistory } from "../../localgraphs/src/interaction/undo";
 import { NAMES, THINGS } from "./names";
-import { ensured, mapFromFunction, randInt } from "../../shared/utils";
+import { assert, ensured, mapFromFunction, randInt } from "../../shared/utils";
 
 const canvas = document.getElementById("graph_canvas") as HTMLCanvasElement;
 initFullscreenCanvas(canvas);
@@ -53,6 +53,11 @@ function getUniqueName(names: string[], index: number) {
 // maps x in [0, 1] to [0, 1] with a uniform exponent
 function niceExponential(x: number, b: number) {
   return Math.pow(x, Math.log(1 - b) / Math.log(b));
+}
+
+// map x in [0,1] to exponential distribution
+function expDistributionInv(x: number, lambda: number) {
+  return -Math.log(1 - x) / lambda;
 }
 
 type DemoAgent = NamedAgent & {
@@ -80,14 +85,14 @@ class AllocationDemo {
   }
 
   randomUtility(exponent: number) {
-    const discreteSteps = 12;
-    let r = (randInt(discreteSteps) + 1) / discreteSteps;
-    return niceExponential(r, exponent);
+    const discreteSteps = 128;
+    let r = (randInt(discreteSteps-1)+1) / discreteSteps; // excludes 0 and 1
+    return expDistributionInv(r, exponent);
   }
 
   addAgent(): NamedAgent {
     const name = getUniqueName(NAMES, this.agents.length);
-    const utilityExponent = Math.random() * 0.4 + 0.5;
+    const utilityExponent = 1.0 / (Math.random()*0.9 + 0.1);
     const utilities = mapFromFunction(this.items, () =>
       this.randomUtility(utilityExponent),
     );
@@ -101,7 +106,7 @@ class AllocationDemo {
     return agent;
   }
 
-  recompute() {
+  computeAllocation() {
     if (this.agents.length > 0) {
       // run algorithm!
       this.market = allocateEF1PO(this.agents, this.items);
@@ -293,10 +298,10 @@ function drawSquare(
 
 class AllocationRenderer implements GraphPainter<NodeData> {
   drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<NodeData>): void {
-    let priceScale = 10;
+    let priceScale = 50;
     let priceOffset = 2;
     let getRadiusForPrice = (price: number) =>
-      Math.max(price * priceScale, priceOffset);
+      Math.max(Math.sqrt(price * priceScale), priceOffset);
     let drawNames = true;
     let showUtilities = false;
     let agentNodes: GraphNode<AgentNodeData>[] = graph.nodes.filter(
@@ -357,6 +362,7 @@ class AllocationRenderer implements GraphPainter<NodeData> {
           : "darkgreen";
       ctx.fillStyle = color;
       let radius = getRadiusForPrice(data.budget);
+      assert(radius < 500, "budget too large");
       ctx.beginPath();
       drawSquare(ctx, node.x, node.y, radius);
       ctx.fill();
@@ -442,6 +448,11 @@ let clearButton = document.getElementById("btn_clear")!;
 clearButton.addEventListener(
   "click",
   globalAction((g) => g.clearAllocation()),
+);
+let solveButton = document.getElementById("btn_solve")!;
+solveButton.addEventListener(
+  "click",
+  globalAction((g) => g.computeAllocation()),
 );
 
 // meta buttons
