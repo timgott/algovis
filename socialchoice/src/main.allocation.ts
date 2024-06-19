@@ -16,19 +16,19 @@ import {
   calcBudgets,
   checkIsEquilibrium,
   computeMBBSet,
+  findBudgetViolatorsUpTo1,
+  findLeastSpenders,
   improveAllocationStep,
 } from "./algo";
 import {
   Graph,
   GraphNode,
-  clearEdges,
   createEdge,
   createEmptyGraph,
-  createNode,
 } from "../../localgraphs/src/graph";
-import { UndoHistory } from "../../localgraphs/src/interaction/undo"
+import { UndoHistory } from "../../localgraphs/src/interaction/undo";
 import { NAMES, THINGS } from "./names";
-import { mapFromFunction, randInt } from "../../shared/utils";
+import { ensured, mapFromFunction, randInt } from "../../shared/utils";
 
 const canvas = document.getElementById("graph_canvas") as HTMLCanvasElement;
 initFullscreenCanvas(canvas);
@@ -57,7 +57,7 @@ function niceExponential(x: number, b: number) {
 
 type DemoAgent = NamedAgent & {
   // unique exponent to break identical distributions
-  utilityExponent: number
+  utilityExponent: number;
 };
 class AllocationDemo {
   items: Item[];
@@ -80,17 +80,17 @@ class AllocationDemo {
   }
 
   randomUtility(exponent: number) {
-    let r = (randInt(128) + 1) / 128
+    const discreteSteps = 12;
+    let r = (randInt(discreteSteps) + 1) / discreteSteps;
     return niceExponential(r, exponent);
   }
 
   addAgent(): NamedAgent {
     const name = getUniqueName(NAMES, this.agents.length);
-    const utilityExponent = Math.random();
-    const utilities = mapFromFunction(
-      this.items,
-      () => this.randomUtility(utilityExponent)
-    )
+    const utilityExponent = Math.random() * 0.4 + 0.5;
+    const utilities = mapFromFunction(this.items, () =>
+      this.randomUtility(utilityExponent),
+    );
     const agent: DemoAgent = {
       utility: utilities,
       name,
@@ -119,7 +119,7 @@ class AllocationDemo {
     if (this.agents.length > 0) {
       if (!checkIsEquilibrium(this.market, this.agents, this.items)) {
         // needs initial allocation
-        this.market = allocateUnfairEquilibrium(this.agents, this.items)
+        this.market = allocateUnfairEquilibrium(this.agents, this.items);
       } else {
         improveAllocationStep(this.market, this.agents, this.items);
       }
@@ -129,7 +129,7 @@ class AllocationDemo {
   clone(): AllocationDemo {
     let clone = new AllocationDemo();
     clone.items = this.items.slice();
-    clone.agents = this.agents.slice();
+    clone.agents = this.agents.slice(); // agents are not immutable! utilities are added with new items
     clone.market = {
       allocation: new Map(this.market.allocation),
       prices: new Map(this.market.prices),
@@ -144,6 +144,8 @@ type AgentNodeData = {
   mbbItems: Set<GraphNode<ItemNodeData>>;
   budget: number;
   utilities: [GraphNode<ItemNodeData>, number][];
+  isViolator: boolean;
+  isLeastSpender: boolean;
 };
 type ItemNodeData = {
   nodeType: "item";
@@ -163,82 +165,120 @@ class AllocationGraph {
   }
 
   private putNewAgentNode(agent: NamedAgent): GraphNode<AgentNodeData> {
-    let node = this.putNewNode<AgentNodeData>({
+    let node = this.createNewNode<AgentNodeData>({
       nodeType: "agent",
       agent,
       mbbItems: new Set(),
       budget: 0,
       utilities: [],
+      isViolator: false,
+      isLeastSpender: false,
     });
-    this.agentMap.set(agent, node);
     return node;
   }
 
   private putNewItemNode(item: string): GraphNode<ItemNodeData> {
-    let node = this.putNewNode<ItemNodeData>({
+    let node = this.createNewNode<ItemNodeData>({
       nodeType: "item",
       name: item,
       owner: null,
       price: null,
     });
-    this.itemMap.set(item, node);
     return node;
   }
 
-  putNewNode<D extends NodeData>(data: D): GraphNode<D> {
+  createNewNode<D extends NodeData>(data: D): GraphNode<D> {
     let x = (0.25 + 0.5 * Math.random()) * canvas.clientWidth;
     let y = (0.25 + 0.5 * Math.random()) * canvas.clientHeight;
-    return createNode(this.graph, data, x, y) as GraphNode<D>;
+    return {
+      data,
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      neighbors: new Set<GraphNode<D>>(),
+    };
   }
 
-  updateGraph(model: AllocationDemo) {
+  updateGraphNodes(model: AllocationDemo) {
+    // clear all nodes
     let newGraph = createEmptyGraph<NodeData>();
-    let budgets = calcBudgets(model.agents, model.market);
-    for (let agent of model.agents) {
-      // find node in old graph
-      let agentNode = this.agentMap.get(agent) ?? this.putNewAgentNode(agent);
-      newGraph.nodes.push(agentNode)
+    let newItems = new Map<Item, GraphNode<ItemNodeData>>();
+    let newAgents = new Map<Agent, GraphNode<AgentNodeData>>();
 
+    // add item nodes
+    for (let item of model.items) {
+      let itemNode = this.itemMap.get(item) ?? this.putNewItemNode(item);
+      itemNode.neighbors = new Set();
+      newGraph.nodes.push(itemNode);
+      newItems.set(item, itemNode);
+    }
+
+    // add agent nodes
+    for (let agent of model.agents) {
+      let agentNode = this.agentMap.get(agent) ?? this.putNewAgentNode(agent);
+      agentNode.neighbors = new Set();
+      newGraph.nodes.push(agentNode);
+      newAgents.set(agent, agentNode);
+    }
+
+    this.graph = newGraph;
+    this.itemMap = newItems;
+    this.agentMap = newAgents;
+  }
+
+  update(model: AllocationDemo) {
+    this.updateGraphNodes(model);
+
+    let budgets = calcBudgets(model.agents, model.market);
+    let [leastSpenders, leastBudget] = findLeastSpenders(model.agents, budgets);
+    let violators = new Set(
+      findBudgetViolatorsUpTo1(leastBudget, model.market),
+    );
+    let leastSpendersSet = new Set(leastSpenders);
+    for (let [agent, agentNode] of this.agentMap) {
       // connect MBB set
       let mbbSet = computeMBBSet(agent, model.market.prices);
-      agentNode.data.mbbItems = mbbSet.map((item) => this.itemMap.get(item)!);
+      agentNode.data.mbbItems = mbbSet.map((item) =>
+        ensured(this.itemMap.get(item)),
+      );
 
       // assign budget
       agentNode.data.budget = budgets.get(agent)!;
 
       // connect utilities
-      agentNode.data.utilities = [...agent.utility.entries()].map(
-        ([item, u]) => [this.itemMap.get(item)!, u],
-      );
-    }
-    for (let item of model.items) {
-      // find node in old graph
-      let itemNode = this.itemMap.get(item) ?? this.putNewItemNode(item);
-      newGraph.nodes.push(itemNode);
+      agentNode.data.utilities = model.items.map((item) => [
+        ensured(this.itemMap.get(item)),
+        ensured(agent.utility.get(item)),
+      ]);
 
+      // mark violators and least spenders
+      agentNode.data.isViolator = violators.has(agent);
+      agentNode.data.isLeastSpender = leastSpendersSet.has(agent);
+    }
+    for (let [item, itemNode] of this.itemMap) {
       // connect allocation
       let owner = model.market.allocation.get(item);
-      itemNode.data.owner = owner ? this.agentMap.get(owner)! : null;
+      itemNode.data.owner = owner ? ensured(this.agentMap.get(owner)) : null;
       // assign price
       itemNode.data.price = model.market.prices.get(item) ?? null;
     }
 
     // add physics edges
+    // (old edges have already been cleared)
     for (let agentNode of this.agentMap.values()) {
       for (let itemNode of agentNode.data.mbbItems) {
         if (itemNode.data.owner != agentNode) {
-          createEdge(newGraph, agentNode, itemNode); // length 300
+          createEdge(this.graph, agentNode, itemNode, 300); // length 300
         }
       }
     }
     for (let item of this.itemMap.values()) {
       let owner = item.data.owner;
       if (owner) {
-        createEdge(newGraph, item, owner); // length 100
+        createEdge(this.graph, item, owner, 100); // length 100
       }
     }
-
-    this.graph = newGraph;
   }
 }
 
@@ -253,29 +293,44 @@ function drawSquare(
 
 class AllocationRenderer implements GraphPainter<NodeData> {
   drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<NodeData>): void {
-    let priceScale = 2;
-    let priceOffset = 5;
-    let getRadiusForPrice = (price: number) => Math.sqrt(price) * priceScale + priceOffset;
+    let priceScale = 10;
+    let priceOffset = 2;
+    let getRadiusForPrice = (price: number) =>
+      Math.max(price * priceScale, priceOffset);
     let drawNames = true;
     let showUtilities = false;
-    let agentNodes: GraphNode<AgentNodeData>[] =
-      graph.nodes.filter((n): n is GraphNode<AgentNodeData> => n.data.nodeType == "agent");
-    let itemNodes: GraphNode<ItemNodeData>[] =
-      graph.nodes.filter((n): n is GraphNode<ItemNodeData> => n.data.nodeType == "item");
+    let agentNodes: GraphNode<AgentNodeData>[] = graph.nodes.filter(
+      (n): n is GraphNode<AgentNodeData> => n.data.nodeType == "agent",
+    );
+    let itemNodes: GraphNode<ItemNodeData>[] = graph.nodes.filter(
+      (n): n is GraphNode<ItemNodeData> => n.data.nodeType == "item",
+    );
     if (showUtilities) {
       for (let node of agentNodes) {
         // preferences
         // TODO: show only on hover
         for (let [item, utility] of node.data.utilities) {
-          let u = utility * utility / 20.0; // square for distinctive effect
-          ctx.lineWidth = u;
-          let alpha = u / 50.0;
+          ctx.lineWidth = utility * 20.0;
+          let alpha = utility * 0.75;
           ctx.strokeStyle = `rgba(10,100,50,${alpha})`;
           ctx.beginPath();
           ctx.moveTo(node.x, node.y);
           ctx.lineTo(item.x, item.y);
           ctx.stroke();
         }
+      }
+    }
+
+    for (let node of itemNodes) {
+      // line from item to allocated owner
+      let owner = node.data.owner;
+      if (owner !== null) {
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "black";
+        ctx.beginPath();
+        ctx.moveTo(node.x, node.y);
+        ctx.lineTo(owner.x, owner.y);
+        ctx.stroke();
       }
     }
 
@@ -295,14 +350,19 @@ class AllocationRenderer implements GraphPainter<NodeData> {
       ctx.setLineDash([]);
 
       // agent square
-      ctx.fillStyle = "black";
+      let color = data.isViolator
+        ? "red"
+        : data.isLeastSpender
+          ? "black"
+          : "darkgreen";
+      ctx.fillStyle = color;
       let radius = getRadiusForPrice(data.budget);
       ctx.beginPath();
       drawSquare(ctx, node.x, node.y, radius);
       ctx.fill();
 
       if (drawNames) {
-        ctx.fillStyle = "black";
+        ctx.fillStyle = color;
         ctx.textBaseline = "middle";
         ctx.fillText(data.agent.name, node.x + 2 + radius, node.y);
       }
@@ -310,17 +370,6 @@ class AllocationRenderer implements GraphPainter<NodeData> {
 
     for (let node of itemNodes) {
       let data = node.data;
-
-      // line from item to allocated owner
-      let owner = data.owner;
-      if (owner !== null) {
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = "black";
-        ctx.beginPath();
-        ctx.moveTo(node.x, node.y);
-        ctx.lineTo(owner.x, owner.y);
-        ctx.stroke();
-      }
 
       // item circle
       let price = data.price ?? 0;
@@ -358,60 +407,60 @@ const controller = new InteractionController(canvas, sim);
 
 function applyGlobalState(target: GlobalState) {
   globalState = target;
-  allocationGraph.updateGraph(globalState)
+  allocationGraph.update(globalState);
   sim.changeGraph(allocationGraph.graph);
   controller.requestFrame();
 }
 
-const initialState = structuredClone(globalState);
-let history = new UndoHistory<GlobalState>(
-  Infinity,
-  (s) => s.clone()
-);
+let history = new UndoHistory<GlobalState>(Infinity, (s) => s.clone());
 
 function globalAction(f: (model: AllocationDemo) => unknown): () => void {
   return () => {
     history.push(globalState);
     f(globalState);
     applyGlobalState(globalState);
-  }
+  };
 }
 
 // action buttons
 let addAgentButton = document.getElementById("add_agent")!;
-addAgentButton.addEventListener("click", globalAction(
-  g => g.addAgent(),
-));
+addAgentButton.addEventListener(
+  "click",
+  globalAction((g) => g.addAgent()),
+);
 let addItemButton = document.getElementById("add_item")!;
-addItemButton.addEventListener("click", globalAction(
-  g => g.addItem(),
-));
+addItemButton.addEventListener(
+  "click",
+  globalAction((g) => g.addItem()),
+);
 let stepButton = document.getElementById("btn_step")!;
-stepButton.addEventListener("click", globalAction(
-  g => g.algoStep(),
-))
+stepButton.addEventListener(
+  "click",
+  globalAction((g) => g.algoStep()),
+);
 let clearButton = document.getElementById("btn_clear")!;
-clearButton.addEventListener("click", globalAction(
-  g => g.clearAllocation(),
-))
+clearButton.addEventListener(
+  "click",
+  globalAction((g) => g.clearAllocation()),
+);
 
 // meta buttons
 let resetButton = document.getElementById("btn_reset")!;
 resetButton.addEventListener("click", () => {
-  applyGlobalState(initialState);
+  applyGlobalState(new AllocationDemo());
 });
 let undoButton = document.getElementById("btn_undo")!;
 undoButton.addEventListener("click", () => {
   let lastState = history.undo(globalState);
-  if (lastState == null) throw "End of undo history"
-  applyGlobalState(lastState)
-})
+  if (lastState == null) throw "End of undo history";
+  applyGlobalState(lastState);
+});
 let redoButton = document.getElementById("btn_redo")!;
 redoButton.addEventListener("click", () => {
   let nextState = history.redo();
-  if (nextState == null) throw "End of redo history"
-  applyGlobalState(nextState)
-})
+  if (nextState == null) throw "End of redo history";
+  applyGlobalState(nextState);
+});
 
 // Run.
 controller.requestFrame();

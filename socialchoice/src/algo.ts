@@ -99,7 +99,7 @@ export function checkIsEquilibrium(
   return true;
 }
 
-// check whether each agent values its own bundle higher than the others
+// check whether each agent values its own bundle at least as much as the others, up to one item
 export function checkIsEnvyFreeUpTo1(market: MarketOutcome, agents: Agent[]) {
   let bundles = getBundles(agents, market.allocation);
   for (let [agent, bundle] of bundles) {
@@ -151,7 +151,7 @@ export function allocateUnfairEquilibrium(
 }
 
 // find all agents that spend more than budget even if taking one item out of their bundle.
-function findBudgetViolatorsUpTo1(
+export function findBudgetViolatorsUpTo1(
   budget: number,
   market: MarketOutcome,
 ): Agent[] {
@@ -259,6 +259,11 @@ function validateUtilities(agents: Agent[], items: Item[]) {
   }
 }
 
+export function findLeastSpenders(agents: Agent[], budgets: Map<Agent, number>): [Agent[], leastBudget: number] {
+  let leastSpenders =  minSet(agents, (agent) => budgets.get(agent)!, epsilon);
+  return [leastSpenders, budgets.get(leastSpenders[0])!];
+}
+
 // One step of the iterative improvement algorithm. Returns null when EF1+PO allocation is reached.
 export function improveAllocationStep(
   market: MarketOutcome,
@@ -272,8 +277,7 @@ export function improveAllocationStep(
     "invariant: must be fisher equilibrium",
   );
   const budgets = calcBudgets(agents, market);
-  const leastSpenders = minSet(agents, (agent) => budgets.get(agent)!, epsilon);
-  const leastBudget = budgets.get(leastSpenders[0])!;
+  const [leastSpenders, leastBudget] = findLeastSpenders(agents, budgets);
   const violators = findBudgetViolatorsUpTo1(leastBudget, market);
   if (violators.length === 0) {
     // MBB equilibrium and pEF1.
