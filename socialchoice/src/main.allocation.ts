@@ -26,6 +26,7 @@ import {
   createEmptyGraph,
   createNode,
 } from "../../localgraphs/src/graph";
+import { UndoHistory } from "../../localgraphs/src/interaction/undo"
 import { NAMES, THINGS } from "./names";
 import { mapFromFunction, randInt } from "../../shared/utils";
 
@@ -51,7 +52,7 @@ function getUniqueName(names: string[], index: number) {
 
 // maps x in [0, 1] to [0, 1] with a uniform exponent
 function niceExponential(x: number, b: number) {
-  return Math.pow(x, Math.log(1-b)/Math.log(b));
+  return Math.pow(x, Math.log(1 - b) / Math.log(b));
 }
 
 type DemoAgent = NamedAgent & {
@@ -79,7 +80,7 @@ class AllocationDemo {
   }
 
   randomUtility(exponent: number) {
-    let r = (randInt(128)+1)/128
+    let r = (randInt(128) + 1) / 128
     return niceExponential(r, exponent);
   }
 
@@ -124,6 +125,17 @@ class AllocationDemo {
       }
     }
   }
+
+  clone(): AllocationDemo {
+    let clone = new AllocationDemo();
+    clone.items = this.items.slice();
+    clone.agents = this.agents.slice();
+    clone.market = {
+      allocation: new Map(this.market.allocation),
+      prices: new Map(this.market.prices),
+    };
+    return clone;
+  }
 }
 
 type AgentNodeData = {
@@ -143,18 +155,14 @@ type NodeData = AgentNodeData | ItemNodeData;
 
 class AllocationGraph {
   graph: Graph<NodeData>;
-  model: AllocationDemo;
-
   itemMap: Map<Item, GraphNode<ItemNodeData>> = new Map();
   agentMap: Map<Agent, GraphNode<AgentNodeData>> = new Map();
 
   constructor() {
     this.graph = createEmptyGraph();
-    this.model = new AllocationDemo();
   }
 
-  addAgent() {
-    let agent = this.model.addAgent();
+  private putNewAgentNode(agent: NamedAgent): GraphNode<AgentNodeData> {
     let node = this.putNewNode<AgentNodeData>({
       nodeType: "agent",
       agent,
@@ -163,11 +171,10 @@ class AllocationGraph {
       utilities: [],
     });
     this.agentMap.set(agent, node);
-    this.updateGraph();
+    return node;
   }
 
-  addItem() {
-    let item = this.model.addItem();
+  private putNewItemNode(item: string): GraphNode<ItemNodeData> {
     let node = this.putNewNode<ItemNodeData>({
       nodeType: "item",
       name: item,
@@ -175,17 +182,7 @@ class AllocationGraph {
       price: null,
     });
     this.itemMap.set(item, node);
-    this.updateGraph();
-  }
-
-  algoStep() {
-    this.model.algoStep();
-    this.updateGraph();
-  }
-
-  clearAllocation() {
-    this.model.clearAllocation();
-    this.updateGraph();
+    return node;
   }
 
   putNewNode<D extends NodeData>(data: D): GraphNode<D> {
@@ -194,46 +191,54 @@ class AllocationGraph {
     return createNode(this.graph, data, x, y) as GraphNode<D>;
   }
 
-  updateGraph() {
-    let budgets = calcBudgets(this.model.agents, this.model.market);
-    for (let agent of this.model.agents) {
-      let agentNode = this.agentMap.get(agent)!;
-      // MBB set
-      let mbbSet = computeMBBSet(agent, this.model.market.prices);
+  updateGraph(model: AllocationDemo) {
+    let newGraph = createEmptyGraph<NodeData>();
+    let budgets = calcBudgets(model.agents, model.market);
+    for (let agent of model.agents) {
+      // find node in old graph
+      let agentNode = this.agentMap.get(agent) ?? this.putNewAgentNode(agent);
+      newGraph.nodes.push(agentNode)
+
+      // connect MBB set
+      let mbbSet = computeMBBSet(agent, model.market.prices);
       agentNode.data.mbbItems = mbbSet.map((item) => this.itemMap.get(item)!);
 
-      // budget
+      // assign budget
       agentNode.data.budget = budgets.get(agent)!;
 
-      // utilities
+      // connect utilities
       agentNode.data.utilities = [...agent.utility.entries()].map(
         ([item, u]) => [this.itemMap.get(item)!, u],
       );
     }
-    for (let item of this.model.items) {
-      let itemNode = this.itemMap.get(item)!;
-      // allocation
-      let owner = this.model.market.allocation.get(item);
-      itemNode.data.owner = owner? this.agentMap.get(owner)! : null;
-      // price
-      itemNode.data.price = this.model.market.prices.get(item) ?? null;
+    for (let item of model.items) {
+      // find node in old graph
+      let itemNode = this.itemMap.get(item) ?? this.putNewItemNode(item);
+      newGraph.nodes.push(itemNode);
+
+      // connect allocation
+      let owner = model.market.allocation.get(item);
+      itemNode.data.owner = owner ? this.agentMap.get(owner)! : null;
+      // assign price
+      itemNode.data.price = model.market.prices.get(item) ?? null;
     }
 
     // add physics edges
-    clearEdges(this.graph);
     for (let agentNode of this.agentMap.values()) {
       for (let itemNode of agentNode.data.mbbItems) {
         if (itemNode.data.owner != agentNode) {
-          createEdge(this.graph, agentNode, itemNode); // length 300
+          createEdge(newGraph, agentNode, itemNode); // length 300
         }
       }
     }
     for (let item of this.itemMap.values()) {
       let owner = item.data.owner;
       if (owner) {
-        createEdge(this.graph, item, owner); // length 100
+        createEdge(newGraph, item, owner); // length 100
       }
     }
+
+    this.graph = newGraph;
   }
 }
 
@@ -335,7 +340,11 @@ class AllocationRenderer implements GraphPainter<NodeData> {
   }
 }
 
-let allocationGraph = new AllocationGraph();
+// Global init
+type GlobalState = AllocationDemo;
+
+let globalState: GlobalState = new AllocationDemo();
+let allocationGraph: AllocationGraph = new AllocationGraph();
 
 const sim = new GraphPhysicsSimulator<NodeData>(
   allocationGraph.graph,
@@ -346,32 +355,63 @@ sim.substeps = 10;
 sim.setInteractionMode(() => new DragNodeInteraction());
 
 const controller = new InteractionController(canvas, sim);
-controller.requestFrame();
 
-// buttons
-const addAgentButton = document.getElementById("add_agent")!;
-const addItemButton = document.getElementById("add_item")!;
-addAgentButton.addEventListener("click", () => {
-  allocationGraph.addAgent();
-  controller.requestFrame();
-});
-addItemButton.addEventListener("click", () => {
-  allocationGraph.addItem();
-  controller.requestFrame();
-});
-const resetButton = document.getElementById("btn_reset")!;
-resetButton.addEventListener("click", () => {
-  allocationGraph = new AllocationGraph();
+function applyGlobalState(target: GlobalState) {
+  globalState = target;
+  allocationGraph.updateGraph(globalState)
   sim.changeGraph(allocationGraph.graph);
   controller.requestFrame();
+}
+
+const initialState = structuredClone(globalState);
+let history = new UndoHistory<GlobalState>(
+  Infinity,
+  (s) => s.clone()
+);
+
+function globalAction(f: (model: AllocationDemo) => unknown): () => void {
+  return () => {
+    history.push(globalState);
+    f(globalState);
+    applyGlobalState(globalState);
+  }
+}
+
+// action buttons
+let addAgentButton = document.getElementById("add_agent")!;
+addAgentButton.addEventListener("click", globalAction(
+  g => g.addAgent(),
+));
+let addItemButton = document.getElementById("add_item")!;
+addItemButton.addEventListener("click", globalAction(
+  g => g.addItem(),
+));
+let stepButton = document.getElementById("btn_step")!;
+stepButton.addEventListener("click", globalAction(
+  g => g.algoStep(),
+))
+let clearButton = document.getElementById("btn_clear")!;
+clearButton.addEventListener("click", globalAction(
+  g => g.clearAllocation(),
+))
+
+// meta buttons
+let resetButton = document.getElementById("btn_reset")!;
+resetButton.addEventListener("click", () => {
+  applyGlobalState(initialState);
 });
-const stepButton = document.getElementById("btn_step")!;
-stepButton.addEventListener("click", () => {
-  allocationGraph.algoStep();
-  controller.requestFrame();
+let undoButton = document.getElementById("btn_undo")!;
+undoButton.addEventListener("click", () => {
+  let lastState = history.undo(globalState);
+  if (lastState == null) throw "End of undo history"
+  applyGlobalState(lastState)
 })
-const clearButton = document.getElementById("btn_clear")!;
-clearButton.addEventListener("click", () => {
-  allocationGraph.clearAllocation();
-  controller.requestFrame();
+let redoButton = document.getElementById("btn_redo")!;
+redoButton.addEventListener("click", () => {
+  let nextState = history.redo();
+  if (nextState == null) throw "End of redo history"
+  applyGlobalState(nextState)
 })
+
+// Run.
+controller.requestFrame();
