@@ -12,8 +12,11 @@ import {
   MarketOutcome,
   NamedAgent,
   allocateEF1PO,
+  allocateUnfairEquilibrium,
   calcBudgets,
+  checkIsEquilibrium,
   computeMBBSet,
+  improveAllocationStep,
 } from "./algo";
 import {
   Graph,
@@ -32,7 +35,7 @@ initFullscreenCanvas(canvas);
 const layoutStyle: LayoutConfig = {
   nodeRadius: 10,
   pushDistance: 40,
-  minEdgeLength: 30,
+  minEdgeLength: 50,
   pushForce: 100,
   edgeForce: 100,
   centeringForce: 0.0,
@@ -46,42 +49,53 @@ function getUniqueName(names: string[], index: number) {
   return names[index % names.length] + suffix;
 }
 
+// maps x in [0, 1] to [0, 1] with a uniform exponent
+function niceExponential(x: number, b: number) {
+  return Math.pow(x, Math.log(1-b)/Math.log(b));
+}
+
+type DemoAgent = NamedAgent & {
+  // unique exponent to break identical distributions
+  utilityExponent: number
+};
 class AllocationDemo {
   items: Item[];
-  agents: Agent[];
+  agents: DemoAgent[];
   market: MarketOutcome;
 
   constructor() {
     this.items = [];
     this.agents = [];
-    this.recompute(); // empty market outcome
+    this.clearAllocation(); // empty market outcome
   }
 
   addItem(): Item {
     const itemName = getUniqueName(THINGS, this.items.length);
     this.items.push(itemName);
     for (let agent of this.agents) {
-      agent.utility.set(itemName, this.randomUtility());
+      agent.utility.set(itemName, this.randomUtility(agent.utilityExponent));
     }
-
-    this.recompute();
-
     return itemName;
   }
 
-  randomUtility() {
-    return randInt(2) * randInt(20) + 1;
+  randomUtility(exponent: number) {
+    let r = (randInt(128)+1)/128
+    return niceExponential(r, exponent);
   }
 
   addAgent(): NamedAgent {
     const name = getUniqueName(NAMES, this.agents.length);
-    const agent: NamedAgent = {
+    const utilityExponent = Math.random();
+    const utilities = mapFromFunction(
+      this.items,
+      () => this.randomUtility(utilityExponent)
+    )
+    const agent: DemoAgent = {
+      utility: utilities,
       name,
-      utility: mapFromFunction(this.items, () => this.randomUtility()),
+      utilityExponent,
     };
     this.agents.push(agent);
-
-    this.recompute();
 
     return agent;
   }
@@ -90,12 +104,24 @@ class AllocationDemo {
     if (this.agents.length > 0) {
       // run algorithm!
       this.market = allocateEF1PO(this.agents, this.items);
-    } else {
-      // dummy
-      this.market = {
-        allocation: new Map(),
-        prices: new Map(),
-      };
+    }
+  }
+
+  clearAllocation() {
+    this.market = {
+      allocation: new Map(),
+      prices: new Map(),
+    };
+  }
+
+  algoStep() {
+    if (this.agents.length > 0) {
+      if (!checkIsEquilibrium(this.market, this.agents, this.items)) {
+        // needs initial allocation
+        this.market = allocateUnfairEquilibrium(this.agents, this.items)
+      } else {
+        improveAllocationStep(this.market, this.agents, this.items);
+      }
     }
   }
 }
@@ -152,6 +178,16 @@ class AllocationGraph {
     this.updateGraph();
   }
 
+  algoStep() {
+    this.model.algoStep();
+    this.updateGraph();
+  }
+
+  clearAllocation() {
+    this.model.clearAllocation();
+    this.updateGraph();
+  }
+
   putNewNode<D extends NodeData>(data: D): GraphNode<D> {
     let x = (0.25 + 0.5 * Math.random()) * canvas.clientWidth;
     let y = (0.25 + 0.5 * Math.random()) * canvas.clientHeight;
@@ -178,9 +214,7 @@ class AllocationGraph {
       let itemNode = this.itemMap.get(item)!;
       // allocation
       let owner = this.model.market.allocation.get(item);
-      if (owner !== undefined) {
-        itemNode.data.owner = this.agentMap.get(owner)!;
-      }
+      itemNode.data.owner = owner? this.agentMap.get(owner)! : null;
       // price
       itemNode.data.price = this.model.market.prices.get(item) ?? null;
     }
@@ -190,14 +224,14 @@ class AllocationGraph {
     for (let agentNode of this.agentMap.values()) {
       for (let itemNode of agentNode.data.mbbItems) {
         if (itemNode.data.owner != agentNode) {
-          createEdge(this.graph, agentNode, itemNode, 300);
+          createEdge(this.graph, agentNode, itemNode); // length 300
         }
       }
     }
     for (let item of this.itemMap.values()) {
       let owner = item.data.owner;
       if (owner) {
-        createEdge(this.graph, item, owner, 100);
+        createEdge(this.graph, item, owner); // length 100
       }
     }
   }
@@ -216,23 +250,27 @@ class AllocationRenderer implements GraphPainter<NodeData> {
   drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<NodeData>): void {
     let priceScale = 2;
     let priceOffset = 5;
+    let getRadiusForPrice = (price: number) => Math.sqrt(price) * priceScale + priceOffset;
     let drawNames = true;
+    let showUtilities = false;
     let agentNodes: GraphNode<AgentNodeData>[] =
-      graph.nodes.filter((n) => n.data.nodeType == "agent") as GraphNode<AgentNodeData>[];
+      graph.nodes.filter((n): n is GraphNode<AgentNodeData> => n.data.nodeType == "agent");
     let itemNodes: GraphNode<ItemNodeData>[] =
-      graph.nodes.filter((n) => n.data.nodeType == "item") as GraphNode<ItemNodeData>[];
-    for (let node of agentNodes) {
-      // preferences
-      // TODO: show only on hover
-      for (let [item, utility] of node.data.utilities) {
-        let u = utility * utility / 20.0; // square for distinctive effect
-        ctx.lineWidth = u;
-        let alpha = u / 50.0;
-        ctx.strokeStyle = `rgba(10,100,50,${alpha})`;
-        ctx.beginPath();
-        ctx.moveTo(node.x, node.y);
-        ctx.lineTo(item.x, item.y);
-        ctx.stroke();
+      graph.nodes.filter((n): n is GraphNode<ItemNodeData> => n.data.nodeType == "item");
+    if (showUtilities) {
+      for (let node of agentNodes) {
+        // preferences
+        // TODO: show only on hover
+        for (let [item, utility] of node.data.utilities) {
+          let u = utility * utility / 20.0; // square for distinctive effect
+          ctx.lineWidth = u;
+          let alpha = u / 50.0;
+          ctx.strokeStyle = `rgba(10,100,50,${alpha})`;
+          ctx.beginPath();
+          ctx.moveTo(node.x, node.y);
+          ctx.lineTo(item.x, item.y);
+          ctx.stroke();
+        }
       }
     }
 
@@ -242,7 +280,7 @@ class AllocationRenderer implements GraphPainter<NodeData> {
       // MBB lines
       ctx.strokeStyle = "black";
       ctx.lineWidth = 1;
-      ctx.setLineDash([5, 5]);
+      ctx.setLineDash([2, 5]);
       ctx.beginPath();
       for (let item of data.mbbItems) {
         ctx.moveTo(node.x, node.y);
@@ -253,7 +291,7 @@ class AllocationRenderer implements GraphPainter<NodeData> {
 
       // agent square
       ctx.fillStyle = "black";
-      let radius = Math.sqrt(data.budget) * priceScale + priceOffset;
+      let radius = getRadiusForPrice(data.budget);
       ctx.beginPath();
       drawSquare(ctx, node.x, node.y, radius);
       ctx.fill();
@@ -271,7 +309,7 @@ class AllocationRenderer implements GraphPainter<NodeData> {
       // line from item to allocated owner
       let owner = data.owner;
       if (owner !== null) {
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.strokeStyle = "black";
         ctx.beginPath();
         ctx.moveTo(node.x, node.y);
@@ -281,7 +319,7 @@ class AllocationRenderer implements GraphPainter<NodeData> {
 
       // item circle
       let price = data.price ?? 0;
-      let radius = Math.sqrt(price * priceScale) + priceOffset;
+      let radius = getRadiusForPrice(price);
       ctx.lineWidth = 1;
       ctx.fillStyle = "blue";
       ctx.strokeStyle = "black";
@@ -327,3 +365,13 @@ resetButton.addEventListener("click", () => {
   sim.changeGraph(allocationGraph.graph);
   controller.requestFrame();
 });
+const stepButton = document.getElementById("btn_step")!;
+stepButton.addEventListener("click", () => {
+  allocationGraph.algoStep();
+  controller.requestFrame();
+})
+const clearButton = document.getElementById("btn_clear")!;
+clearButton.addEventListener("click", () => {
+  allocationGraph.clearAllocation();
+  controller.requestFrame();
+})

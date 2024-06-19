@@ -33,8 +33,8 @@ describe("allocateEF1PO", () => {
     };
     const agents = [agent1, agent2, agent3];
     const outcome = allocateEF1PO(agents, items);
-    expect(checkIsEquilibrium(agents, outcome));
-    expect(checkIsEnvyFreeUpTo1(agents, outcome));
+    expect(checkIsEquilibrium(outcome, agents, items));
+    expect(checkIsEnvyFreeUpTo1(outcome, agents));
 
     console.log("Outcome:", outcome);
   });
@@ -61,8 +61,8 @@ describe("allocateEF1PO", () => {
       };
       const agents = [agent1, agent2, agent3];
       const outcome = allocateEF1PO(agents, items);
-      expect(checkIsEquilibrium(agents, outcome));
-      expect(checkIsEnvyFreeUpTo1(agents, outcome));
+      expect(checkIsEquilibrium(outcome, agents, items));
+      expect(checkIsEnvyFreeUpTo1(outcome, agents));
 
       console.log("Outcome:", outcome);
     });
@@ -76,8 +76,8 @@ describe("allocateEF1PO", () => {
       };
       const agents = [agent1];
       const outcome = allocateEF1PO(agents, items);
-      expect(checkIsEquilibrium(agents, outcome));
-      expect(checkIsEnvyFreeUpTo1(agents, outcome));
+      expect(checkIsEquilibrium(outcome, agents, items));
+      expect(checkIsEnvyFreeUpTo1(outcome, agents));
 
       console.log("Outcome:", outcome);
     });
@@ -92,8 +92,8 @@ describe("allocateEF1PO", () => {
       };
       const agents = [agent1];
       const outcome = allocateEF1PO(agents, items);
-      expect(checkIsEquilibrium(agents, outcome));
-      expect(checkIsEnvyFreeUpTo1(agents, outcome));
+      expect(checkIsEquilibrium(outcome, agents, items));
+      expect(checkIsEnvyFreeUpTo1(outcome, agents));
 
       console.log("Outcome:", outcome);
     });

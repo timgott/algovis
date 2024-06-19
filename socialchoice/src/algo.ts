@@ -48,7 +48,10 @@ export function computeMBBSet(agent: Agent, prices: Pricing): Set<Item> {
 }
 
 // Resulting map is guaranteed to include bundle for every agent
-export function getBundles(agents: Iterable<Agent>, allocation: Allocation): Map<Agent, Item[]> {
+export function getBundles(
+  agents: Iterable<Agent>,
+  allocation: Allocation,
+): Map<Agent, Item[]> {
   let bundles = new Map<Agent, Item[]>();
   for (let agent of agents) {
     bundles.set(agent, []);
@@ -59,19 +62,37 @@ export function getBundles(agents: Iterable<Agent>, allocation: Allocation): Map
   return bundles;
 }
 
-export function calcBudgets(agents: Iterable<Agent>, market: MarketOutcome): Map<Agent, number> {
+export function calcBudgets(
+  agents: Iterable<Agent>,
+  market: MarketOutcome,
+): Map<Agent, number> {
   let bundles = getBundles(agents, market.allocation);
   return mapFromFunction(agents, (agent) =>
-    sum(bundles.get(agent)!.map((item) => market.prices.get(item)!))
+    sum(bundles.get(agent)!.map((item) => market.prices.get(item)!)),
   );
 }
 
-// check whether every agent is allocated only maximum bang-per-buck items
-export function checkIsEquilibrium(agents: Agent[], market: MarketOutcome) {
+// check whether every agent is allocated only maximum bang-per-buck items and all items are allocated
+export function checkIsEquilibrium(
+  market: MarketOutcome,
+  agents: Agent[],
+  items: Item[],
+) {
+  for (let item of items) {
+    if (!market.allocation.has(item)) {
+      // item not allocated
+      return false;
+    }
+    if (!market.prices.has(item)) {
+      // item has no price?
+      return false;
+    }
+  }
   let bundles = getBundles(agents, market.allocation);
   for (let [agent, items] of bundles) {
     let mbbSet = computeMBBSet(agent, market.prices);
     if (!items.every((i) => mbbSet.has(i))) {
+      // agent allocated non-MBB item
       return false;
     }
   }
@@ -79,7 +100,7 @@ export function checkIsEquilibrium(agents: Agent[], market: MarketOutcome) {
 }
 
 // check whether each agent values its own bundle higher than the others
-export function checkIsEnvyFreeUpTo1(agents: Agent[], market: MarketOutcome) {
+export function checkIsEnvyFreeUpTo1(market: MarketOutcome, agents: Agent[]) {
   let bundles = getBundles(agents, market.allocation);
   for (let [agent, bundle] of bundles) {
     let getBundleValue = (bundle: Item[]) =>
@@ -88,7 +109,7 @@ export function checkIsEnvyFreeUpTo1(agents: Agent[], market: MarketOutcome) {
     for (let [otherAgent, otherBundle] of bundles) {
       if (otherAgent !== agent) {
         let otherValue = getBundleValue(otherBundle);
-        let maxItem = maxValue(otherBundle, item => agent.utility.get(item)!)
+        let maxItem = maxValue(otherBundle, (item) => agent.utility.get(item)!);
         if (otherValue - maxItem > ownValue) {
           return false;
         }
@@ -110,7 +131,7 @@ export function allocateMaximalWelfare(
   );
 }
 
-export function paretoOptimalMarketEquilibrium(
+export function allocateUnfairEquilibrium(
   agents: Agent[],
   items: Item[],
 ): MarketOutcome {
@@ -232,73 +253,81 @@ function validateUtilities(agents: Agent[], items: Item[]) {
   for (let agent of agents) {
     for (let item of items) {
       const u = agent.utility.get(item);
-      assert(u !== undefined, "Agent must have utility for every item")
-      assert(u > 0, "Utilities must be positive") // item that has 0 utility in all agents causes 0 price and then division by 0
+      assert(u !== undefined, "Agent must have utility for every item");
+      assert(u > 0, "Utilities must be positive"); // item that has 0 utility in all agents causes 0 price and then division by 0
     }
   }
 }
 
-export function allocateEF1PO(agents: Agent[], items: Item[]): MarketOutcome {
-  validateUtilities(agents, items)
-  assert(agents.length > 0, "Needs at least one agent")
-
-  // initialize with a welfare maximizing allocation
-  const market = paretoOptimalMarketEquilibrium(agents, items);
-
-  while (true) {
-    assert (checkIsEquilibrium(agents, market), "invariant: must be fisher equilibrium")
-    const budgets = calcBudgets(agents, market);
-    const leastSpenders = minSet(
-      agents,
-      (agent) => budgets.get(agent)!,
-      epsilon,
-    );
-    const leastBudget = budgets.get(leastSpenders[0])!;
-    const violators = findBudgetViolatorsUpTo1(leastBudget, market);
-    if (violators.length === 0) {
-      // MBB equilibrium and pEF1.
-      return market;
-    }
-    const mbbSets = mapFromFunction(agents, (agent) =>
-      computeMBBSet(agent, market.prices),
-    );
-    const swapComponent = findSwappableComponent(
-      leastSpenders,
-      market,
-      mbbSets,
-    );
-    let reachableViolator = violators.find((v) =>
-      swapComponent.swappables.has(v),
-    );
-    if (reachableViolator) {
-      // TODO: Order least spenders as in paper?
-      let [swapItem, swapTo] = swapComponent.swappables.get(reachableViolator)!;
-      market.allocation.set(swapItem, swapTo);
-    } else {
-      // raise prices of items in the component
-      const outsideItems = items.filter((item) => !swapComponent.items.has(item));
-      const outsideAgents = agents.filter((agent) => !swapComponent.agents.has(agent));
-      assert(
-        outsideItems.length > 0,
-        "There must be at least one item outside of component",
-      );
-      assert(
-        outsideAgents.length > 0,
-        "There must be at least one agent outside of component",
-      );
-      const gamma1 = minMBBIncreaseFactor(
-        market.prices,
-        swapComponent.agents,
-        mbbSets,
-        outsideItems,
-      );
-      const leastOutsideSpending = minValue(
-        outsideAgents,
-        (agent) => budgets.get(agent)!,
-      );
-      const gamma2 = leastOutsideSpending / leastBudget;
-      const priceFactor = Math.min(gamma1, gamma2);
-      raisePrices(market, swapComponent.items, priceFactor);
-    }
+// One step of the iterative improvement algorithm. Returns null when EF1+PO allocation is reached.
+export function improveAllocationStep(
+  market: MarketOutcome,
+  agents: Agent[],
+  items: Item[],
+): boolean {
+  validateUtilities(agents, items);
+  assert(agents.length > 0, "Needs at least one agent");
+  assert(
+    checkIsEquilibrium(market, agents, items),
+    "invariant: must be fisher equilibrium",
+  );
+  const budgets = calcBudgets(agents, market);
+  const leastSpenders = minSet(agents, (agent) => budgets.get(agent)!, epsilon);
+  const leastBudget = budgets.get(leastSpenders[0])!;
+  const violators = findBudgetViolatorsUpTo1(leastBudget, market);
+  if (violators.length === 0) {
+    // MBB equilibrium and pEF1.
+    return false;
   }
+  const mbbSets = mapFromFunction(agents, (agent) =>
+    computeMBBSet(agent, market.prices),
+  );
+  const swapComponent = findSwappableComponent(leastSpenders, market, mbbSets);
+  let reachableViolator = violators.find((v) =>
+    swapComponent.swappables.has(v),
+  );
+  if (reachableViolator) {
+    // TODO: Order least spenders as in paper?
+    let [swapItem, swapTo] = swapComponent.swappables.get(reachableViolator)!;
+    market.allocation.set(swapItem, swapTo);
+    return true;
+  } else {
+    // raise prices of items in the component
+    const outsideItems = items.filter((item) => !swapComponent.items.has(item));
+    const outsideAgents = agents.filter(
+      (agent) => !swapComponent.agents.has(agent),
+    );
+    assert(
+      outsideItems.length > 0,
+      "There must be at least one item outside of component",
+    );
+    assert(
+      outsideAgents.length > 0,
+      "There must be at least one agent outside of component",
+    );
+    const gamma1 = minMBBIncreaseFactor(
+      market.prices,
+      swapComponent.agents,
+      mbbSets,
+      outsideItems,
+    );
+    const leastOutsideSpending = minValue(
+      outsideAgents,
+      (agent) => budgets.get(agent)!,
+    );
+    const gamma2 = leastOutsideSpending / leastBudget;
+    const priceFactor = Math.min(gamma1, gamma2);
+    raisePrices(market, swapComponent.items, priceFactor);
+    return true;
+  }
+}
+
+export function allocateEF1PO(agents: Agent[], items: Item[]): MarketOutcome {
+  // initialize with a welfare maximizing allocation
+  const market = allocateUnfairEquilibrium(agents, items);
+
+  // swap and raise prices until termination
+  while (improveAllocationStep(market, agents, items));
+
+  return market;
 }
