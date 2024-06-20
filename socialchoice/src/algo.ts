@@ -220,20 +220,6 @@ function raisePrices(market: MarketOutcome, items: Set<Item>, factor: number) {
   }
 }
 
-function agentMBBIncreaseFactor(
-  prices: Pricing,
-  agent: Agent,
-  mbb: number,
-  outsideItems: Iterable<Item>,
-): number {
-  // find factor to increase prices of max bang-per-buck set such that more items will be max bpb too
-  // result = mbb / max(bangPerBuck(outsideItems))
-  let outsideMBB = maxValue(outsideItems, (item) =>
-    calcBangPerBuck(agent, prices, item),
-  );
-  return mbb / outsideMBB;
-}
-
 function minMBBIncreaseFactor(
   prices: Pricing,
   insideAgents: Iterable<Agent>,
@@ -244,9 +230,15 @@ function minMBBIncreaseFactor(
     const [first] = ensured(mbbSets.get(agent));
     return calcBangPerBuck(agent, prices, first);
   };
-  return minValue(insideAgents, (agent) =>
-    agentMBBIncreaseFactor(prices, agent, getMBB(agent), outsideItems),
-  );
+  // find factor to increase prices of max bang-per-buck set such that more items will be max bpb too
+  // result = min(mbb(inside) / mbb(outside))
+  return minValue(insideAgents, (agent) => {
+    let insideMBB = getMBB(agent)
+    let outsideMBB = maxValue(outsideItems, (item) =>
+      calcBangPerBuck(agent, prices, item),
+    );
+    return insideMBB / outsideMBB;
+  });
 }
 
 function validateUtilities(agents: Agent[], items: Item[]) {
