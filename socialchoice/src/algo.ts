@@ -177,7 +177,7 @@ type SwapComponent = {
   swappables: Map<Agent, [Item, Agent]>;
 };
 
-function findSwappableComponent(
+export function findSwappableComponent(
   root: Agent[],
   market: MarketOutcome,
   mbbSets: Map<Agent, Set<Item>>,
@@ -196,7 +196,7 @@ function findSwappableComponent(
     for (const item of mbb) {
       connectedItems.add(item);
       const owner = getOwner(item);
-      if (!predecessor.has(owner)) {
+      if (!connectedAgents.has(owner)) {
         children.push(owner);
         predecessor.set(owner, [item, agent]);
       }

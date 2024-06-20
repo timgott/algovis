@@ -1,5 +1,5 @@
 import { InteractionController } from "../../localgraphs/src/interaction/renderer";
-import { initFullscreenCanvas } from "../../shared/canvas";
+import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas";
 import {
   DragNodeInteraction,
   GraphPainter,
@@ -18,6 +18,7 @@ import {
   computeMBBSet,
   findBudgetViolatorsUpTo1,
   findLeastSpenders,
+  findSwappableComponent,
   improveAllocationStep,
 } from "./algo";
 import {
@@ -143,27 +144,31 @@ class AllocationDemo {
   }
 }
 
+type AgentNode = GraphNode<AgentNodeData>;
+type ItemNode = GraphNode<ItemNodeData>;
+
 type AgentNodeData = {
+  swap: {item: ItemNode, target: AgentNode} | null;
   nodeType: "agent";
   agent: NamedAgent;
-  mbbItems: Set<GraphNode<ItemNodeData>>;
+  mbbItems: Set<ItemNode>;
   budget: number;
-  utilities: [GraphNode<ItemNodeData>, number][];
+  utilities: [ItemNode, number][];
   isViolator: boolean;
   isLeastSpender: boolean;
 };
 type ItemNodeData = {
   nodeType: "item";
   name: string;
-  owner: GraphNode<AgentNodeData> | null;
+  owner: AgentNode | null;
   price: number | null;
 };
 type NodeData = AgentNodeData | ItemNodeData;
 
 class AllocationGraph {
   graph: Graph<NodeData>;
-  itemMap: Map<Item, GraphNode<ItemNodeData>> = new Map();
-  agentMap: Map<Agent, GraphNode<AgentNodeData>> = new Map();
+  itemMap: Map<Item, ItemNode> = new Map();
+  agentMap: Map<Agent, AgentNode> = new Map();
 
   constructor() {
     this.graph = createEmptyGraph();
@@ -178,6 +183,7 @@ class AllocationGraph {
       utilities: [],
       isViolator: false,
       isLeastSpender: false,
+      swap: null
     });
     return node;
   }
@@ -241,9 +247,13 @@ class AllocationGraph {
       findBudgetViolatorsUpTo1(leastBudget, model.market),
     );
     let leastSpendersSet = new Set(leastSpenders);
+    let mbbSets = mapFromFunction<Agent,Set<Item>>(
+      model.agents, a => computeMBBSet(a, model.market.prices)
+    );
+    let swapComponent = findSwappableComponent(leastSpenders, model.market, mbbSets);
     for (let [agent, agentNode] of this.agentMap) {
       // connect MBB set
-      let mbbSet = computeMBBSet(agent, model.market.prices);
+      let mbbSet = ensured(mbbSets.get(agent));
       agentNode.data.mbbItems = mbbSet.map((item) =>
         ensured(this.itemMap.get(item)),
       );
@@ -260,6 +270,13 @@ class AllocationGraph {
       // mark violators and least spenders
       agentNode.data.isViolator = violators.has(agent);
       agentNode.data.isLeastSpender = leastSpendersSet.has(agent);
+
+      // connect swap edge
+      let swap = swapComponent.swappables.get(agent) ?? null;
+      agentNode.data.swap = swap === null? null : {
+        item: ensured(this.itemMap.get(swap[0])),
+        target: ensured(this.agentMap.get(swap[1])),
+      }
     }
     for (let [item, itemNode] of this.itemMap) {
       // connect allocation
@@ -304,6 +321,7 @@ class AllocationRenderer implements GraphPainter<NodeData> {
       Math.max(Math.sqrt(price * priceScale), priceOffset);
     let drawNames = true;
     let showUtilities = false;
+    let showSwaps = true;
     let agentNodes: GraphNode<AgentNodeData>[] = graph.nodes.filter(
       (n): n is GraphNode<AgentNodeData> => n.data.nodeType == "agent",
     );
@@ -336,6 +354,27 @@ class AllocationRenderer implements GraphPainter<NodeData> {
         ctx.moveTo(node.x, node.y);
         ctx.lineTo(owner.x, owner.y);
         ctx.stroke();
+      }
+    }
+
+    if (showSwaps) {
+      for (let source of agentNodes) {
+        let swap = source.data.swap;
+        if (swap !== null) {
+          let {item, target} = swap;
+          let isActive = source.data.isViolator
+          ctx.lineWidth = isActive ? 4 : 3;
+          ctx.strokeStyle = isActive ? "red" : "lightpink";
+          ctx.beginPath();
+          let middleX = (item.x + target.x) * 0.5;
+          let middleY = (item.y + target.y) * 0.5;
+          //ctx.moveTo(item.x, item.y);
+          //ctx.lineTo(target.x, target.y);
+          ctx.moveTo(source.x, source.y)
+          ctx.quadraticCurveTo(item.x, item.y, middleX, middleY);
+          drawArrowTip(item.x, item.y, middleX, middleY, 12, ctx)
+          ctx.stroke();
+        }
       }
     }
 
@@ -428,16 +467,24 @@ function globalAction(f: (model: AllocationDemo) => unknown): () => void {
   };
 }
 
+function repeat(count: number, f: (model: AllocationDemo) => unknown): (model: AllocationDemo) => void {
+  return (model) => {
+    for (let i = 0; i < count; i++) {
+      f(model);
+    }
+  };
+}
+
 // action buttons
 let addAgentButton = document.getElementById("add_agent")!;
 addAgentButton.addEventListener(
   "click",
-  globalAction((g) => g.addAgent()),
+  globalAction(repeat(5, (g) => g.addAgent())),
 );
 let addItemButton = document.getElementById("add_item")!;
 addItemButton.addEventListener(
   "click",
-  globalAction((g) => g.addItem()),
+  globalAction(repeat(10, (g) => g.addItem())),
 );
 let stepButton = document.getElementById("btn_step")!;
 stepButton.addEventListener(
