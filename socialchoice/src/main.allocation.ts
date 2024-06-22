@@ -5,6 +5,7 @@ import {
   GraphPainter,
   GraphPhysicsSimulator,
   LayoutConfig,
+  moveSlightly,
 } from "../../localgraphs/src/interaction/graphlayout";
 import {
   Agent,
@@ -36,9 +37,9 @@ initFullscreenCanvas(canvas);
 
 const layoutStyle: LayoutConfig = {
   nodeRadius: 10,
-  pushDistance: 40,
+  pushDistance: 50,
   minEdgeLength: 50,
-  pushForce: 100,
+  pushForce: 400,
   edgeForce: 100,
   centeringForce: 0.0,
   dampening: 20.0,
@@ -201,7 +202,7 @@ class AllocationGraph {
   createNewNode<D extends NodeData>(data: D): GraphNode<D> {
     let x = (0.25 + 0.5 * Math.random()) * canvas.clientWidth;
     let y = (0.25 + 0.5 * Math.random()) * canvas.clientHeight;
-    return {
+    let node = {
       data,
       x,
       y,
@@ -209,6 +210,8 @@ class AllocationGraph {
       vy: 0,
       neighbors: new Set<GraphNode<D>>(),
     };
+    moveSlightly(node)
+    return node
   }
 
   updateGraphNodes(model: AllocationDemo) {
@@ -405,6 +408,9 @@ class AllocationRenderer implements GraphPainter<NodeData> {
       ctx.beginPath();
       drawSquare(ctx, node.x, node.y, radius);
       ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "black";
+      ctx.stroke();
 
       if (drawNames) {
         ctx.fillStyle = color;
