@@ -87,7 +87,7 @@ class AllocationDemo {
   }
 
   randomUtility(exponent: number) {
-    const discreteSteps = 128;
+    const discreteSteps = 24;
     let r = (randInt(discreteSteps-1)+1) / discreteSteps; // excludes 0 and 1
     return expDistributionInv(r, exponent);
   }
