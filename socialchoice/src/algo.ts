@@ -201,19 +201,18 @@ export function findSwappableTowards(
   let connectedAgents = new Set<Agent>();
   let connectedItems = new Set<Item>();
   let predecessor = new Map<Agent, [Item, Agent]>();
-  bfsSimple(root, (agent: Agent) => {
+  bfsFold(root, () => null, (agent: Agent, parent: [Item, Agent] | null) => {
     connectedAgents.add(agent);
-
+    if (parent) {
+      predecessor.set(agent, parent);
+    }
     // find alternating continuation (mbb, then allocation)
     const mbb = mbbSets.get(agent)!;
-    const children: Agent[] = [];
+    const children: [Agent, [Item, Agent]][] = [];
     for (const item of mbb) {
       connectedItems.add(item);
       const owner = getOwner(item);
-      if (!connectedAgents.has(owner)) {
-        children.push(owner);
-        predecessor.set(owner, [item, agent]);
-      }
+      children.push([owner, [item, agent]]);
     }
 
     return children;

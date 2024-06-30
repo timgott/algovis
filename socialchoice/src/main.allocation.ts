@@ -19,7 +19,7 @@ import {
   computeMBBSet,
   findBudgetViolatorsUpTo1,
   findLeastSpenders,
-  findSwappableComponent,
+  findSwappableTowards,
   improveAllocationStep,
 } from "./algo";
 import {
@@ -253,7 +253,7 @@ class AllocationGraph {
     let mbbSets = mapFromFunction<Agent,Set<Item>>(
       model.agents, a => computeMBBSet(a, model.market.prices)
     );
-    let swapComponent = findSwappableComponent(leastSpenders, model.market, mbbSets);
+    let swapComponent = findSwappableTowards(leastSpenders, model.market, mbbSets);
     for (let [agent, agentNode] of this.agentMap) {
       // connect MBB set
       let mbbSet = ensured(mbbSets.get(agent));
