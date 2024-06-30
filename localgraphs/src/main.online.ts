@@ -1,6 +1,6 @@
-import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, LayoutConfig, distanceToPointSqr, findClosestNode, offsetNodes } from "./interaction/graphlayout.js";
+import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, distanceToPointSqr, findClosestNode, offsetNodes } from "./interaction/graphsim.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
-import { InteractionController, UiStack as UiStack } from "./interaction/renderer.js";
+import { InteractionController, UiStack as UiStack } from "./interaction/controller.js";
 import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode, mapSubgraphTo } from "./graph.js";
 import { assert, hasStaticType } from "../../shared/utils.js";
 import { UndoHistory } from "./interaction/undo.js";
@@ -8,6 +8,7 @@ import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction }
 import { SearchState, bfs, computeDistances, findDistanceTo } from "./graphalgos.js";
 import { Vector } from "../../shared/vector.js";
 import { InputNode, OperatorNode, OutputNode, createOperatorNode, createOperatorWindow, getInputs, getOutputs } from "./interaction/operators.js";
+import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
 
 // "Online" refers to the online local computation model, unrelated to networking
 
@@ -505,7 +506,8 @@ localityInput.addEventListener("input", () => {
 const history = new UndoHistory<State>()
 let globalState = makeInitialState()
 
-const globalSim = new GraphPhysicsSimulator<NodeData>(globalState.graph, layoutStyle, new OurGraphPainter(layoutStyle.nodeRadius))
+const layoutPhysics = new GraphLayoutPhysics(layoutStyle)
+const globalSim = new GraphPhysicsSimulator<NodeData>(globalState.graph, layoutPhysics, new OurGraphPainter(layoutStyle.nodeRadius))
 globalSim.setInteractionMode(buildInteraction)
 
 const globalWindows = new UiStack(globalState.operators.map(createOperatorWindow))

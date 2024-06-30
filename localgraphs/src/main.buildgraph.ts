@@ -1,5 +1,5 @@
 import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring } from "./coloring.js";
-import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode, dragNodes, offsetNodes, moveSlightly } from "./interaction/graphlayout.js";
+import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, findClosestNode, dragNodes, offsetNodes, moveSlightly } from "./interaction/graphsim.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, MappedNode, copyGraph, copyGraphTo, copySubgraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, filteredGraphView, mapGraph, mapGraphLazy } from "./graph.js";
 import { assert, assertExists, degToRad, ensured, invertBijectiveMap, min, sleep } from "../../shared/utils.js";
@@ -8,9 +8,10 @@ import { Vector } from "../../shared/vector.js";
 import { Rect } from "../../shared/rectangle.js";
 import { DynamicLocal } from "./partialgrid.js";
 import { CommandTreeAdversary, executeEdgeCommand, make3Tree, runAdversary } from "./adversary.js";
-import { InteractionController } from "./interaction/renderer.js";
+import { InteractionController } from "./interaction/controller.js";
 import { ClickNodeInteraction, BuildGraphInteraction, MoveComponentInteraction } from "./interaction/tools.js";
 import { UndoHistory } from "./interaction/undo.js";
+import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
 
 let algorithmSelect = document.getElementById("select_algorithm") as HTMLSelectElement
 let localityInput = document.getElementById("locality") as HTMLInputElement
@@ -408,7 +409,8 @@ const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
 initFullscreenCanvas(canvas)
 
 const painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
-const sim = new GraphPhysicsSimulator(createEmptyGraph<NodeData>(), layoutStyle, painter)
+const physics = new GraphLayoutPhysics(layoutStyle)
+const sim = new GraphPhysicsSimulator<NodeData>(createEmptyGraph<NodeData>(), physics, painter)
 sim.visibleFilter = (node) => !node.data.collapsed
 
 const renderer = new InteractionController(canvas, sim)

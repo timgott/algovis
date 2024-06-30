@@ -1,7 +1,7 @@
 import { Positioned, distance } from "../../../shared/vector"
 import { Graph, GraphEdge, GraphNode } from "../graph"
 import { collectNeighborhood } from "../graphalgos"
-import { GraphInteraction, dragNodes, findClosestEdge, findClosestNode } from "./graphlayout"
+import { GraphInteraction, dragNodes, findClosestEdge, findClosestNode } from "./graphsim"
 
 export class BuildGraphInteraction<T> implements GraphInteraction<T> {
     moveThreshold: number = 20
@@ -53,7 +53,7 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
                 drawCtx.moveTo(mouseX, mouseY)
                 drawCtx.lineTo(this.startNode.x, this.startNode.y)
                 drawCtx.stroke()
-                drawCtx.setLineDash([]) 
+                drawCtx.setLineDash([])
                 drawCtx.circle(mouseX, mouseY, 5)
                 drawCtx.stroke()
             }

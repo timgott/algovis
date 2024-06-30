@@ -1,6 +1,7 @@
-import { DragNodeInteraction, GraphPhysicsSimulator, LayoutConfig, SimpleGraphPainter, createGridGraph, createRandomGraph, shuffleGraphPositions } from "./interaction/graphlayout.js";
+import { DragNodeInteraction, GraphPhysicsSimulator, SimpleGraphPainter, createGridGraph, createRandomGraph, shuffleGraphPositions } from "./interaction/graphsim.js";
 import { initFullscreenCanvas } from "../../shared/canvas.js";
-import { InteractionController } from "./interaction/renderer.js";
+import { InteractionController } from "./interaction/controller.js";
+import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
 
 const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
 initFullscreenCanvas(canvas)
@@ -21,7 +22,10 @@ shuffleGraphPositions(graph, canvas.clientWidth, canvas.clientHeight)
 
 graph = createGridGraph(9, layoutStyle)
 
-const sim = new GraphPhysicsSimulator(graph, layoutStyle, new SimpleGraphPainter(layoutStyle.nodeRadius))
+const sim = new GraphPhysicsSimulator(
+    graph, new GraphLayoutPhysics(layoutStyle),
+    new SimpleGraphPainter(layoutStyle.nodeRadius)
+)
 sim.setInteractionMode(() => new DragNodeInteraction())
 
 const controller = new InteractionController(canvas, sim)

@@ -1,7 +1,7 @@
 import { Rect } from "../../../shared/rectangle";
 import { assertExists, ensured } from "../../../shared/utils";
 import { Positioned } from "../../../shared/vector";
-import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "./renderer";
+import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "./controller";
 
 function drawWindowFrame(ctx: CanvasRenderingContext2D, bounds: Rect, headerHeight: number) {
     const cornerRadius = 4

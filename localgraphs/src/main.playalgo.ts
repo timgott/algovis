@@ -1,11 +1,12 @@
 import { NodeColor } from "./coloring.js";
-import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, LayoutConfig, findClosestNode } from "./interaction/graphlayout.js";
+import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, findClosestNode } from "./interaction/graphsim.js";
 import { initFullscreenCanvas } from "../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, createEmptyGraph, createNode } from "./graph.js";
 import { computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js";
 import { Adversary, CommandTree, CommandTreeAdversary, executeEdgeCommand, make3Tree, pathAdv2 } from "./adversary.js";
-import { InteractionController } from "./interaction/renderer.js";
+import { InteractionController } from "./interaction/controller.js";
 import { UndoHistory } from "./interaction/undo.js";
+import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
 
 let adversarySelect = document.getElementById("select_adversary") as HTMLSelectElement
 let localityInput = document.getElementById("locality") as HTMLInputElement
@@ -362,7 +363,8 @@ const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
 initFullscreenCanvas(canvas)
 
 const painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
-const sim = new GraphPhysicsSimulator(createEmptyGraph<NodeData>(), layoutStyle, painter)
+const layoutPhysics = new GraphLayoutPhysics(layoutStyle)
+const sim = new GraphPhysicsSimulator(createEmptyGraph<NodeData>(), layoutPhysics, painter)
 
 const renderer = new InteractionController(canvas, sim)
 const globalCtx: Context = {

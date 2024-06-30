@@ -1,12 +1,11 @@
-import { InteractionController } from "../../localgraphs/src/interaction/renderer";
+import { InteractionController } from "../../localgraphs/src/interaction/controller";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas";
 import {
   DragNodeInteraction,
   GraphPainter,
   GraphPhysicsSimulator,
-  LayoutConfig,
   moveSlightly,
-} from "../../localgraphs/src/interaction/graphlayout";
+} from "../../localgraphs/src/interaction/graphsim";
 import {
   Agent,
   Item,
@@ -31,6 +30,7 @@ import {
 import { UndoHistory } from "../../localgraphs/src/interaction/undo";
 import { NAMES, THINGS } from "./names";
 import { assert, ensured, mapFromFunction, randInt } from "../../shared/utils";
+import { GraphLayoutPhysics, LayoutConfig } from "../../localgraphs/src/interaction/physics";
 
 const canvas = document.getElementById("graph_canvas") as HTMLCanvasElement;
 initFullscreenCanvas(canvas);
@@ -448,7 +448,7 @@ let allocationGraph: AllocationGraph = new AllocationGraph();
 
 const sim = new GraphPhysicsSimulator<NodeData>(
   allocationGraph.graph,
-  layoutStyle,
+  new GraphLayoutPhysics(layoutStyle),
   new AllocationRenderer(),
 );
 sim.substeps = 10;

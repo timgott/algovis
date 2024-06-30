@@ -1,11 +1,12 @@
-import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, LayoutConfig, SimpleGraphPainter, findClosestNode } from "../interaction/graphlayout.js";
+import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, SimpleGraphPainter, findClosestNode } from "../interaction/graphsim.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode } from "../graph.js";
 import { computeDistances, findConnectedComponents, getNodesByComponent } from "../graphalgos.js";
-import { InteractionController } from "../interaction/renderer.js";
+import { InteractionController } from "../interaction/controller.js";
 import { UndoHistory } from "../interaction/undo.js";
 import { ClickEdgeInteraction, ClickNodeInteraction } from "../interaction/tools.js";
 import { randomSubset } from "../../../shared/utils.js";
+import { GraphLayoutPhysics, LayoutConfig } from "../interaction/physics.js";
 
 let stepButton = document.getElementById("finish_step") as HTMLButtonElement
 let localityInput = document.getElementById("locality") as HTMLInputElement
@@ -171,7 +172,8 @@ const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
 initFullscreenCanvas(canvas)
 
 const painter = new DirectedGraphPainter()
-const sim = new GraphPhysicsSimulator<NodeData>(createEmptyGraph<NodeData>(), layoutStyle, painter)
+const layoutPhysics = new GraphLayoutPhysics(layoutStyle)
+const sim = new GraphPhysicsSimulator<NodeData>(createEmptyGraph<NodeData>(), layoutPhysics, painter)
 
 const controller = new InteractionController(canvas, sim)
 const globalCtx: Context = {
