@@ -1,5 +1,7 @@
 import { describe, expect, test } from "@jest/globals";
 import { Item, NamedAgent, allocateEF1PO, checkIsEnvyFreeUpTo1, checkIsEquilibrium } from "./algo";
+import { bfsFold, bfsSimple } from "../../localgraphs/src/graphalgos";
+import { assert } from "../../shared/utils";
 
 describe("allocateEF1PO", () => {
   test("allocateEF1PO", () => {
@@ -97,4 +99,41 @@ describe("allocateEF1PO", () => {
 
       console.log("Outcome:", outcome);
     });
+
 });
+
+describe("shortest path", () => {
+    test("bfs order", () => {
+      const children = new Map([
+        [1,[2]],
+        [2,[3]],
+        [3,[5]],
+        [4,[5]],
+      ]);
+      let visited: number[] = [];
+      bfsSimple([1,4], (node) => {
+        visited.push(node);
+        if (node == 4) {
+          expect(visited).toEqual([1,4])
+        }
+        return children.get(node) || [];
+      })
+      expect(visited).toEqual([1,4,2,5,3])
+    })
+    test("bfs distance", () => {
+      const children = new Map([
+        [1,[2]],
+        [2,[3]],
+        [4,[3]],
+      ]);
+      let distances = new Map<number, number>();
+      bfsFold([1,4], () => 0, (node, dist) => {
+        distances.set(node, dist);
+        return children.get(node)?.map(n => [n,dist + 1]) || [];
+      })
+      expect(distances.get(1)).toEqual(0);
+      expect(distances.get(2)).toEqual(1);
+      expect(distances.get(3)).toEqual(1);
+      expect(distances.get(4)).toEqual(0);
+    })
+})

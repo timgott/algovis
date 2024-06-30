@@ -237,6 +237,17 @@ export function invertMap<K, V>(map: Map<K, V>): Map<V, K[]> {
     return result
 }
 
+export function invertMultiMap<K, V>(map: Map<K, Iterable<V>>): Map<V, K[]> {
+    let result = new Map<V, K[]>()
+    for (let [key, values] of map) {
+        for (let value of values) {
+            let old = result.get(value) ?? []
+            result.set(value, [...old, key])
+        }
+    }
+    return result
+}
+
 export function degToRad(degrees: number) {
     return degrees * Math.PI / 180
 }
