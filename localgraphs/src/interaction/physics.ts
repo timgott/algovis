@@ -1,3 +1,4 @@
+import { assert } from "../../../shared/utils";
 import { Graph, GraphNode } from "../graph";
 
 export interface LayoutPhysics<T> {
@@ -35,12 +36,14 @@ export function findActiveNodes(
 }
 
 export function applyVelocityStep(
-    graph: Graph<unknown>,
+    nodes: Iterable<GraphNode<unknown>>,
     dampening: number,
     dt: number,
 ) {
     // position and velocity integration
-    for (let node of graph.nodes) {
+    for (let node of nodes) {
+        assert(!isNaN(node.x) && !isNaN(node.y), "position is NaN")
+        assert(!isNaN(node.vx) && !isNaN(node.vy), "velocity is NaN")
         node.x += node.vx * dt;
         node.y += node.vy * dt;
 
@@ -125,7 +128,7 @@ export class GraphLayoutPhysics implements LayoutPhysics<unknown> {
         dt: number,
     ) {
         let activeNodes = findActiveNodes(graph, this.layoutStyle.sleepVelocity)
-        applyVelocityStep(graph, this.layoutStyle.dampening, dt)
+        applyVelocityStep(graph.nodes, this.layoutStyle.dampening, dt)
         applyLayoutForces(graph, this.layoutStyle, activeNodes, width, height, dt)
 
         // count at the end again, in case nodes started moving this step

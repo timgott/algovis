@@ -20,7 +20,7 @@ const layoutStyle: LayoutConfig = {
 let graph = createRandomGraph(20, 3)
 shuffleGraphPositions(graph, canvas.clientWidth, canvas.clientHeight)
 
-graph = createGridGraph(9, layoutStyle)
+graph = createGridGraph(9, layoutStyle.minEdgeLength)
 
 const sim = new GraphPhysicsSimulator(
     graph, new GraphLayoutPhysics(layoutStyle),

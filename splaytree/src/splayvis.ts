@@ -254,10 +254,10 @@ function animate(timeStamp: number) {
     ctx.fillStyle = "white"
     ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight)
   }
-  
+
   let root = findRoot(nodes)
   applyLayoutForces(root, dt)
-  
+
   for (let node of nodes) {
     node.update(dt);
   }
@@ -293,7 +293,7 @@ function clicked(x: number, y: number) {
   commands = splaySteps(node.node)
 }
 
-canvas.addEventListener("click", (ev) => { 
+canvas.addEventListener("click", (ev) => {
   const [x, y] = getCursorPosition(canvas, ev)
   clicked(x, y)
 })

@@ -2,7 +2,7 @@ import { getCursorPosition } from "../../../shared/canvas"
 import { min } from "../../../shared/utils"
 import { Positioned } from "../../../shared/vector"
 import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode, filteredGraphView } from "../graph"
-import { applyLayoutForces, applyVelocityStep, findActiveNodes, LayoutPhysics } from "./physics"
+import { applyVelocityStep, findActiveNodes, LayoutConfig, LayoutPhysics } from "./physics"
 import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "./controller"
 
 export function distanceToPointSqr(x: number, y: number, node: Positioned) {
@@ -75,11 +75,11 @@ export function createRandomGraph(size: number, edgesPerNode: number): Graph<nul
     return graph
 }
 
-export function createGridGraph(size: number, layout: LayoutConfig): Graph<null> {
+export function createGridGraph(size: number, edgeLength: number): Graph<null> {
     let graph = createEmptyGraph<null>()
     for (let i = 0; i < size; i++) {
         for (let j = 0; j < size; j++) {
-            let node = createNode(graph, null, i * layout.minEdgeLength, j * layout.minEdgeLength)
+            let node = createNode(graph, null, i * edgeLength, j * edgeLength)
             if (i > 0) {
                 createEdge(graph, node, graph.nodes[(i - 1) * size + j])
             }
@@ -87,6 +87,25 @@ export function createGridGraph(size: number, layout: LayoutConfig): Graph<null>
                 createEdge(graph, node, graph.nodes[i * size + j - 1])
             }
         }
+    }
+    return graph
+}
+
+export function createRegularTree(depth: number, degree: number): Graph<null> {
+    let graph = createEmptyGraph<null>()
+    let root = createNode(graph, null)
+    let lastLayer = [root]
+    while (depth > 0) {
+        let newLayer: GraphNode<null>[] = []
+        for (let parent of lastLayer) {
+            for (let i = 0; i < degree - 1; i++) {
+                let child = createNode(graph, null)
+                createEdge(graph, parent, child)
+                newLayer.push(child)
+            }
+        }
+        depth--;
+        lastLayer = newLayer;
     }
     return graph
 }
