@@ -96,12 +96,12 @@ function putAttachPoint(ctx: CanvasRenderingContext2D, x: number, y: number, nod
 }
 
 function drawBinOp(ctx: CanvasRenderingContext2D,
-    x: number, y: number, offset: number,
+    pos: Positioned, offset: number,
     left: Positioned, operator: string, right: Positioned
 ) {
-    putAttachPoint(ctx, x - offset, y, left)
-    putAttachPoint(ctx, x + offset, y, right)
-    ctx.fillText(operator, x, y)
+    putAttachPoint(ctx, pos.x - offset, pos.y, left)
+    putAttachPoint(ctx, pos.x + offset, pos.y, right)
+    ctx.fillText(operator, pos.x, pos.y)
 }
 
 function drawEqualityWindow(ctx: CanvasRenderingContext2D,
@@ -115,11 +115,11 @@ function drawEqualityWindow(ctx: CanvasRenderingContext2D,
     ctx.textBaseline = "middle"
 
     drawBinOp(
-        ctx, titleArea.center.x, titleArea.center.y, argOffset,
+        ctx, Rect.center(titleArea), argOffset,
         op.inputs.a, "?", op.inputs.b
     )
 
-    const [trueBox, falseBox] = bounds.splitHorizontal(0.5)
+    const [trueBox, falseBox] = Rect.splitHorizontal(bounds, 0.5)
 
     ctx.beginPath()
     ctx.strokeStyle = `rgba(0,0,0,0.3)`
@@ -128,9 +128,9 @@ function drawEqualityWindow(ctx: CanvasRenderingContext2D,
     ctx.moveTo(falseBox.left, falseBox.top)
     ctx.lineTo(falseBox.left, falseBox.bottom)
     ctx.stroke()
-    drawBinOp(ctx, trueBox.center.x, trueBox.center.y, opOffset,
+    drawBinOp(ctx, Rect.center(trueBox), opOffset,
         op.outputs.trueA, "=", op.outputs.trueB)
-    drawBinOp(ctx, falseBox.center.x, falseBox.center.y, opOffset,
+    drawBinOp(ctx, Rect.center(falseBox), opOffset,
         op.outputs.falseA, "≠", op.outputs.falseB)
 }
 

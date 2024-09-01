@@ -27,7 +27,7 @@ function drawSolution(points: Vector[], boundingCircle: Circle) {
 }
 
 function clicked(x: number, y: number) {
-  let p = new Vector(x, y)
+  let p = Vector.new(x, y)
   globalCircle = expandSmallestCircle(globalCircle, globalPoints, p)
   globalPoints.push(p)
   drawSolution(globalPoints, globalCircle)

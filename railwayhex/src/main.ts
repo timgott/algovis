@@ -63,7 +63,7 @@ class RailBuilder {
             const path = this.map.findPath(this.currentPlayer, this.hoverStart, coord, 5)
             this.hoverPath?.remove()
             if (path !== null) {
-                let offsets = path.map(c => new Vector(0, 0))
+                let offsets = path.map(c => Vector.new(0, 0))
                 this.hoverPath = this.mapSvg.createPath(this.mapSvg.lineGroup, path, offsets, {
                     "stroke-width": 2,
                     "stroke-dasharray": "5,5",
@@ -103,7 +103,7 @@ class GameSvgRenderer implements IGameUserInterface {
             let i = cellOffsets.size
             let sign = i % 2 === 0 ? 1 : -1
             let d = Math.ceil(i/2)*3*sign
-            let offset = new Vector(d, d)
+            let offset = Vector.new(d, d)
             cellOffsets.set(player, offset)
             return offset
         })

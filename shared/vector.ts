@@ -2,38 +2,46 @@ export type Positioned = {
     x: number;
     y: number;
 }
+export type Vector = Positioned;
 
-export class Vector implements Positioned {
-    constructor(public x: number, public y: number) {}
+export function vecadd(a: Positioned, b: Positioned) {
+    return { x: a.x + b.x, y: a.y + b.y };
+}
 
-    // 0 is up, clockwise rotation in radians
-    static fromAngle(angle: number, length: number = 1) {
-        return new Vector(length * Math.sin(angle), length * -Math.cos(angle));
-    }
+export function vecsub(a: Positioned, b: Positioned) {
+    return { x: a.x - b.x, y: a.y - b.y };
+}
 
-    static Zero = new Vector(0, 0);
+export function vecscale(factor: number, v: Positioned) {
+    return { x: v.x * factor, y: v.y * factor };
+}
 
-    add(other: Vector): Vector {
-        return new Vector(this.x + other.x, this.y + other.y);
-    }
+export function veclength(v: Positioned) {
+    return Math.hypot(v.x, v.y);
+}
 
-    sub(other: Vector): Vector {
-        return new Vector(this.x - other.x, this.y - other.y);
-    }
+export function normalize(v: Positioned) {
+    let len = veclength(v);
+    return { x: v.x / len, y: v.y / len };
+}
 
-    static add = Vector.prototype.add;
-    static sub = Vector.prototype.sub;
+export function vec(x: number, y: number): Positioned {
+    return { x, y };
+}
 
-    scale(factor: number): Vector {
-        return new Vector(this.x * factor, this.y * factor);
-    }
+export function vecdir(a: Positioned, b: Positioned): Positioned {
+    return normalize(vecsub(b, a));
+}
 
-    length(): number {
-        return Math.hypot(this.x, this.y);
-    }
-
-    normalize(): Vector {
-        return this.scale(1 / this.length());
+export const Vector = {
+    new: vec,
+    add: vecadd,
+    sub: vecsub,
+    scale: vecscale,
+    length: veclength,
+    Zero: { x: 0, y: 0 },
+    fromAngle(angle: number, length: number = 1) {
+        return Vector.new(length * Math.sin(angle), length * -Math.cos(angle));
     }
 }
 

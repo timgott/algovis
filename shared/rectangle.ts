@@ -1,22 +1,31 @@
 import { Vector } from "./vector"
 
-export class Rect {
-    constructor(
-        public readonly left: number,
-        public readonly top: number,
-        public readonly right: number,
-        public readonly bottom: number,
-    ) {}
+export type Rect = {
+    readonly left: number,
+    readonly top: number,
+    readonly right: number,
+    readonly bottom: number,
+}
 
-    static fromSize(left: number, top: number, width: number, height: number) {
-        return new Rect(left, top, left + width, top + height)
-    }
+export const Rect = {
+    new(
+        left: number,
+        top: number,
+        right: number,
+        bottom: number,
+    ) {
+        return { left, top, right, bottom }
+    },
 
-    static fromCenter(x: number, y: number, width: number, height: number) {
-        return new Rect(x - width/2, y - height/2, x + width/2, y + height/2)
-    }
+    fromSize(left: number, top: number, width: number, height: number) {
+        return { left, top, right: left + width, bottom: top + height }
+    },
 
-    static fromPoints(points: Iterable<Vector>) {
+    fromCenter(x: number, y: number, width: number, height: number) {
+        return { left: x - width / 2, top: y - height / 2, right: x + width / 2, bottom: y + height / 2 }
+    },
+
+    fromPoints(points: Iterable<Vector>) {
         let left = Infinity
         let top = Infinity
         let right = -Infinity
@@ -27,52 +36,52 @@ export class Rect {
             right = Math.max(right, point.x)
             bottom = Math.max(bottom, point.y)
         }
-        return new Rect(left, top, right, bottom)
-    }
+        return { left, top, right, bottom }
+    },
 
-    static readonly Empty = new Rect(Infinity, Infinity, -Infinity, -Infinity)
+    Empty: { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity },
 
-    get width(): number {
-        return this.right - this.left
-    }
+    width(rect: Rect): number {
+        return rect.right - rect.left
+    },
 
-    get height(): number {
-        return this.bottom - this.top
-    }
+    height(rect: Rect): number {
+        return rect.bottom - rect.top
+    },
 
-    get center(): Vector {
-        return new Vector((this.left + this.right) / 2, (this.top + this.bottom) / 2)
-    }
+    center(rect: Rect): Vector {
+        return Vector.new((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2)
+    },
 
-    extend(other: Rect): Rect {
-        let left = Math.min(this.left, other.left)
-        let top = Math.min(this.top, other.top)
-        let right = Math.max(this.right, other.right)
-        let bottom = Math.max(this.bottom, other.bottom)
-        return new Rect(left, top, right, bottom)
-    }
+    extend(rect: Rect, other: Rect): Rect {
+        let left = Math.min(rect.left, other.left)
+        let top = Math.min(rect.top, other.top)
+        let right = Math.max(rect.right, other.right)
+        let bottom = Math.max(rect.bottom, other.bottom)
+        return { left, top, right, bottom }
+    },
 
-    addOffset(dx: number, dy: number) {
-        return new Rect(this.left + dx, this.top + dy, this.right + dx, this.bottom + dy)
-    }
+    addOffset(rect: Rect, dx: number, dy: number) {
+        return { left: rect.left + dx, top: rect.top + dy, right: rect.right + dx, bottom: rect.bottom + dy }
+    },
 
-    contains(x: number, y: number): boolean {
-        return x >= this.left && x <= this.right && y >= this.top && y <= this.bottom
-    }
+    contains(rect: Rect, x: number, y: number): boolean {
+        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+    },
 
-    splitVertical(percent: number): [Rect, Rect] {
-        let splitY = this.top + this.height * percent
+    splitVertical(rect: Rect, percent: number): [Rect, Rect] {
+        let splitY = rect.top + (rect.bottom - rect.top) * percent
         return [
-            new Rect(this.left, this.top, this.right, splitY),
-            new Rect(this.left, splitY, this.right, this.bottom)
+            { left: rect.left, top: rect.top, right: rect.right, bottom: splitY },
+            { left: rect.left, top: splitY, right: rect.right, bottom: rect.bottom }
         ]
-    }
+    },
 
-    splitHorizontal(percent: number): [Rect, Rect] {
-        let splitX = this.left + this.width * percent
+    splitHorizontal(rect: Rect, percent: number): [Rect, Rect] {
+        let splitX = rect.left + (rect.right - rect.left) * percent
         return [
-            new Rect(this.left, this.top, splitX, this.bottom),
-            new Rect(splitX, this.top, this.right, this.bottom)
+            { left: rect.left, top: rect.top, right: splitX, bottom: rect.bottom },
+            { left: splitX, top: rect.top, right: rect.right, bottom: rect.bottom }
         ]
     }
 }

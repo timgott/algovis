@@ -1,0 +1,104 @@
+;;;; types: vargraph constructor
+;;; Do I not need concrete graph??
+;;; (vargraph varnodes... nodes... edges... label... (where type-assertions))
+;;;   (varnode var-name connector-binders)
+;;; connector-binders can be used in edge-list
+
+;;;; function types
+;;; (forall symbols result-type)
+;;; (constructor input-list output)
+
+;;;; top-level statements
+;;; (axiom name type)
+;;; (define name type expression)
+
+;;; (specialize forall-expr argument-bindings)
+;;; (apply constructor-expr argument-bindings) ; sees through foralls
+;;; (match expr (binder result)*) ; applies to either branches
+;;; (let binder expr) ; like match with only one branch?
+
+(axiom empty_graph (vargraph))
+
+(axiom combine ; SC-LOCAL, not Online-LOCAL
+    (forall (A B)
+        (constructor
+            (
+                (make-A (vargraph (varnode A)))
+                (make-B (vargraph (varnode B)))
+            )
+            (vargraph (varnode A) (varnode B))
+        )
+    )
+)
+
+(axiom make_edge
+    (forall (A B)
+        (constructor
+            (
+                (G (vargraph (varnode A a) (varnode B b) (where (pin-dist? a 8) (pin-dist? b 8))))
+            )
+            (vargraph (varnode A a) (varnode B b) (edge a b))
+        )
+    )
+)
+
+(axiom decide
+    (forall (A B C)
+        (constructor
+            (
+                (G (vargraph (varnode A a) (varnode B b) (varnode C c) (node v) (edge a v) (edge b v) (edge c v)))
+            )
+            (either
+                (vargraph (varnode A a) (node v) (edge a v))
+                (vargraph (varnode B b) (node v) (edge b v))
+                (vargraph (varnode C c) (node v) (edge c v))
+            )
+        )
+    )
+)
+
+(lemma reaktor
+    (forall (A B)
+        (constructor
+            (
+                (stage1 (forall (X)
+                    (constructor
+                        (
+                            (c (vargraph (varnode X x) (node v) (edge x v) (where (pin-dist? v 8))))
+                        )
+                        (vargraph (varnode X x) (varnode A a) (node v) (edge x v) (edge v a) (where (pin-dist? v 8)))
+                    )
+                )
+                (stage2 (forall (Y)
+                    (constructor
+                        (
+                            (c (vargraph (varnode Y y) (varnode A a) (node v) (edge y v) (edge v a) (where (pin-dist? v 4))))
+                        )
+                        (vargraph (varnode Y y) (varnode B b) (node v) (edge y v) (edge v b) (where (pin-dist? v 4)))
+                    )
+                )
+            )
+            (constructor (vargraph (varnode B b) (node v) (label v b))
+        )
+    )
+    ; proof
+    (
+        (let s1 (apply (specialize stage1 ((X (vargraph nil)))) (c empty_graph)))
+        ; ...
+    )
+)
+
+(lemma put-one
+    (forall (A)
+        (constructor
+            (
+                (c (vargraph (varnode A a) (node v) (edge a v) (where (pin-dist? v 8)))
+            )
+            (vargraph (varnode A a) (node v) (edge a v) (label v a))
+        )
+    )
+    ; proof
+    (
+        (let (vargraph
+    )
+)

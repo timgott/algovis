@@ -1,6 +1,5 @@
 import { Rect } from "../../../shared/rectangle";
-import { assertExists, ensured } from "../../../shared/utils";
-import { Positioned } from "../../../shared/vector";
+import { ensured } from "../../../shared/utils";
 import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "./controller";
 
 function drawWindowFrame(ctx: CanvasRenderingContext2D, bounds: Rect, headerHeight: number) {
@@ -9,9 +8,9 @@ function drawWindowFrame(ctx: CanvasRenderingContext2D, bounds: Rect, headerHeig
     ctx.fillStyle = `rgba(200, 220, 255, 0.6)`;
     ctx.lineWidth = 1;
     ctx.beginPath()
-    ctx.roundRect(bounds.left, bounds.top, bounds.width, headerHeight, [cornerRadius, cornerRadius, 0, 0]);
+    ctx.roundRect(bounds.left, bounds.top, Rect.width(bounds), headerHeight, [cornerRadius, cornerRadius, 0, 0]);
     ctx.fill()
-    ctx.roundRect(bounds.left, bounds.top, bounds.width, bounds.height, cornerRadius);
+    ctx.roundRect(bounds.left, bounds.top, Rect.width(bounds), Rect.height(bounds), cornerRadius);
     ctx.moveTo(bounds.left, bounds.top + headerHeight);
     ctx.lineTo(bounds.right, bounds.top + headerHeight);
     ctx.stroke();
@@ -23,7 +22,7 @@ export function drawWindowTitle(ctx: CanvasRenderingContext2D, titleBounds: Rect
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
     const left = titleBounds.left + 12
-    ctx.fillText(title, left, titleBounds.top + titleBounds.height / 2);
+    ctx.fillText(title, left, titleBounds.top + Rect.height(titleBounds) / 2);
     const measured = ctx.measureText(title);
     return left + measured.width
 }
@@ -33,8 +32,8 @@ const titleHeight = 40
 // contains only input related data
 export class WindowController implements InteractiveSystem {
     constructor(
-        public contentArea: Rect,
-        public drawContents: (ctx: CanvasRenderingContext2D, contentArea: Rect, titleArea: Rect) => unknown,
+        protected contentArea: Rect,
+        protected drawContents: (ctx: CanvasRenderingContext2D, contentArea: Rect, titleArea: Rect) => unknown,
     ) {
     }
 
@@ -49,7 +48,7 @@ export class WindowController implements InteractiveSystem {
             const mouse = ensured(frame.dragState.get(this.dragState.pointerId))
             const dx = mouse.x - this.dragState.lastX
             const dy = mouse.y - this.dragState.lastY
-            this.contentArea = this.contentArea.addOffset(dx, dy)
+            this.contentArea = Rect.addOffset(this.contentArea, dx, dy)
             this.dragState.lastX = mouse.x
             this.dragState.lastY = mouse.y
         }
@@ -59,19 +58,23 @@ export class WindowController implements InteractiveSystem {
     }
 
     get bounds(): Rect {
-        return new Rect(
+        return Rect.new(
             this.contentArea.left, this.contentArea.top - titleHeight, this.contentArea.right, this.contentArea.bottom
         )
     }
 
     get titleArea(): Rect {
-        return new Rect(
+        return Rect.new(
             this.bounds.left, this.bounds.top, this.bounds.right, this.contentArea.top
         )
     }
 
+    resize(newSize: Rect) {
+        this.contentArea = newSize
+    }
+
     onMouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {
-        if (this.titleArea.contains(x, y)) {
+        if (Rect.contains(this.titleArea, x, y)) {
             this.dragState = {
                 lastX: x,
                 lastY: y,

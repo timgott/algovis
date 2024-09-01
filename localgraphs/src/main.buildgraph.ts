@@ -4,8 +4,6 @@ import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, MappedNode, copyGraph, copyGraphTo, copySubgraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, filteredGraphView, mapGraph, mapGraphLazy } from "./graph.js";
 import { assert, assertExists, degToRad, ensured, invertBijectiveMap, min, sleep } from "../../shared/utils.js";
 import { collectNeighborhood, computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js";
-import { Vector } from "../../shared/vector.js";
-import { Rect } from "../../shared/rectangle.js";
 import { DynamicLocal } from "./partialgrid.js";
 import { CommandTreeAdversary, executeEdgeCommand, make3Tree, runAdversary } from "./adversary.js";
 import { InteractionController } from "./interaction/controller.js";
@@ -191,10 +189,6 @@ function collapse(node: GraphNode<NodeData>) {
             n.data.collapsed = false
         }
     }
-}
-
-function nodePos(node: GraphNode<NodeData>) {
-    return new Vector(node.x, node.y)
 }
 
 // duplicates the neighborhood around blueprintNode in the order of orderedNodes and creates edges between them in the order of orderedEdges

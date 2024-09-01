@@ -1,12 +1,12 @@
 import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, distanceToPointSqr, findClosestNode, offsetNodes } from "./interaction/graphsim.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
-import { InteractionController, UiStack as UiStack } from "./interaction/controller.js";
+import { InteractionController, UiStack } from "./interaction/controller.js";
 import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode, mapSubgraphTo } from "./graph.js";
 import { assert, hasStaticType } from "../../shared/utils.js";
 import { UndoHistory } from "./interaction/undo.js";
 import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction } from "./interaction/tools.js";
 import { SearchState, bfs, computeDistances, findDistanceTo } from "./graphalgos.js";
-import { Vector } from "../../shared/vector.js";
+import { normalize, vec, vecadd, vecdir, vecscale, vecsub, Vector } from "../../shared/vector.js";
 import { InputNode, OperatorNode, OutputNode, createOperatorNode, createOperatorWindow, getInputs, getOutputs } from "./interaction/operators.js";
 import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
 
@@ -261,9 +261,9 @@ function computePinLevel(nodes: Node[], radius: number): Map<Node, number> {
 }
 
 function drawLineBetweenCircles(ctx: CanvasRenderingContext2D, a: Vector, b: Vector, radiusA: number, radiusB: number = radiusA) {
-    const dir = b.sub(a).normalize()
-    const newA = a.add(dir.scale(radiusA))
-    const newB = b.sub(dir.scale(radiusB))
+    const dir = vecdir(a, b)
+    const newA = vecadd(a, vecscale(radiusA, dir))
+    const newB = vecsub(b, vecscale(radiusB, dir))
     ctx.beginPath()
     ctx.moveTo(newA.x, newA.y)
     ctx.lineTo(newB.x, newB.y)
@@ -398,8 +398,8 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         }
         ctx.lineWidth = linewidth
         ctx.strokeStyle = `rgba(0, 0, 0, ${alpha})`
-        const posA = new Vector(edge.a.x, edge.a.y)
-        const posB = new Vector(edge.b.x, edge.b.y)
+        const posA = vec(edge.a.x, edge.a.y)
+        const posB = vec(edge.b.x, edge.b.y)
         drawLineBetweenCircles(ctx, posA, posB, this.calcRadius(edge.a), this.calcRadius(edge.b))
         ctx.stroke()
     }
@@ -412,11 +412,11 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         ctx.strokeStyle = `rgba(0, 0, 0, ${alpha})`
         ctx.lineWidth = 2
         ctx.beginPath()
-        let a = new Vector(from.x, from.y)
-        let b = new Vector(to.x, to.y)
-        const offset = b.sub(a).normalize().scale(this.nodeRadius * 2)
-        a = a.add(offset)
-        b = b.sub(offset)
+        let a = vec(from.x, from.y)
+        let b = vec(to.x, to.y)
+        const offset = vecscale(this.nodeRadius * 2, vecdir(a, b))
+        a = vecadd(a, offset)
+        b = vecsub(b, offset)
         ctx.moveTo(a.x, a.y)
         ctx.lineTo(b.x, b.y)
         drawArrowTip(a.x, a.y, b.x, b.y, 20, ctx)

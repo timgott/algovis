@@ -1,4 +1,4 @@
-import { Vector } from "../../shared/vector.js"
+import { vecadd, vecscale, Vector } from "../../shared/vector.js"
 import { Rect } from "../../shared/rectangle.js"
 import { SVGAttrs, createSvgNode } from "../../shared/svg.js"
 import { HexCoordinate, HexGrid } from "./hexgrid.js"
@@ -25,7 +25,7 @@ export class HexGridSvg {
         let points = ""
         for (let i = 0; i < 6; i++) {
             let angle = i * Math.PI / 3
-            let point = pos.add(Vector.fromAngle(angle, radius))
+            let point = vecadd(pos, Vector.fromAngle(angle, radius))
             points += `${point.x},${point.y} `
         }
         return createSvgNode(parent, "polygon", {
@@ -35,13 +35,13 @@ export class HexGridSvg {
     }
 
     getHexPosition([u,v,w]: HexCoordinate): Vector {
-        return this.origin.add(this.axisU.scale(u)).add(this.axisV.scale(v))
+        return vecadd(this.origin, vecadd(vecscale(u, this.axisU), vecscale(v, this.axisV)))
     }
 
     createPath(parent: SVGElement, coords: HexCoordinate[], offsets: Vector[], attrs: SVGAttrs): SVGPathElement {
         const points = coords.map((c) => this.getHexPosition(c))
         for (let i = 0; i < points.length; i++) {
-            points[i] = points[i].add(offsets[i])
+            points[i] = vecadd(points[i], offsets[i])
         }
         let d = `M ${points[0].x} ${points[0].y} `
         for (let i = 1; i < points.length; i++) {
@@ -142,9 +142,9 @@ export class HexGridSvg {
             })
             hex.addEventListener("mouseover", () => this.hover(coord))
             this.cells.push([coord, hex])
-            vbox = vbox.extend(Rect.fromCenter(pos.x, pos.y, this.cellSize*2, this.cellSize*2))
+            vbox = Rect.extend(vbox, Rect.fromCenter(pos.x, pos.y, this.cellSize*2, this.cellSize*2))
         }
-        mapSvg.setAttribute("viewBox", `${vbox.left} ${vbox.top} ${vbox.width} ${vbox.height}`)
+        mapSvg.setAttribute("viewBox", `${vbox.left} ${vbox.top} ${Rect.width(vbox)} ${Rect.height(vbox)}`)
         this.svg = svg
         this.hexGroup = cellGroup
         this.cityMarkerGroup = markerGroup
