@@ -41,7 +41,7 @@ export function drawWindowTitle(ctx: CanvasRenderingContext2D, titleBounds: Rect
 }
 
 const titleHeight = 40
-const resizeHandleSize = 20
+const resizeHandleSize = 32
 
 export type WindowBounds = {
     bounds: Rect
@@ -120,9 +120,9 @@ export class WindowController<T extends WindowBounds> implements InteractiveSyst
     }
 
     resizeArea(window: T): Rect {
-        let size = resizeHandleSize
+        let size = resizeHandleSize / 2
         return Rect.new(
-            window.bounds.right - size, window.bounds.bottom - size, window.bounds.right, window.bounds.bottom
+            window.bounds.right - size, window.bounds.bottom - size, window.bounds.right + size, window.bounds.bottom + size
         )
     }
 
