@@ -1,13 +1,13 @@
 import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, distanceToPointSqr, findClosestNode, offsetNodes } from "./interaction/graphsim.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
-import { InteractionController, UiStack } from "./interaction/controller.js";
+import { InteractionController } from "./interaction/controller.js";
 import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode, mapSubgraphTo } from "./graph.js";
 import { assert, hasStaticType } from "../../shared/utils.js";
 import { UndoHistory } from "./interaction/undo.js";
 import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction } from "./interaction/tools.js";
 import { SearchState, bfs, computeDistances, findDistanceTo } from "./graphalgos.js";
-import { normalize, vec, vecadd, vecdir, vecscale, vecsub, Vector } from "../../shared/vector.js";
-import { InputNode, OperatorNode, OutputNode, createOperatorNode, createOperatorWindow, getInputs, getOutputs } from "./interaction/operators.js";
+import { vec, vecadd, vecdir, vecscale, vecsub, Vector } from "../../shared/vector.js";
+import { InputNode, OperatorNode, OutputNode, getInputs, getOutputs } from "./interaction/operators.js";
 import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
 
 // "Online" refers to the online local computation model, unrelated to networking
@@ -479,7 +479,6 @@ toolButton("tool_transfer", () => new TransferTool(pushUndoPoint, collectGlobalI
 function replaceGlobalState(newState: State) {
     globalState = newState
     globalSim.changeGraph(newState.graph)
-    globalWindows.systems = newState.operators.map(createOperatorWindow)
     controller.requestFrame()
 }
 
@@ -510,12 +509,5 @@ const layoutPhysics = new GraphLayoutPhysics(layoutStyle)
 const globalSim = new GraphPhysicsSimulator<NodeData>(globalState.graph, layoutPhysics, new OurGraphPainter(layoutStyle.nodeRadius))
 globalSim.setInteractionMode(buildInteraction)
 
-const globalWindows = new UiStack(globalState.operators.map(createOperatorWindow))
-
-const controller = new InteractionController(canvas,
-    new UiStack([
-        globalSim,
-        globalWindows,
-    ])
-)
+const controller = new InteractionController(canvas, globalSim)
 controller.requestFrame()

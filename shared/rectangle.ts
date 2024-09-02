@@ -1,10 +1,10 @@
 import { Vector } from "./vector"
 
 export type Rect = {
-    readonly left: number,
-    readonly top: number,
-    readonly right: number,
-    readonly bottom: number,
+    left: number,
+    top: number,
+    right: number,
+    bottom: number,
 }
 
 export const Rect = {

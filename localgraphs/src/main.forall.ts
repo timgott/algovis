@@ -1,7 +1,7 @@
 //#region Imports
-import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, distanceToPointSqr, findClosestNode } from "./interaction/graphsim.js";
+import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, distanceToPointSqr, findClosestNode, moveSlightly } from "./interaction/graphsim.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
-import { InteractionController, UiStack } from "./interaction/controller.js";
+import { AnimationFrame, InteractionController, UiStack } from "./interaction/controller.js";
 import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode } from "./graph.js";
 import { assert, hasStaticType } from "../../shared/utils.js";
 import { UndoHistory } from "./interaction/undo.js";
@@ -9,7 +9,7 @@ import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction }
 import { computeDistances } from "./graphalgos.js";
 import { normalize, vec, vecadd, vecdir, vecscale, vecsub, Vector } from "../../shared/vector.js";
 import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
-import { WindowController } from "./interaction/windows.js";
+import { drawWindowTitle, WindowBounds as BoundedWindow, WindowController } from "./interaction/windows.js";
 import { Rect } from "../../shared/rectangle.js";
 //#endregion
 
@@ -28,13 +28,17 @@ const layoutStyle: LayoutConfig = {
     nodeRadius: 10,
     pushDistance: 50,
     minEdgeLength: 50,
-    pushForce: 30.0,
+    pushForce: 50.0,
     edgeForce: 100.0,
     centeringForce: 0.0,
     dampening: 5.0,
     sleepVelocity: 0.5,
 }
 hasStaticType<LayoutConfig>(layoutStyle)
+
+const windowPushForce = 2000.0
+const windowPushMargin = 200.0
+
 //#endregion
 
 //#region State types
@@ -57,15 +61,14 @@ type NodeData = NormalNodeData | VariableNodeData
 type MainGraph = Graph<NodeData>
 type Node = GraphNode<NodeData>
 
-type WindowState = {
+type WindowState = BoundedWindow & {
     kind: "test"
-    bounds: Rect
 }
 
 // Everything that can be undone, possibly derived data to save recomputation
 type State = {
     graph: MainGraph,
-    windows: WindowController[],
+    windows: WindowState[],
 }
 
 
@@ -83,10 +86,12 @@ function putNewNode(graph: MainGraph, x: number, y: number): Node {
         pin: null,
         annotation: "",
     }
-    return createNode(graph, data, x, y)
+    let node = createNode(graph, data, x, y)
+    moveSlightly(node)
+    return node
 }
 
-function putNewWindow(state: State, window: WindowController) {
+function putNewWindow(state: State, window: WindowState) {
     pushUndoPoint()
     state.windows.push(window)
 }
@@ -256,9 +261,7 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         }
         ctx.lineWidth = linewidth
         ctx.strokeStyle = `rgba(0, 0, 0, ${alpha})`
-        const posA = vec(edge.a.x, edge.a.y)
-        const posB = vec(edge.b.x, edge.b.y)
-        drawLineBetweenCircles(ctx, posA, posB, this.calcRadius(edge.a), this.calcRadius(edge.b))
+        drawLineBetweenCircles(ctx, edge.a, edge.b, this.calcRadius(edge.a), this.calcRadius(edge.b))
         ctx.stroke()
     }
 
@@ -267,11 +270,9 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         ctx.strokeStyle = this.committedColor
         ctx.lineWidth = 6
         ctx.beginPath()
-        let a = vec(from.x, from.y)
-        let b = vec(to.x, to.y)
-        const offset = vecscale(this.nodeRadius * 1.5, vecdir(a, b))
-        a = vecadd(a, offset)
-        b = vecsub(b, offset)
+        const offset = vecscale(this.nodeRadius * 1.5, vecdir(from, to))
+        let a = vecadd(from, offset)
+        let b = vecsub(to, offset)
         ctx.moveTo(a.x, a.y)
         ctx.lineTo(b.x, b.y)
         drawArrowTip(a.x, a.y, b.x, b.y, 16, ctx)
@@ -290,6 +291,31 @@ function clearArrow(node: GraphNode<NormalNodeData>) {
 }
 
 /* #endregion */
+
+function animateWindowContent(frame: AnimationFrame, window: WindowState, titleArea: Rect) {
+    let graph = globalState.graph
+    if (window.kind === "test") {
+        drawWindowTitle(frame.ctx, titleArea, "Test Window")
+        let center = Rect.center(window.bounds)
+        for (let node of graph.nodes) {
+            if (Rect.contains(window.bounds, node.x, node.y)) {
+                // push away from borders
+                let margin = windowPushMargin
+                let power = 3
+
+                let left = Math.pow(Math.max(margin - (node.x - window.bounds.left), 0) / margin, power)
+                let right = Math.pow(Math.max(margin - (window.bounds.right - node.x), 0) / margin, power)
+                let top = Math.pow(Math.max(margin - (node.y - window.bounds.top), 0) / margin, power)
+                let bottom = Math.pow(Math.max(margin - (window.bounds.bottom - node.y), 0) / margin, power)
+
+                let force = vecscale(windowPushForce, vec(left - right, top - bottom))
+                node.vx += force.x * frame.dt
+                node.vy += force.y * frame.dt
+
+            }
+        }
+    }
+}
 
 //#region Custom tools: Arrow and window spanning
 
@@ -382,11 +408,11 @@ class ArrowTool implements GraphInteraction<NodeData> {
 class SpanWindowTool implements GraphInteraction<NodeData> {
     state: {
         startPos: Vector,
-        window: WindowController,
+        window: WindowState,
     } | null = null
 
     constructor(
-        private createEmptyWindow: (bounds: Rect) => WindowController,
+        private createEmptyWindow: (bounds: Rect) => WindowState,
     ) {
     }
 
@@ -401,7 +427,7 @@ class SpanWindowTool implements GraphInteraction<NodeData> {
         let state = this.state
         if (state !== null) {
             let bounds = Rect.fromPoints([state.startPos, vec(mouseX, mouseY)])
-            state.window.resize(bounds)
+            state.window.bounds = bounds
         }
     }
 
@@ -438,7 +464,14 @@ function askNodeLabel(node: Node): void {
 }
 
 function createTestWindow(bounds: Rect) {
-    let window = new WindowController(bounds, (ctx, contentArea, titleArea) => {})
+    let window: WindowState = {
+        kind: "test",
+        bounds,
+        resizing: {
+            minWidth: 150,
+            minHeight: 50,
+        }
+    }
     putNewWindow(globalState, window)
     return window
 }
@@ -454,13 +487,6 @@ toolButton("tool_arrow", arrowInteraction)
 toolButton("tool_label", labelInteraction)
 
 toolButton("tool_testwindow", () => new SpanWindowTool(createTestWindow))
-
-function replaceGlobalState(newState: State) {
-    globalState = newState
-    globalSim.changeGraph(newState.graph)
-    globalWindows.systems = newState.windows
-    controller.requestFrame()
-}
 
 undoButton.addEventListener("click", () => {
     const last = history.undo(globalState)
@@ -482,7 +508,15 @@ localityInput.addEventListener("input", () => {
 })
 //#endregion
 
+function replaceGlobalState(newState: State) {
+    globalState = newState
+    globalSim.changeGraph(newState.graph)
+    globalWindows.windows = newState.windows
+    controller.requestFrame()
+}
+
 /* Global init */
+
 const history = new UndoHistory<State>()
 let globalState = makeInitialState()
 
@@ -490,7 +524,7 @@ const layoutPhysics = new GraphLayoutPhysics(layoutStyle)
 const globalSim = new GraphPhysicsSimulator<NodeData>(globalState.graph, layoutPhysics, new OurGraphPainter(layoutStyle.nodeRadius))
 globalSim.setInteractionMode(buildInteraction)
 
-const globalWindows = new UiStack(globalState.windows)
+const globalWindows = new WindowController(globalState.windows, animateWindowContent)
 
 initFullscreenCanvas(canvas)
 const controller = new InteractionController(canvas,

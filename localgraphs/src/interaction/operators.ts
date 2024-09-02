@@ -1,7 +1,6 @@
 import { Rect } from "../../../shared/rectangle"
 
 import { Positioned } from "../../../shared/vector"
-import { WindowController } from "./windows"
 
 /* Decision operators */
 
@@ -141,16 +140,6 @@ const operatorWindows = {
         height: 80
     }
 } as const
-
-export function createOperatorWindow(op: OperatorNode): WindowController {
-    const cfg = operatorWindows[op.kind]
-    const area = Rect.fromSize(op.x, op.y, cfg.width, cfg.height)
-    return new WindowController(area, (ctx, bounds, titleArea) => {
-        op.x = bounds.left // store position in node such that window can be restored
-        op.y = bounds.top
-        cfg.draw(ctx, op, bounds, titleArea)
-    })
-}
 
 export function getInputs(op: OperatorNode): InputNode[] {
     return Object.values(op.inputs)
