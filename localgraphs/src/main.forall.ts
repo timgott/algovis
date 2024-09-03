@@ -9,7 +9,7 @@ import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction }
 import { computeDistances } from "./graphalgos.js";
 import { normalize, vec, vecadd, vecdir, vecscale, vecsub, Vector } from "../../shared/vector.js";
 import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
-import { drawWindowTitle, WindowBounds as BoundedWindow, WindowController } from "./interaction/windows.js";
+import { drawWindowTitle, WindowBounds as BoundedWindow, WindowController, satisfyMinBounds } from "./interaction/windows.js";
 import { Rect } from "../../shared/rectangle.js";
 //#endregion
 
@@ -62,7 +62,7 @@ type MainGraph = Graph<NodeData>
 type Node = GraphNode<NodeData>
 
 type WindowState = BoundedWindow & {
-    kind: "test"
+    kind: "box"
 }
 
 // Everything that can be undone, possibly derived data to save recomputation
@@ -294,8 +294,8 @@ function clearArrow(node: GraphNode<NormalNodeData>) {
 
 function animateWindowContent(frame: AnimationFrame, window: WindowState, titleArea: Rect) {
     let graph = globalState.graph
-    if (window.kind === "test") {
-        drawWindowTitle(frame.ctx, titleArea, "Test Window")
+    if (window.kind === "box") {
+        drawWindowTitle(frame.ctx, titleArea, "Box")
         let center = Rect.center(window.bounds)
         for (let node of graph.nodes) {
             if (Rect.contains(window.bounds, node.x, node.y)) {
@@ -408,18 +408,16 @@ class ArrowTool implements GraphInteraction<NodeData> {
 class SpanWindowTool implements GraphInteraction<NodeData> {
     state: {
         startPos: Vector,
-        window: WindowState,
     } | null = null
 
     constructor(
-        private createEmptyWindow: (bounds: Rect) => WindowState,
+        private createWindow: (bounds: Rect) => WindowState,
     ) {
     }
 
     onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
         this.state = {
             startPos : vec(mouseX, mouseY),
-            window: this.createEmptyWindow(Rect.fromSize(mouseX, mouseY, 0, 0))
         }
     }
 
@@ -427,12 +425,22 @@ class SpanWindowTool implements GraphInteraction<NodeData> {
         let state = this.state
         if (state !== null) {
             let bounds = Rect.fromPoints([state.startPos, vec(mouseX, mouseY)])
-            state.window.bounds = bounds
+            // dashed gray rectangle
+            drawCtx.save()
+            drawCtx.strokeStyle = "gray"
+            drawCtx.setLineDash([5, 5])
+            drawCtx.lineWidth = 1
+            drawCtx.strokeRect(bounds.left, bounds.top, Rect.width(bounds), Rect.height(bounds))
+            drawCtx.restore()
         }
     }
 
     onMouseUp(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
-        // nothing special happens on release
+        if (this.state === null) {
+            return
+        }
+        let bounds = Rect.fromPoints([this.state.startPos, vec(mouseX, mouseY)])
+        this.createWindow(bounds)
     }
 }
 //#endregion
@@ -463,15 +471,16 @@ function askNodeLabel(node: Node): void {
     }
 }
 
-function createTestWindow(bounds: Rect) {
+function createBoxWindow(bounds: Rect) {
     let window: WindowState = {
-        kind: "test",
+        kind: "box",
         bounds,
         resizing: {
             minWidth: 150,
             minHeight: 50,
         }
     }
+    satisfyMinBounds(window)
     putNewWindow(globalState, window)
     return window
 }
@@ -486,7 +495,7 @@ toolButton("tool_build", buildInteraction)
 toolButton("tool_arrow", arrowInteraction)
 toolButton("tool_label", labelInteraction)
 
-toolButton("tool_testwindow", () => new SpanWindowTool(createTestWindow))
+toolButton("tool_boxwindow", () => new SpanWindowTool(createBoxWindow))
 
 undoButton.addEventListener("click", () => {
     const last = history.undo(globalState)
