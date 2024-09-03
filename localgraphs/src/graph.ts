@@ -52,11 +52,30 @@ export function createEdge<T>(graph: Graph<T>, a: GraphNode<T>, b: GraphNode<T>,
     return edge
 }
 
-export function clearEdges<T>(graph: Graph<T>) {
+export function clearAllEdges<T>(graph: Graph<T>) {
     for (let node of graph.nodes) {
         node.neighbors.clear()
     }
     graph.edges = []
+}
+
+export function clearNeighbors<T>(graph: Graph<T>, node: GraphNode<T>) {
+    for (let neighbor of node.neighbors) {
+        neighbor.neighbors.delete(node)
+    }
+    node.neighbors.clear()
+    graph.edges = graph.edges.filter(e => e.a !== node && e.b !== node)
+}
+
+export function deleteEdge<T>(graph: Graph<T>, a: GraphNode<T>, b: GraphNode<T>) {
+    graph.edges = graph.edges.filter(e => !(e.a === a && e.b === b) && !(e.a === b && e.b === a))
+    a.neighbors.delete(b)
+    b.neighbors.delete(a)
+}
+
+export function deleteNode<T>(graph: Graph<T>, node: GraphNode<T>) {
+    clearNeighbors(graph, node)
+    graph.nodes = graph.nodes.filter(n => n !== node)
 }
 
 // copies the given nodes with data transformed by mapping and the edges between them to targetGraph

@@ -15,10 +15,14 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
     constructor(private buildNode: (graph: Graph<T>, x: number, y: number) => GraphNode<T>, private buildEdge: (graph: Graph<T>, a: GraphNode<T>, b: GraphNode<T>) => unknown) {
     }
 
+    findNode(x: number, y: number, visible: Iterable<GraphNode<T>>): GraphNode<T> | null {
+        return findClosestNode(x, y, visible)
+    }
+
     onMouseDown(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number): void {
         this.startX = mouseX
         this.startY = mouseY
-        this.startNode = findClosestNode(mouseX, mouseY, visible)
+        this.startNode = this.findNode(mouseX, mouseY, visible)
         this.hasMoved = false
     }
     checkHasMoved(mouseX: number, mouseY: number): boolean {
@@ -43,7 +47,7 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
             drawCtx.strokeStyle = "black"
             drawCtx.lineWidth = 1
             drawCtx.beginPath()
-            let endNode = findClosestNode(mouseX, mouseY, visible)
+            let endNode = this.findNode(mouseX, mouseY, visible)
             if (endNode !== null && !this.shouldCreateEndpoint(mouseX, mouseY, endNode)) {
                 drawCtx.moveTo(endNode.x, endNode.y)
                 drawCtx.quadraticCurveTo(mouseX, mouseY, this.startNode.x, this.startNode.y)
@@ -61,7 +65,7 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
     }
     onMouseUp(graph: Graph<T>, visible: Iterable<GraphNode<T>>, endX: number, endY: number): void {
         if (this.startNode !== null && this.hasMoved) {
-            let endNode = findClosestNode(endX, endY, visible)
+            let endNode = this.findNode(endX, endY, visible)
             if (endNode === null || this.shouldCreateEndpoint(endX, endY, endNode)) {
                 endNode = this.buildNode(graph, endX, endY)
             }

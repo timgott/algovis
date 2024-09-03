@@ -119,18 +119,25 @@ function applyLayoutForces<T>(
     }
 }
 
-export class GraphLayoutPhysics implements LayoutPhysics<unknown> {
-    constructor(private layoutStyle: LayoutConfig) {}
+export class GraphLayoutPhysics<T> implements LayoutPhysics<T> {
+    constructor(
+        private layoutStyle: LayoutConfig,
+        private customForces: ((dt: number, graph: Graph<T>, w: number, h: number) => unknown)[] = []
+    ) {}
     step(
-        graph: Graph<unknown>,
+        graph: Graph<T>,
         width: number,
         height: number,
         dt: number,
     ) {
         let activeNodes = findActiveNodes(graph, this.layoutStyle.sleepVelocity)
+
+        for (let custom of this.customForces) {
+            custom(dt, graph, width, height);
+        }
+
         applyVelocityStep(graph.nodes, this.layoutStyle.dampening, dt)
         applyLayoutForces(graph, this.layoutStyle, activeNodes, width, height, dt)
-
         // count at the end again, in case nodes started moving this step
         let activeNodesCount = activeNodes.size;
         activeNodesCount += findActiveNodes(graph, this.layoutStyle.sleepVelocity).size;

@@ -3,9 +3,11 @@ import { ensured } from "../../../shared/utils";
 import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "./controller";
 
 function drawWindowFrame(ctx: CanvasRenderingContext2D, window: WindowBounds, titleArea: Rect) {
+    ctx.save()
     const cornerRadius = 4
-    ctx.strokeStyle = "darkblue";
-    ctx.fillStyle = `rgba(200, 220, 255, 0.6)`;
+    ctx.strokeStyle = window.borderColor;
+    //ctx.fillStyle = `rgba(200, 220, 255, 0.6)`;
+    ctx.fillStyle = `color-mix(in srgb, ${window.borderColor} 10%, rgba(255, 255, 255, 0.8))`;
     ctx.lineWidth = 1;
     ctx.beginPath()
     ctx.roundRect(window.bounds.left, titleArea.top, Rect.width(window.bounds), Rect.height(titleArea), [cornerRadius, cornerRadius, 0, 0]);
@@ -27,15 +29,18 @@ function drawWindowFrame(ctx: CanvasRenderingContext2D, window: WindowBounds, ti
         }
         ctx.stroke();
     }
+    ctx.restore()
 }
 
-export function drawWindowTitle(ctx: CanvasRenderingContext2D, titleBounds: Rect, title: string): number {
-    ctx.fillStyle = "darkblue";
+export function drawWindowTitle(ctx: CanvasRenderingContext2D, titleBounds: Rect, title: string, color: string): number {
+    ctx.save()
+    ctx.fillStyle = color;
     ctx.font = "15px monospace";
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
     const left = titleBounds.left + 12
     ctx.fillText(title, left, titleBounds.top + Rect.height(titleBounds) / 2);
+    ctx.restore()
     const measured = ctx.measureText(title);
     return left + measured.width
 }
@@ -49,6 +54,7 @@ export type WindowBounds = {
         minWidth: number,
         minHeight: number,
     } | false
+    borderColor: string
 }
 
 export function satisfyMinBounds(window: WindowBounds) {

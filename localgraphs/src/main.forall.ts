@@ -2,12 +2,12 @@
 import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, distanceToPointSqr, findClosestNode, moveSlightly } from "./interaction/graphsim.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
 import { AnimationFrame, InteractionController, UiStack } from "./interaction/controller.js";
-import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode } from "./graph.js";
-import { assert, hasStaticType } from "../../shared/utils.js";
+import { Graph, GraphEdge, GraphNode, clearAllEdges, clearNeighbors, createEdge, createEmptyGraph, createNode, deleteNode } from "./graph.js";
+import { assert, hasStaticType, unreachable } from "../../shared/utils.js";
 import { UndoHistory } from "./interaction/undo.js";
 import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction } from "./interaction/tools.js";
 import { computeDistances } from "./graphalgos.js";
-import { normalize, vec, vecadd, vecdir, vecscale, vecsub, Vector } from "../../shared/vector.js";
+import { normalize, Positioned, vec, vecadd, vecdir, vecscale, vecset, vecsub, Vector } from "../../shared/vector.js";
 import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
 import { drawWindowTitle, WindowBounds as BoundedWindow, WindowController, satisfyMinBounds } from "./interaction/windows.js";
 import { Rect } from "../../shared/rectangle.js";
@@ -29,15 +29,18 @@ const layoutStyle: LayoutConfig = {
     pushDistance: 50,
     minEdgeLength: 50,
     pushForce: 50.0,
-    edgeForce: 100.0,
+    edgeForce: 200.0,
     centeringForce: 0.0,
     dampening: 5.0,
-    sleepVelocity: 0.5,
+    sleepVelocity: 2.0,
 }
 hasStaticType<LayoutConfig>(layoutStyle)
 
 const windowPushForce = 2000.0
-const windowPushMargin = 200.0
+const windowPushMargin = 0.1
+const windowPushMarginConst = 30
+
+const varnodeRadius = layoutStyle.nodeRadius * 2
 
 //#endregion
 
@@ -55,15 +58,19 @@ type NormalNodeData = BaseNodeData & {
 type VariableNodeData = BaseNodeData & {
     kind: "variable"
     name: string
+    connectors: Node[]
 }
 
 type NodeData = NormalNodeData | VariableNodeData
 type MainGraph = Graph<NodeData>
 type Node = GraphNode<NodeData>
 
-type WindowState = BoundedWindow & {
-    kind: "box"
-}
+type WindowState = BoundedWindow & ({
+    kind: "box" | "output" | "either"
+} | {
+    kind: "forall"
+    bindings: string[]
+})
 
 // Everything that can be undone, possibly derived data to save recomputation
 type State = {
@@ -91,12 +98,84 @@ function putNewNode(graph: MainGraph, x: number, y: number): Node {
     return node
 }
 
-function putNewWindow(state: State, window: WindowState) {
+function putNewWindow(state: State, window: WindowState): WindowState {
     pushUndoPoint()
+    satisfyMinBounds(window)
     state.windows.push(window)
+    return window
 }
 //#endregion
 
+function isNormalNode(node: Node): node is GraphNode<NormalNodeData> {
+    return node.data.kind === "normal"
+}
+
+function isVarNode(node: Node): node is GraphNode<VariableNodeData> {
+    return node.data.kind === "variable"
+}
+
+function createConnector(graph: MainGraph, varnode: GraphNode<VariableNodeData>): Node {
+    let connector = putNewNode(graph, varnode.x, varnode.y)
+    varnode.data.connectors.push(connector)
+    placeConnectors(varnode, 0)
+    return connector
+}
+
+function makeEdgeOrConnector(graph: Graph<NodeData>, a: Node, b: Node): GraphEdge<NodeData> {
+    if (isVarNode(a)) {
+        a = createConnector(graph, a)
+    }
+    if (isVarNode(b)) {
+        b = createConnector(graph, b)
+    }
+    return createEdge(graph, a, b)
+}
+
+function placeConnectors(varnode: GraphNode<VariableNodeData>, dt: number) {
+    // place all connectors in circle around varnode
+    let center = vec(0, 0);
+    for (let connector of varnode.data.connectors) {
+        center.x += connector.x
+        center.y += connector.y
+    }
+    let n = varnode.data.connectors.length
+    let r = varnodeRadius+layoutStyle.nodeRadius
+    let vel = vec(0, 0)
+    let averagevel = vec(varnode.vx, varnode.vy)
+    for (let i = 0; i < n; i++) {
+        let angle = i / n * 2 * Math.PI
+        let targetPos = vecadd(varnode, Vector.fromAngle(angle, r))
+        let connector = varnode.data.connectors[i]
+        averagevel = vecadd(averagevel, vec(connector.vx, connector.vy))
+        connector.vx = 0
+        connector.vy = 0
+        if (dt == 0) {
+            vecset(connector, targetPos)
+        } else {
+            let deltav = vecscale(1 / dt, vecsub(targetPos, connector))
+            connector.vx += deltav.x * 2
+            connector.vy += deltav.y * 2
+            vel = vecsub(vel, deltav)
+        }
+    }
+    vel = vecadd(vel, vecscale(1 / (n+1), averagevel))
+    varnode.vx = vel.x
+    varnode.vy = vel.y
+    for (let connector of varnode.data.connectors) {
+        connector.vx += vel.x
+        connector.vy += vel.y
+        //connector.x += vel.x * dt
+        //connector.y += vel.y * dt
+    }
+}
+
+function applyCustomPhysics(dt: number, graph: MainGraph) {
+    for (let node of graph.nodes) {
+        if (isVarNode(node)) {
+            placeConnectors(node, dt)
+        }
+    }
+}
 
 function isPinned(n: GraphNode<NodeData>) {
     return n.data.kind === "normal" && n.data.pin;
@@ -145,11 +224,17 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
     constructor(private nodeRadius: number) {}
 
     public drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<NodeData>) {
+        ctx.save()
         const pinLevel = computePinLevel(graph.nodes, localityInput.valueAsNumber)
 
         // nodes
         for (let node of graph.nodes) {
-            this.drawNode(ctx, node, pinLevel.get(node)!)
+            let data = node.data
+            if (data.kind === "normal") {
+                this.drawNormalNode(ctx, node, pinLevel.get(node)!)
+            } else {
+                this.drawVariableNode(ctx, node, data)
+            }
         }
         // edges
         for (let edge of graph.edges) {
@@ -164,6 +249,8 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
                 this.drawEdge(ctx, edge, free)
             }
         }
+
+        ctx.restore()
     }
 
     private calcLineWidth(node: Node): number {
@@ -174,10 +261,29 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         return this.nodeRadius + (isPinned(node)? this.calcLineWidth(node)*2 : 0)
     }
 
-    protected drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>, level: number) {
+    protected drawVariableNode(ctx: CanvasRenderingContext2D, node: GraphNode<unknown>, data: VariableNodeData) {
+        // gray circle with variable name in center
+        const radius = this.nodeRadius * 2
+        ctx.fillStyle = "white"
+        ctx.strokeStyle = "black"
+        ctx.lineWidth = this.strokeWidth
+        ctx.circle(node.x, node.y, radius)
+        ctx.fill()
+        ctx.stroke()
+        // label
+        ctx.fillStyle = "black"
+        ctx.textAlign = "center"
+        ctx.textBaseline = "middle"
+        const fontWeight = "bold"
+        const fontSize = this.nodeRadius * 1.5
+        ctx.font = `${fontWeight} ${fontSize}px sans-serif`
+        ctx.fillText(data.name, node.x, node.y)
+    }
+
+    protected drawNormalNode(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>, level: number) {
         const pinned = isPinned(node)
         const free = level === 0
-        const hasHint = node.data.annotation.length > 0 && !pinned
+        const hasHint = node.data.annotation.length > 0
         const blackV = 0
         const whiteV = 255
         const black = `rgba(${blackV}, ${blackV}, ${blackV}, 1)`
@@ -216,23 +322,9 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         }
         ctx.globalAlpha = 1
 
-        if (pinned) {
-            ctx.fillStyle = black
-            this.drawLabel(ctx, node)
-        } else if (hasHint) {
+        if (hasHint) {
             this.drawHint(ctx, node)
         }
-    }
-
-    protected drawLabel(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>) {
-        // label
-        ctx.textAlign = "center"
-        ctx.textBaseline = "middle"
-        const fontWeight = "normal"
-        const fontSize = this.nodeRadius * 1.5
-        ctx.font = `${fontWeight} ${fontSize}px sans-serif`
-        let label = node.data.annotation
-        ctx.fillText(label, node.x, node.y)
     }
 
     protected drawHint(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>) {
@@ -292,27 +384,35 @@ function clearArrow(node: GraphNode<NormalNodeData>) {
 
 /* #endregion */
 
+function getWindowTitle(window: WindowState): string {
+    switch (window.kind) {
+        case "box": return "Box"
+        case "output": return "Output"
+        case "forall": return `Forall(${window.bindings.join(", ")})`
+        case "either": return "Either"
+        default: unreachable(window)
+    }
+}
+
 function animateWindowContent(frame: AnimationFrame, window: WindowState, titleArea: Rect) {
     let graph = globalState.graph
-    if (window.kind === "box") {
-        drawWindowTitle(frame.ctx, titleArea, "Box")
-        let center = Rect.center(window.bounds)
-        for (let node of graph.nodes) {
-            if (Rect.contains(window.bounds, node.x, node.y)) {
-                // push away from borders
-                let margin = windowPushMargin
-                let power = 3
+    drawWindowTitle(frame.ctx, titleArea, getWindowTitle(window), window.borderColor)
+    // todo: move to custom physics
+    for (let node of graph.nodes) {
+        if (Rect.contains(window.bounds, node.x, node.y)) {
+            // push away from borders
+            let marginX = Rect.width(window.bounds) * windowPushMargin + windowPushMarginConst
+            let marginY = Rect.height(window.bounds) * windowPushMargin + windowPushMarginConst
+            let power = 3
 
-                let left = Math.pow(Math.max(margin - (node.x - window.bounds.left), 0) / margin, power)
-                let right = Math.pow(Math.max(margin - (window.bounds.right - node.x), 0) / margin, power)
-                let top = Math.pow(Math.max(margin - (node.y - window.bounds.top), 0) / margin, power)
-                let bottom = Math.pow(Math.max(margin - (window.bounds.bottom - node.y), 0) / margin, power)
+            let left = Math.pow(Math.max(marginX - (node.x - window.bounds.left), 0) / marginX, power)
+            let right = Math.pow(Math.max(marginX - (window.bounds.right - node.x), 0) / marginX, power)
+            let top = Math.pow(Math.max(marginY - (node.y - window.bounds.top), 0) / marginY, power)
+            let bottom = Math.pow(Math.max(marginY - (window.bounds.bottom - node.y), 0) / marginY, power)
 
-                let force = vecscale(windowPushForce, vec(left - right, top - bottom))
-                node.vx += force.x * frame.dt
-                node.vy += force.y * frame.dt
-
-            }
+            let force = vecscale(windowPushForce, vec(left - right, top - bottom))
+            node.vx += force.x * frame.dt
+            node.vy += force.y * frame.dt
         }
     }
 }
@@ -411,7 +511,7 @@ class SpanWindowTool implements GraphInteraction<NodeData> {
     } | null = null
 
     constructor(
-        private createWindow: (bounds: Rect) => WindowState,
+        private createWindow: (bounds: Rect) => unknown,
     ) {
     }
 
@@ -430,6 +530,7 @@ class SpanWindowTool implements GraphInteraction<NodeData> {
             drawCtx.strokeStyle = "gray"
             drawCtx.setLineDash([5, 5])
             drawCtx.lineWidth = 1
+            drawCtx.beginPath()
             drawCtx.strokeRect(bounds.left, bounds.top, Rect.width(bounds), Rect.height(bounds))
             drawCtx.restore()
         }
@@ -471,21 +572,79 @@ function askNodeLabel(node: Node): void {
     }
 }
 
-function createBoxWindow(bounds: Rect) {
+function createSimpleWindow(bounds: Rect, kind: "box" | "output" | "either", color: string): WindowState {
     let window: WindowState = {
-        kind: "box",
+        kind,
+        bounds,
+        borderColor: color,
+        resizing: {
+            minWidth: 50,
+            minHeight: 30,
+        }
+    }
+    return putNewWindow(globalState, window)
+}
+
+function createBoxWindow(bounds: Rect): WindowState {
+    return createSimpleWindow(bounds, "box", "darkblue")
+}
+
+function createOutputWindow(bounds: Rect): WindowState {
+    return createSimpleWindow(bounds, "output", "darkgreen")
+}
+
+function createEitherWindow(bounds: Rect): WindowState {
+    return createSimpleWindow(bounds, "either", "black")
+}
+
+function createForallWindow(bounds: Rect): void {
+    let bindings = prompt("Parameter names split by comma")?.split(",")?.map(s => s.trim()) ?? []
+    if (bindings.length === 0) {
+        return
+    }
+    let window: WindowState = {
+        kind: "forall",
+        borderColor: "purple",
         bounds,
         resizing: {
             minWidth: 150,
             minHeight: 50,
-        }
+        },
+        bindings: bindings
     }
-    satisfyMinBounds(window)
     putNewWindow(globalState, window)
-    return window
 }
 
-const buildInteraction = () => new BuildGraphInteraction<NodeData>(makeUndoable(putNewNode), makeUndoable(createEdge))
+function ourDeleteNode(node: Node) {
+    deleteNode(globalState.graph, node)
+}
+
+function toggleNodeVariable(node: GraphNode<NodeData>) {
+    if (node.data.kind === "normal") {
+        let variableName = prompt("Variable name")
+        if (variableName == null) {
+            return
+        }
+        clearNeighbors(globalState.graph, node)
+        node.data = {
+            kind: "variable",
+            name: variableName,
+            annotation: node.data.annotation,
+            connectors: []
+        }
+    } else {
+        for (let connector of node.data.connectors) {
+            ourDeleteNode(connector)
+        }
+        node.data = {
+            kind: "normal",
+            pin: null,
+            annotation: node.data.annotation
+        }
+    }
+}
+
+const buildInteraction = () => new BuildGraphInteraction<NodeData>(makeUndoable(putNewNode), makeUndoable(makeEdgeOrConnector))
 const arrowInteraction = () => new ArrowTool(pushUndoPoint)
 const labelInteraction = () => new ClickNodeInteraction<NodeData>(makeUndoable(askNodeLabel))
 
@@ -495,7 +654,12 @@ toolButton("tool_build", buildInteraction)
 toolButton("tool_arrow", arrowInteraction)
 toolButton("tool_label", labelInteraction)
 
-toolButton("tool_boxwindow", () => new SpanWindowTool(createBoxWindow))
+toolButton("tool_box", () => new SpanWindowTool(createBoxWindow))
+toolButton("tool_outputbox", () => new SpanWindowTool(createOutputWindow))
+toolButton("tool_eitherbox", () => new SpanWindowTool(createEitherWindow))
+toolButton("tool_forallbox", () => new SpanWindowTool(createForallWindow))
+
+toolButton("tool_varnode", () => new ClickNodeInteraction(makeUndoable(toggleNodeVariable)))
 
 undoButton.addEventListener("click", () => {
     const last = history.undo(globalState)
@@ -529,7 +693,7 @@ function replaceGlobalState(newState: State) {
 const history = new UndoHistory<State>()
 let globalState = makeInitialState()
 
-const layoutPhysics = new GraphLayoutPhysics(layoutStyle)
+const layoutPhysics = new GraphLayoutPhysics(layoutStyle, [applyCustomPhysics])
 const globalSim = new GraphPhysicsSimulator<NodeData>(globalState.graph, layoutPhysics, new OurGraphPainter(layoutStyle.nodeRadius))
 globalSim.setInteractionMode(buildInteraction)
 

@@ -48,3 +48,8 @@ export const Vector = {
 export function distance(a: Positioned, b: Positioned): number {
     return Math.hypot(a.x - b.x, a.y - b.y);
 }
+
+export function vecset(v: Positioned, to: Vector) {
+    v.x = to.x;
+    v.y = to.y;
+}

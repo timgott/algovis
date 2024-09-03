@@ -42,6 +42,8 @@ export function moveSlightly(node: GraphNode<unknown>, strength: number = 3) {
     // prevents nodes on same position and wakes them from sleep
     node.vx += (Math.random()*2.-1.) * strength
     node.vy += (Math.random()*2.-1.) * strength
+    node.x += node.vx * 0.2
+    node.y += node.vy * 0.2
 }
 
 export function dragNodes(nodes: Iterable<GraphNode<unknown>>, dx: number, dy: number, deltaTime: number) {
