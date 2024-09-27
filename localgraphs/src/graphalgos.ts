@@ -56,7 +56,7 @@ export function bfsFold<S, T>(
 export function bfsSimple<S>(
   start: S | S[],
   callback: (node: S) => Iterable<S> | SearchState.Terminate
-) {
+): void {
     if (!Array.isArray(start)) {
         start = [start]
     }

@@ -2,11 +2,11 @@
 import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, distanceToPointSqr, findClosestNode, moveSlightly } from "./interaction/graphsim.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
 import { AnimationFrame, InteractionController, UiStack } from "./interaction/controller.js";
-import { Graph, GraphEdge, GraphNode, clearAllEdges, clearNeighbors, createEdge, createEmptyGraph, createNode, deleteNode } from "./graph.js";
-import { assert, hasStaticType, unreachable } from "../../shared/utils.js";
+import { Graph, GraphEdge, GraphNode, clearAllEdges, clearNeighbors, copySubgraphTo, createEdge, createEmptyGraph, createNode, deleteNode } from "./graph.js";
+import { assert, ensured, hasStaticType, unreachable } from "../../shared/utils.js";
 import { UndoHistory } from "./interaction/undo.js";
 import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction } from "./interaction/tools.js";
-import { computeDistances } from "./graphalgos.js";
+import { bfsSimple, computeDistances } from "./graphalgos.js";
 import { normalize, Positioned, vec, vecadd, vecdir, vecscale, vecset, vecsub, Vector } from "../../shared/vector.js";
 import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
 import { drawWindowTitle, WindowBounds as BoundedWindow, WindowController, satisfyMinBounds } from "./interaction/windows.js";
@@ -25,7 +25,7 @@ const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
 
 //#region Layout Config
 const layoutStyle: LayoutConfig = {
-    nodeRadius: 10,
+    nodeRadius: 5,
     pushDistance: 50,
     minEdgeLength: 50,
     pushForce: 50.0,
@@ -180,6 +180,75 @@ function applyCustomPhysics(dt: number, graph: MainGraph) {
 function isPinned(n: GraphNode<NodeData>) {
     return n.data.kind === "normal" && n.data.pin;
 }
+
+//#region Rotation Symmetry
+
+// copy connected component 3x around node
+function rotationSymmetrize(count: number, center: Node, graph: Graph<NodeData>) {
+    if (center.neighbors.size !== 1) {
+        console.warn("Mirrored node must have exactly one neighbor")
+        return
+    }
+
+    let [neighbor] = center.neighbors
+
+    // find connected component
+    let otherNodes: Node[] = []
+    bfsSimple(neighbor, n => {
+        if (n === center) return [];
+        otherNodes.push(n)
+        return n.neighbors
+    })
+
+    // make new copies so that we have the subgraph count times
+    let maps: Map<Node, Node>[] = [];
+    for (let i=1; i<count; i++) {
+        maps.push(copySubgraphTo(otherNodes, graph))
+    }
+
+    // fix labels and variable connectors
+    for (let map of maps) {
+        function mapNode(n: Node) {
+            return n === center ? center : ensured(map.get(n))
+        }
+        for (let [n, m] of map) {
+            if (isNormalNode(n) && n.data.pin) {
+                let label = n.data.pin.label
+                m.data = {
+                    ...n.data,
+                    pin: { label: mapNode(label) }
+                }
+            } else if (isVarNode(n)) {
+                m.data = {
+                    ...n.data,
+                    connectors: n.data.connectors.map(mapNode)
+                }
+            }
+        }
+    }
+
+    // rotate the copies around center
+    for (let i=1; i<count; i++) {
+        let map = maps[i-1]
+        for (let [_, node] of map) {
+            vecset(node, Vector.rotate(node, i * 2 * Math.PI / count, center))
+            moveSlightly(node)
+        }
+    }
+
+    // connect to center
+    for (let map of maps) {
+        createEdge(graph, center, map.get(neighbor)!)
+    }
+
+    // clear center label
+    if (isNormalNode(center)) {
+        clearArrow(center)
+    }
+}
+
+//#endregion
+
 
 //#region Renderer
 
@@ -495,8 +564,8 @@ class ArrowTool implements GraphInteraction<NodeData> {
         if (state !== null) {
             const startNode = state.startNode
             const endNode = this.findEndNode(mouseX, mouseY, startNode)
+            this.pushUndoPoint(graph)
             if (endNode !== null) {
-                this.pushUndoPoint(graph)
                 setArrow(startNode, endNode)
             } else {
                 clearArrow(startNode)
@@ -616,6 +685,14 @@ function createForallWindow(bounds: Rect): void {
 }
 
 function ourDeleteNode(node: Node) {
+    for (let neighbor of node.neighbors) {
+        if (isNormalNode(neighbor) && neighbor.data.pin?.label === node) {
+            clearArrow(neighbor)
+        }
+        if (isVarNode(neighbor)) {
+            neighbor.data.connectors = neighbor.data.connectors.filter(c => c !== node)
+        }
+    }
     deleteNode(globalState.graph, node)
 }
 
@@ -660,6 +737,10 @@ toolButton("tool_eitherbox", () => new SpanWindowTool(createEitherWindow))
 toolButton("tool_forallbox", () => new SpanWindowTool(createForallWindow))
 
 toolButton("tool_varnode", () => new ClickNodeInteraction(makeUndoable(toggleNodeVariable)))
+
+toolButton("tool_symmetrize", () => new ClickNodeInteraction(makeUndoable((n,g) => rotationSymmetrize(3, n, g))))
+toolButton("tool_symmetrize2", () => new ClickNodeInteraction(makeUndoable((n,g) => rotationSymmetrize(2, n, g))))
+toolButton("tool_delete", () => new ClickNodeInteraction(makeUndoable(ourDeleteNode)))
 
 undoButton.addEventListener("click", () => {
     const last = history.undo(globalState)

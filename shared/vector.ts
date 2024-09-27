@@ -42,6 +42,16 @@ export const Vector = {
     Zero: { x: 0, y: 0 },
     fromAngle(angle: number, length: number = 1) {
         return Vector.new(length * Math.sin(angle), length * -Math.cos(angle));
+    },
+    rotate(point: Positioned, angle: number, around: Positioned): Positioned {
+        let dx = point.x - around.x;
+        let dy = point.y - around.y;
+        let cos = Math.cos(angle);
+        let sin = Math.sin(angle);
+        return {
+            x: around.x + dx * cos - dy * sin,
+            y: around.y + dx * sin + dy * cos,
+        };
     }
 }
 
