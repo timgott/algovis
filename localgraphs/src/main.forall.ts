@@ -184,7 +184,7 @@ function isPinned(n: GraphNode<NodeData>) {
 //#region Rotation Symmetry
 
 // copy connected component 3x around node
-function rotationSymmetrize(count: number, center: Node, graph: Graph<NodeData>) {
+function rotationSymmetrize(count: number, locality: number, center: Node, graph: Graph<NodeData>) {
     if (center.neighbors.size !== 1) {
         console.warn("Mirrored node must have exactly one neighbor")
         return
@@ -194,10 +194,17 @@ function rotationSymmetrize(count: number, center: Node, graph: Graph<NodeData>)
 
     // find connected component
     let otherNodes: Node[] = []
+    let pinLevels = computePinLevel(graph.nodes, locality)
     bfsSimple(neighbor, n => {
         if (n === center) return [];
         otherNodes.push(n)
-        return n.neighbors
+        let next = []
+        for (let neighbor of n.neighbors) {
+            if (pinLevels.get(neighbor)! > 1 || pinLevels.get(n)! > 1){
+                next.push(neighbor)
+            }
+        }
+        return next
     })
 
     // make new copies so that we have the subgraph count times
@@ -738,8 +745,10 @@ toolButton("tool_forallbox", () => new SpanWindowTool(createForallWindow))
 
 toolButton("tool_varnode", () => new ClickNodeInteraction(makeUndoable(toggleNodeVariable)))
 
-toolButton("tool_symmetrize", () => new ClickNodeInteraction(makeUndoable((n,g) => rotationSymmetrize(3, n, g))))
-toolButton("tool_symmetrize2", () => new ClickNodeInteraction(makeUndoable((n,g) => rotationSymmetrize(2, n, g))))
+toolButton("tool_symmetrize", () => new ClickNodeInteraction(
+    makeUndoable((n,g) => rotationSymmetrize(3, localityInput.valueAsNumber, n, g))))
+toolButton("tool_symmetrize2", () => new ClickNodeInteraction(
+    makeUndoable((n,g) => rotationSymmetrize(2, localityInput.valueAsNumber, n, g))))
 toolButton("tool_delete", () => new ClickNodeInteraction(makeUndoable(ourDeleteNode)))
 
 undoButton.addEventListener("click", () => {
