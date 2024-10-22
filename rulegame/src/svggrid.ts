@@ -141,13 +141,10 @@ export class ColoredGridSvg {
     }
 }
 
-export function renderColoredGrid(svg: ColoredGridSvg, grid: PartialGrid<number>, colors: string[]) {
-    grid.forEach((i, j, nodeColor) => {
-        if (nodeColor !== null && nodeColor > 0) {
-            let c = colors[nodeColor - 1] ?? "white"
-            let text = (nodeColor).toString()
-            svg.cellColor(i, j, c)
-            //svg.cellLabel(i, j, text)
+export function renderColoredGrid(svg: ColoredGridSvg, colorGrid: PartialGrid<string | null>) {
+    colorGrid.forEach((i, j, color) => {
+        if (color !== null) {
+            svg.cellColor(i, j, color)
             svg.cellBorder(i, j, "#121")
         } else {
             svg.clearCell(i, j)

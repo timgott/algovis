@@ -1,22 +1,23 @@
-import { makeFoxInitialBoard, makeFoxRules, makeGeeseRules } from "./foxgame";
+import { makeFoxGame, Stone } from "./games";
 import { IHumanPlayInterface, IBoardUserInterface, runGame, HumanPlayer } from "./metagame";
 import { PartialGrid } from "./partialgrid";
 import { ColoredGridSvg, highlightGrid, renderColoredGrid } from "./svggrid";
 
-class BoardUi implements IBoardUserInterface<number> {
-    constructor(private svgGrid: ColoredGridSvg, private stoneColors: string[]) {
+class BoardUi implements IBoardUserInterface<Stone> {
+    constructor(private svgGrid: ColoredGridSvg, private stoneColors: {[key: Stone]: string}) {
     }
 
-    drawBoard(board: PartialGrid<number>): void {
-        renderColoredGrid(this.svgGrid, board, this.stoneColors)
+    drawBoard(board: PartialGrid<Stone>): void {
+        const colorGrid = board.map(stone => stone === "_" ? null : this.stoneColors[stone] ?? "magenta")
+        renderColoredGrid(this.svgGrid, colorGrid)
     }
 }
 
-class SelectionUi implements IHumanPlayInterface<number> {
+class SelectionUi implements IHumanPlayInterface<Stone> {
     constructor(private svgGrid: ColoredGridSvg, private playerColor: string) {
     }
 
-    selectCell(board: PartialGrid<number>, selectable: PartialGrid<boolean>, path: [number, number][]): Promise<[number, number]> {
+    selectCell(board: PartialGrid<Stone>, selectable: PartialGrid<boolean>, path: [number, number][]): Promise<[number, number]> {
         highlightGrid(this.svgGrid, selectable, this.playerColor)
         return new Promise((resolve, reject) => {
             this.svgGrid.onClick = (i, j) => {
@@ -30,15 +31,17 @@ class SelectionUi implements IHumanPlayInterface<number> {
 }
 
 function main() {
-    let initialBoard = makeFoxInitialBoard()
+    let game = makeFoxGame()
     let svgRoot = document.getElementById("grid_root")!
-    let svg = new ColoredGridSvg(svgRoot, initialBoard.rows, initialBoard.columns, 30)
-    let stoneColors = ["lightgreen", "red"]
-    let ui = new BoardUi(svg, stoneColors)
+    let svg = new ColoredGridSvg(svgRoot, game.initialBoard.rows, game.initialBoard.columns, 30)
+    let ui = new BoardUi(svg, game.stones)
 
-    let player1 = new HumanPlayer("fox", new SelectionUi(svg, "red"), makeFoxRules())
-    let player2 = new HumanPlayer("geese", new SelectionUi(svg, "green"), makeGeeseRules())
-    runGame(initialBoard, ui, [player1, player2])
+    let players = game.players.map(
+        ({name, color, rules}) => {
+            return new HumanPlayer(name, new SelectionUi(svg, color), rules)
+        }
+    )
+    runGame(game.initialBoard, ui, players)
 }
 
 main()

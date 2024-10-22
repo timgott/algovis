@@ -14,9 +14,9 @@ interface State<S, L> {
     apply(location: L, rule: Rule<S>): unknown;
 }
 
-type GridPos = [number, number]
+export type GridPos = [number, number]
 
-type GridRule<T> = Rule<PartialGrid<T>>
+export type GridRule<T> = Rule<PartialGrid<T>>
 
 type RuleMatch<T> = {
     offset: GridPos
@@ -163,7 +163,7 @@ export class HumanPlayer<T> implements IPlayer<T> {
         do {
             console.log("Player", this.name, "chooses move.")
             let changeGrid = makeChangeGrid(board, matches)
-            changeGrid = filterToCanonicalCell(matches, changeGrid)
+            //changeGrid = filterToCanonicalCell(matches, changeGrid)
             let selectable = changeGrid.map((set) => set.size > 0 && (set.size < matches.length || matches.length === 1))
             let pos = await this.ui.selectCell(board, selectable, [])
             let newMatches = Array.from(changeGrid.get(...pos)!)
