@@ -123,4 +123,14 @@ export class PartialGrid<T> {
         })
         return count
     }
+
+    differenceTo(other: PartialGrid<T>): PartialGrid<T> {
+        let result: PartialGrid<T> = PartialGrid.emptyLike(this)
+        this.forNonEmpty((i, j, value) => {
+            if (other.get(i, j) !== value) {
+                result.put(i, j, value)
+            }
+        })
+        return result
+    }
 }

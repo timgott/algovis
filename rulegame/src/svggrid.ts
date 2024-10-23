@@ -161,3 +161,9 @@ export function highlightGrid(svg: ColoredGridSvg, highlight: PartialGrid<boolea
         }
     })
 }
+
+export function clearGridHighlight(svg: ColoredGridSvg, highlight: PartialGrid<unknown>) {
+    highlight.forEach((i, j, value) => {
+        svg.clearBackgroundCell(i, j)
+    })
+}

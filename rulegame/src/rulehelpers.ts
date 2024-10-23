@@ -7,7 +7,7 @@ export function ruleRotations<T>(rule: Rule<PartialGrid<T>>): Rule<PartialGrid<T
         result.push(rule)
         rule = {
             pattern: rule.pattern.rotate(),
-            update: rule.update.rotate()
+            after: rule.after.rotate()
         }
     }
     return result
@@ -16,7 +16,7 @@ export function ruleRotations<T>(rule: Rule<PartialGrid<T>>): Rule<PartialGrid<T
 export function make2dRule<T>(before: T[], after: T[]): Rule<PartialGrid<T>>[] {
     return ruleRotations({
         pattern: PartialGrid.fromArray([before]),
-        update: PartialGrid.fromArray([after]),
+        after: PartialGrid.fromArray([after]),
     })
 }
 
@@ -31,7 +31,7 @@ function makeDiagonalGrid<T>(diagonal: T[]): PartialGrid<T> {
 export function makeDiagonalRule<T>(before: T[], after: T[]): Rule<PartialGrid<T>>[] {
     return ruleRotations({
         pattern: makeDiagonalGrid(before),
-        update: makeDiagonalGrid(after),
+        after: makeDiagonalGrid(after),
     })
 }
 
@@ -50,8 +50,10 @@ export function makeCharGrid(strings: string[]): PartialGrid<string> {
 }
 
 export function makeCharRule(before: string[], after: string[]): Rule<PartialGrid<string>> {
+    const pattern = makeCharGrid(before)
+    const delta = makeCharGrid(after).differenceTo(pattern)
     return {
         pattern: makeCharGrid(before),
-        update: makeCharGrid(after),
+        after: delta,
     }
 }

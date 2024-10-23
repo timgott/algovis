@@ -1,5 +1,5 @@
 import { describe, expect, test, jest } from '@jest/globals';
-import { findSubgridMatches, checkMatchSubgrid } from './metagame';
+import { findSubgridMatches, checkMatchSubgrid, cartesianProduct } from './metagame';
 import { PartialGrid } from './partialgrid';
 
 describe('matching', () => {
@@ -60,5 +60,8 @@ describe('matching', () => {
         let pattern = PartialGrid.fromArray([[2, 0, 0]]);
         let matches = findSubgridMatches(grid, pattern)
         expect(matches).toEqual([[2, 2]])
+    })
+    test('cartesian product', () => {
+        expect(cartesianProduct([[1,2,3],[3,4]])).toEqual([[1,3],[1,4],[2,3],[2,4],[3,3],[3,4]])
     })
 })
