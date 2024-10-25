@@ -1,23 +1,32 @@
-import { Rule } from "./metagame";
+import { MultiRule, Rule } from "./metagame";
 import { PartialGrid } from "./partialgrid";
 
-export function ruleRotations<T>(rule: Rule<PartialGrid<T>>): Rule<PartialGrid<T>>[] {
-    let result: Rule<PartialGrid<T>>[] = [];
+export function ruleRotations<T>(rule: MultiRule<T>): MultiRule<T>[] {
+    let result: MultiRule<T>[] = [];
     for (let i = 0; i < 4; i++) {
         result.push(rule)
-        rule = {
-            pattern: rule.pattern.rotate(),
-            after: rule.after.rotate()
-        }
+        rule = rule.map(subrule => {
+           return {
+                pattern: subrule.pattern.rotate(),
+                after: subrule.after.rotate()
+            }
+        })
     }
     return result
 }
 
-export function make2dRule<T>(before: T[], after: T[]): Rule<PartialGrid<T>>[] {
-    return ruleRotations({
-        pattern: PartialGrid.fromArray([before]),
-        after: PartialGrid.fromArray([after]),
-    })
+export function ruleSymmetriesH<T>(rule: MultiRule<T>): MultiRule<T>[] {
+    let result: MultiRule<T>[] = [];
+    for (let i = 0; i < 2; i++) {
+        result.push(rule)
+        rule = rule.map(subrule => {
+            return {
+                pattern: subrule.pattern.mirror(),
+                after: subrule.after.mirror()
+            }
+        })
+    }
+    return result
 }
 
 function makeDiagonalGrid<T>(diagonal: T[]): PartialGrid<T> {
@@ -26,13 +35,6 @@ function makeDiagonalGrid<T>(diagonal: T[]): PartialGrid<T> {
         grid.put(i, i, diagonal[i])
     }
     return grid
-}
-
-export function makeDiagonalRule<T>(before: T[], after: T[]): Rule<PartialGrid<T>>[] {
-    return ruleRotations({
-        pattern: makeDiagonalGrid(before),
-        after: makeDiagonalGrid(after),
-    })
 }
 
 // special characters: " "==wildcard
@@ -47,6 +49,13 @@ export function makeCharGrid(strings: string[]): PartialGrid<string> {
         }
     }
     return grid
+}
+
+export function makeDiagonalRule(before: string, after: string): Rule<PartialGrid<string>> {
+    return {
+        pattern: makeDiagonalGrid(before.split("")),
+        after: makeDiagonalGrid(after.split("")),
+    }
 }
 
 export function makeCharRule(before: string[], after: string[]): Rule<PartialGrid<string>> {

@@ -133,4 +133,14 @@ export class PartialGrid<T> {
         })
         return result
     }
+
+    or(other: PartialGrid<T>): PartialGrid<T> {
+        let result: PartialGrid<T> = this.copy()
+        other.forNonEmpty((i, j, value) => {
+            if (!result.has(i, j)) {
+                result.put(i, j, value)
+            }
+        })
+        return result
+    }
 }

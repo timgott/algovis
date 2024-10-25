@@ -141,7 +141,7 @@ export class ColoredGridSvg {
     }
 }
 
-export function renderColoredGrid(svg: ColoredGridSvg, colorGrid: PartialGrid<string | null>) {
+export function renderColoredGrid(svg: ColoredGridSvg, colorGrid: PartialGrid<string | null>, labelGrid: PartialGrid<string>) {
     colorGrid.forEach((i, j, color) => {
         if (color !== null) {
             svg.cellColor(i, j, color)
@@ -149,6 +149,9 @@ export function renderColoredGrid(svg: ColoredGridSvg, colorGrid: PartialGrid<st
         } else {
             svg.clearCell(i, j)
         }
+    })
+    labelGrid.forEach((i, j, value) => {
+        svg.cellLabel(i, j, value ?? "")
     })
 }
 

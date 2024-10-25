@@ -1,5 +1,5 @@
-import { randomChoice, sleep } from "../../shared/utils";
-import { makeFoxGame, makeBlocksWorld, Stone } from "./games";
+import { assert, randomChoice, sleep } from "../../shared/utils";
+import { makeFoxGame, makeBlocksWorld, Stone, makeGlueWorld, makeDraughts } from "./games";
 import { IHumanPlayInterface, IBoardUserInterface, runGame, Player, GridPos } from "./metagame";
 import { PartialGrid } from "./partialgrid";
 import { clearGridHighlight, ColoredGridSvg, highlightGrid, renderColoredGrid } from "./svggrid";
@@ -10,7 +10,8 @@ class BoardUi implements IBoardUserInterface<Stone> {
 
     drawBoard(board: PartialGrid<Stone>): void {
         const colorGrid = board.map(stone => stone === "_" ? null : this.stoneColors[stone] ?? "magenta")
-        renderColoredGrid(this.svgGrid, colorGrid)
+        const labels = board.map(stone => stone === "_" ? "" : stone)
+        renderColoredGrid(this.svgGrid, colorGrid, labels)
     }
 }
 
@@ -33,15 +34,17 @@ class SelectionUi implements IHumanPlayInterface<Stone> {
 }
 
 class RandomController implements IHumanPlayInterface<Stone> {
-    constructor(private delay: number) { }
+    constructor(private delay: number, private boardUi: IBoardUserInterface<Stone>) { }
     selectCell(board: PartialGrid<string>, selectable: PartialGrid<boolean>, path: GridPos[]): Promise<GridPos> {
         return new Promise((resolve, reject) => {
+            this.boardUi.drawBoard(board)
             let cells: GridPos[] = []
             selectable.forNonEmpty((i, j, value) => {
                 if (value) {
                     cells.push([i, j])
                 }
             })
+            assert(cells.length > 0, "no selectable cells")
             let result = randomChoice(cells)
             if (this.delay > 0) {
                 setTimeout(() => resolve(result), this.delay)
@@ -53,18 +56,18 @@ class RandomController implements IHumanPlayInterface<Stone> {
 }
 
 function main() {
-    let game = makeBlocksWorld()
+    let game = makeDraughts()
     let svgRoot = document.getElementById("grid_root")!
     let svg = new ColoredGridSvg(svgRoot, game.initialBoard.rows, game.initialBoard.columns, 30)
     let ui = new BoardUi(svg, game.stones)
 
     let players = game.players.map(
         ({name, color, rules}, index) => {
-            let controller = index == 0 ? new SelectionUi(svg, color) : new RandomController(200)
+            let controller = index == 1 ? new SelectionUi(svg, color) : new RandomController(200, ui)
             return new Player(name, controller, rules)
         }
     )
-    let nature = new Player("nature", new RandomController(0), game.nature)
+    let nature = new Player("nature", new RandomController(10, ui), game.nature)
     runGame(game.initialBoard, ui, players, nature)
 }
 

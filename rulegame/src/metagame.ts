@@ -125,8 +125,8 @@ function binAtAllChanges<T>(matchGrid: RuleMatchGrid<T>, matches: MultiRuleMatch
     // write rule match at all cells that it would change
     for (let match of matches) {
         const [i,j] = match.offset
-        const delta = match.rule.after.differenceTo(match.rule.pattern)
-        delta.forNonEmpty((u,v) => {
+        const area = match.rule.pattern.or(match.rule.after)
+        area.forNonEmpty((u,v) => {
             matchGrid.get(i+u, j+v)!.add(matches)
         })
     }
@@ -190,18 +190,20 @@ async function runNature<T>(board: PartialGrid<T>, nature: IPlayer<T>) {
 
 export async function runGame<T>(initialBoard: PartialGrid<T>, ui: IBoardUserInterface<T>, players: IPlayer<T>[], nature: IPlayer<T>) {
     let board = initialBoard
-    while(true) {
+    let terminated = false
+    while(!terminated) {
+        terminated = true
         for (let player of players) {
             // nature
             await runNature(board, nature)
 
             ui.drawBoard(board)
             let move = await player.chooseMove(board)
-            if (move === null) {
-                return
-            }
-            for (let patch of move) {
-                applyGridRule(board, patch)
+            if (move !== null) {
+                terminated = false
+                for (let patch of move) {
+                    applyGridRule(board, patch)
+                }
             }
         }
     }

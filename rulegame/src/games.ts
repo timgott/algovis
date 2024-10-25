@@ -1,10 +1,11 @@
 import { GridRule, MultiRule } from "./metagame";
 import { PartialGrid } from "./partialgrid";
 import {
-    make2dRule,
     makeCharGrid,
     makeCharRule,
+    makeDiagonalRule,
     ruleRotations,
+    ruleSymmetriesH,
 } from "./rulehelpers";
 
 export type Stone = string;
@@ -43,20 +44,14 @@ export function makeFoxGame(): GameRules {
             {
                 name: "Geese",
                 color: "lightgreen",
-                rules: ruleRotations(makeCharRule(["g_"], ["_g"])).map((r) => [
-                    r,
-                ]),
+                rules: ruleRotations([makeCharRule(["g_"], ["_g"])]),
             },
             {
                 name: "Fox",
                 color: "chocolate",
                 rules: [
-                    ...ruleRotations(makeCharRule(["f_"], ["_f"])).map((r) => [
-                        r,
-                    ]),
-                    ...ruleRotations(makeCharRule(["fg_"], ["__f"])).map(
-                        (r) => [r],
-                    ),
+                    ...ruleRotations([makeCharRule(["f_"], ["_f"])]),
+                    ...ruleRotations([makeCharRule(["fg_"], ["__f"])]),
                 ],
             },
         ],
@@ -98,16 +93,23 @@ export function makeBlocksWorld(): GameRules {
     };
 }
 
+// somewhat broken
+// TODO: add stacks/multiset cells
 export function makeGlueWorld(): GameRules {
     return {
         stones: {
             b: "gray",
-            B: "red",
+            f: "orange",
+            u: "darkred",
+            x: "red",
+            y: "blue",
+            z: "green",
+            w: "darkred",
             k: "white",
             "#": "black",
         },
         initialBoard: makeCharGrid([
-            "____bbb#",
+            "S0__bbb#",
             "_____bb#",
             "_______#",
             "_______#",
@@ -120,20 +122,110 @@ export function makeGlueWorld(): GameRules {
                 name: "human",
                 color: "lightblue",
                 rules: [
-                    [
-                        makeCharRule(["b"], ["_"]),
-                        makeCharRule(["_"], ["b"]),
-                    ],
+                    ...ruleRotations([
+                        makeCharRule(["b"], ["u"]),
+                        makeCharRule(["b_"], ["bb"]),
+                    ]),
                 ],
             },
+            {
+                name: "fake_nature",
+                color: "green",
+                rules: [
+                ]
+            }
         ],
         nature: [
             [
-                makeCharRule(["bb"], ["bB"]),
+                makeCharRule(["u"], ["x"]),
+                makeCharRule(["0"], ["1"]),
+            ],
+            ...ruleRotations([
+                makeCharRule(["bx"], ["yx"]),
+            ]),
+            ...ruleRotations([
+                makeCharRule(["by"], ["yy"]),
+            ]),
+            [makeCharRule(["y#"], ["z#"])],
+            ...ruleRotations([
+                makeCharRule(["yz"], ["zz"]),
+            ]),
+            ...ruleRotations([
+                makeCharRule(["zx"], ["z_"]),
+                makeCharRule(["1"], ["0"]),
+            ]),
+            [
+                makeCharRule(["0"], ["0"]),
+                makeCharRule(["y"], ["f"]),
+            ],
+            [
+                makeCharRule(["0"], ["0"]),
+                makeCharRule(["z"], ["b"]),
+            ],
+            [
+                makeCharRule(["f_"], ["_f"]),
+            ],
+            [
+                makeCharRule(["f#"], ["b#"]),
+            ],
+            [
+                makeCharRule(["fb"], ["bb"]),
             ],
         ],
     };
 }
+
 // simplified draughts
 // TODO: multiple jumps (requires nonlocal rules for turn order)
 // TODO: mandatory captures (requires nature rules that automatically apply)
+export function makeDraughts(): GameRules {
+    return {
+        stones: {
+            b: "gray",
+            w: "white",
+        },
+        initialBoard: makeCharGrid([
+            "b_b_b_b_",
+            "_b_b_b_b",
+            "b_b_b_b_",
+            "________",
+            "________",
+            "_w_w_w_w",
+            "w_w_w_w_",
+            "_w_w_w_w",
+            "########",
+            "########",
+        ]),
+        players: [
+            {
+                name: "black",
+                color: "lightblue",
+
+                rules: [
+                    ...ruleSymmetriesH([
+                        makeDiagonalRule("b_", "_b"),
+                    ]),
+                    ...ruleSymmetriesH([
+                        makeDiagonalRule("bw_", "__b"),
+                    ]),
+                ]
+            },
+            {
+                name: "white",
+                color: "lightgreen",
+
+                rules: [
+                    ...ruleSymmetriesH([
+                        makeDiagonalRule("_w", "w_"),
+                    ]),
+                    ...ruleSymmetriesH([
+                        makeDiagonalRule("_bw", "w__"),
+                    ]),
+                ]
+            },
+        ],
+        nature: [
+
+        ],
+    }
+}
