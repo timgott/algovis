@@ -21,7 +21,6 @@ export type GameRules = {
     stones: { [key: Stone]: Color };
     initialBoard: PartialGrid<Stone>;
     players: PlayerMoves[];
-    nature: MultiRule<Stone>[];
 };
 
 export function makeFoxGame(): GameRules {
@@ -55,7 +54,6 @@ export function makeFoxGame(): GameRules {
                 ],
             },
         ],
-        nature: [],
     };
 }
 
@@ -84,13 +82,18 @@ export function makeBlocksWorld(): GameRules {
                     ],
                 ],
             },
+            {
+                name: "nature",
+                color: "green",
+                rules:
+                    [
+                        [
+                            makeCharRule(["b_"], ["_b"])
+                        ],
+                    ],
+            }
         ],
-        nature: [
-            [
-                makeCharRule(["b_"], ["_b"])
-            ],
-        ],
-    };
+    }
 }
 
 // somewhat broken
@@ -132,45 +135,43 @@ export function makeGlueWorld(): GameRules {
                 name: "fake_nature",
                 color: "green",
                 rules: [
-                ]
+                    [
+                        makeCharRule(["u"], ["x"]),
+                        makeCharRule(["0"], ["1"]),
+                    ],
+                    ...ruleRotations([
+                        makeCharRule(["bx"], ["yx"]),
+                    ]),
+                    ...ruleRotations([
+                        makeCharRule(["by"], ["yy"]),
+                    ]),
+                    [makeCharRule(["y#"], ["z#"])],
+                    ...ruleRotations([
+                        makeCharRule(["yz"], ["zz"]),
+                    ]),
+                    ...ruleRotations([
+                        makeCharRule(["zx"], ["z_"]),
+                        makeCharRule(["1"], ["0"]),
+                    ]),
+                    [
+                        makeCharRule(["0"], ["0"]),
+                        makeCharRule(["y"], ["f"]),
+                    ],
+                    [
+                        makeCharRule(["0"], ["0"]),
+                        makeCharRule(["z"], ["b"]),
+                    ],
+                    [
+                        makeCharRule(["f_"], ["_f"]),
+                    ],
+                    [
+                        makeCharRule(["f#"], ["b#"]),
+                    ],
+                    [
+                        makeCharRule(["fb"], ["bb"]),
+                    ],
+                ],
             }
-        ],
-        nature: [
-            [
-                makeCharRule(["u"], ["x"]),
-                makeCharRule(["0"], ["1"]),
-            ],
-            ...ruleRotations([
-                makeCharRule(["bx"], ["yx"]),
-            ]),
-            ...ruleRotations([
-                makeCharRule(["by"], ["yy"]),
-            ]),
-            [makeCharRule(["y#"], ["z#"])],
-            ...ruleRotations([
-                makeCharRule(["yz"], ["zz"]),
-            ]),
-            ...ruleRotations([
-                makeCharRule(["zx"], ["z_"]),
-                makeCharRule(["1"], ["0"]),
-            ]),
-            [
-                makeCharRule(["0"], ["0"]),
-                makeCharRule(["y"], ["f"]),
-            ],
-            [
-                makeCharRule(["0"], ["0"]),
-                makeCharRule(["z"], ["b"]),
-            ],
-            [
-                makeCharRule(["f_"], ["_f"]),
-            ],
-            [
-                makeCharRule(["f#"], ["b#"]),
-            ],
-            [
-                makeCharRule(["fb"], ["bb"]),
-            ],
         ],
     };
 }
@@ -223,9 +224,6 @@ export function makeDraughts(): GameRules {
                     ]),
                 ]
             },
-        ],
-        nature: [
-
         ],
     }
 }

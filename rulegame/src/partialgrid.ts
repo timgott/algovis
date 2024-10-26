@@ -12,6 +12,19 @@ export class PartialGrid<T> {
         this.cells = createEmptyGrid(this.rows, this.columns)
     }
 
+    toString(): string {
+        let result = "["
+        for (let i = 0; i < this.rows; i++) {
+            result += "["
+            for (let j = 0; j < this.columns; j++) {
+                result += this.get(i, j) || " "
+            }
+            result += "]"
+        }
+        result += "]"
+        return result
+    }
+
     static fromArray<T>(array: (T|null)[][]): PartialGrid<T> {
         let rows = array.length
         let columns = array[0].length

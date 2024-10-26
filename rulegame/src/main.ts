@@ -1,5 +1,7 @@
-import { assert, randomChoice, sleep } from "../../shared/utils";
-import { makeFoxGame, makeBlocksWorld, Stone, makeGlueWorld, makeDraughts } from "./games";
+import { parseLispy } from "../../localgraphs/src/prover/sparser";
+import { assert, assertExists, randomChoice, sleep } from "../../shared/utils";
+import { evalGameLisp } from "./gameparser";
+import { makeFoxGame, makeBlocksWorld, Stone, makeGlueWorld, makeDraughts, GameRules } from "./games";
 import { IHumanPlayInterface, IBoardUserInterface, runGame, Player, GridPos } from "./metagame";
 import { PartialGrid } from "./partialgrid";
 import { clearGridHighlight, ColoredGridSvg, highlightGrid, renderColoredGrid } from "./svggrid";
@@ -55,20 +57,35 @@ class RandomController implements IHumanPlayInterface<Stone> {
     }
 }
 
-function main() {
-    let game = makeDraughts()
+async function loadGames() {
+    let url = new URL("games.lisp", import.meta.url)
+    const response = await fetch(url.toString())
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    let text = await response.text()
+    return evalGameLisp(text)
+}
+
+async function main() {
+    console.log("Hello")
+    let allGames = await loadGames()
+    let game = allGames.get("checkers")
+    //let game = makeFoxGame()
+    assertExists(game, "game not found")
+    console.log("Game loaded")
     let svgRoot = document.getElementById("grid_root")!
     let svg = new ColoredGridSvg(svgRoot, game.initialBoard.rows, game.initialBoard.columns, 30)
     let ui = new BoardUi(svg, game.stones)
 
     let players = game.players.map(
-        ({name, color, rules}, index) => {
-            let controller = index == 1 ? new SelectionUi(svg, color) : new RandomController(200, ui)
+        ({name, color, rules}, index: number) => {
+            let controller = true ? new SelectionUi(svg, color) : new RandomController(200, ui)
             return new Player(name, controller, rules)
         }
     )
-    let nature = new Player("nature", new RandomController(10, ui), game.nature)
-    runGame(game.initialBoard, ui, players, nature)
+    runGame(game.initialBoard, ui, players)
 }
 
+console.log
 main()

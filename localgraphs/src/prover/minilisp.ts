@@ -1,33 +1,5 @@
+import { getArgs, requireTag, requireArg, requireSymbol } from "./lisphelper";
 import { SExpr, SList } from "./sparser";
-
-function requireSymbol(expr: SExpr): string {
-    if (expr.type != "symbol") {
-        throw "expected symbol";
-    }
-    return expr.value;
-}
-
-function requireTag(expr: SList): string {
-    if (expr.args.length < 1) {
-        throw `missing tag`;
-    }
-    let tag = expr.args[0];
-    if (tag.type != "symbol") {
-        throw `invalid tag ${expr}`;
-    }
-    return tag.value;
-}
-
-function requireArg(expr: SList, index: number): SExpr {
-    if (expr.args.length <= index) {
-        throw `missing argument ${index}`;
-    }
-    return expr.args[index];
-}
-
-function getArgs(expr: SList): SExpr[] {
-    return expr.args.slice(1);
-}
 
 export class Context<V> {
     private readonly values: Map<string, number> = new Map();

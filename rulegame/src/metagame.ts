@@ -188,15 +188,12 @@ async function runNature<T>(board: PartialGrid<T>, nature: IPlayer<T>) {
     }
 }
 
-export async function runGame<T>(initialBoard: PartialGrid<T>, ui: IBoardUserInterface<T>, players: IPlayer<T>[], nature: IPlayer<T>) {
+export async function runGame<T>(initialBoard: PartialGrid<T>, ui: IBoardUserInterface<T>, players: IPlayer<T>[]) {
     let board = initialBoard
     let terminated = false
     while(!terminated) {
         terminated = true
         for (let player of players) {
-            // nature
-            await runNature(board, nature)
-
             ui.drawBoard(board)
             let move = await player.chooseMove(board)
             if (move !== null) {

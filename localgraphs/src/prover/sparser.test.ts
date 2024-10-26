@@ -35,6 +35,12 @@ describe('tokenizer', () => {
         expect(lexer.next()).toEqual({ type: "symbol", value: "hallo" });
         expect(lexer.next()).toEqual({ type: "symbol", value: "welt" });
     })
+    test('punctuation', () => {
+        // every character should be accepted if it isn't (, ), ", ; or whitespace
+        let lexer = new Tokenizer("+- |#")
+        expect(lexer.next()).toEqual({ type: "symbol", value: "+-" });
+        expect(lexer.next()).toEqual({ type: "symbol", value: "|#" });
+    })
 })
 
 describe('parser', () => {

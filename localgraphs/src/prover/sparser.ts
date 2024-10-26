@@ -22,7 +22,7 @@ export type SExpr = SList | ValueToken
 
 export class Tokenizer {
     private whitespaceRegex = RegExp(/\s/)
-    private wordRegex = RegExp(/\w/)
+    private wordRegex = RegExp(/[^\s\(\)\;]/)
 
     private position = 0
     constructor(private code: string) {}
@@ -46,9 +46,9 @@ export class Tokenizer {
     }
 
     private skipWord() {
-        while (!this.eof() && this.isWordChar(this.code[this.position])) {
+        do {
             this.position++;
-        }
+        } while (!this.eof() && this.isWordChar(this.code[this.position]))
     }
 
     private skipStringLiteral() {
