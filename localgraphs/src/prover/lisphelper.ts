@@ -1,16 +1,18 @@
 
 import { SExpr, SList } from "./sparser";
 
+export class ParsingError extends Error { }
+
 export function requireSymbol(expr: SExpr): string {
     if (expr.type != "symbol") {
-        throw "expected symbol";
+        throw new ParsingError(`expected symbol, got: ${prettyPrint(expr)}`);
     }
     return expr.value;
 }
 
 export function requireList(expr: SExpr): SList {
     if (expr.type != "list") {
-        throw "expected list, got "+prettyPrint(expr);
+        throw new ParsingError(`expected list, got: ${prettyPrint(expr)}`);
     }
     return expr;
 }
@@ -34,18 +36,18 @@ export function checkSymbol(expr: SExpr, symbol: string): boolean {
 
 export function requireTag(expr: SList): string {
     if (expr.args.length < 1) {
-        throw `missing tag`;
+        throw new ParsingError(`missing tag`);
     }
     let tag = expr.args[0];
     if (tag.type != "symbol") {
-        throw `invalid tag ${expr}`;
+        throw new ParsingError(`invalid tag: ${prettyPrint(expr)}`);
     }
     return tag.value;
 }
 
 export function requireArg(expr: SList, index: number): SExpr {
     if (expr.args.length <= index) {
-        throw `missing argument ${index}`;
+        throw new ParsingError(`missing argument ${index}`);
     }
     return expr.args[index];
 }
@@ -56,7 +58,7 @@ export function getArgs(expr: SList): SExpr[] {
 
 export function shiftOrFail<T>(args: T[]): T {
     if (args.length == 0) {
-        throw "missing argument";
+        throw new ParsingError("missing argument");
     }
     return args.shift()!;
 }

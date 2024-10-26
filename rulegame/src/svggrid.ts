@@ -1,6 +1,7 @@
 import { createEmptyGrid, createGrid } from "../../shared/utils.js"
 import { PartialGrid } from "./partialgrid.js"
 import { createSvgNode } from "../../shared/svg.js"
+import { StoneStyle } from "./games.js"
 
 export class ColoredGridSvg {
     neutralColor = "#dddddd"
@@ -14,7 +15,8 @@ export class ColoredGridSvg {
         rect: SVGRectElement,
         border: SVGRectElement,
         back: SVGRectElement,
-        label: SVGTextElement
+        highlight: SVGRectElement
+        label: SVGTextElement,
     })[][]
     cellSize: number
     onClick?: (i: number, j: number) => any
@@ -32,6 +34,7 @@ export class ColoredGridSvg {
         let borderGroup = createSvgNode(svg, "g")
         let cellGroup = createSvgNode(svg, "g")
         let textGroup = createSvgNode(svg, "g")
+        let highlightGroup = createSvgNode(svg, "g")
         let overlayTextGroup = createSvgNode(svg, "g")
 
         this.coordinateText = createSvgNode(overlayTextGroup, "text", {
@@ -51,22 +54,21 @@ export class ColoredGridSvg {
         this.cells = createGrid(rows, columns, (i, j) => {
             let x = i * cellSize
             let y = j * cellSize
-            let border = createSvgNode(borderGroup, "rect", {
-                width: cellSize - this.borderPadding * 2,
-                height: cellSize - this.borderPadding * 2,
-                x: x + this.borderPadding,
-                y: y + this.borderPadding,
-                fill: "transparent",
-                z: -1,
-                "pointer-events": "none",
-            })
             let back = createSvgNode(backGroup, "rect", {
                 width: cellSize - this.backPadding * 2,
                 height: cellSize - this.backPadding * 2,
                 x: x + this.backPadding,
                 y: y + this.backPadding,
                 fill: this.neutralColor,
-                z: 0,
+                "pointer-events": "none",
+            })
+            let border = createSvgNode(borderGroup, "rect", {
+                width: cellSize - this.borderPadding * 2,
+                height: cellSize - this.borderPadding * 2,
+                x: x + this.borderPadding,
+                y: y + this.borderPadding,
+                fill: "transparent",
+                "pointer-events": "none",
             })
             let rect = createSvgNode(cellGroup, "rect", {
                 width: cellSize - this.rectPadding * 2,
@@ -75,8 +77,16 @@ export class ColoredGridSvg {
                 y: y + this.rectPadding,
                 fill: "transparent",
                 "stroke-width": this.rectStroke,
-                z: 0,
                 "pointer-events": "none",
+            })
+            let highlight = createSvgNode(highlightGroup, "rect", {
+                width: cellSize - this.backPadding * 2,
+                height: cellSize - this.backPadding * 2,
+                x: x + this.backPadding,
+                y: y + this.backPadding,
+                fill: "transparent",
+                opacity: "0.3",
+                "stroke-width": this.rectStroke,
             })
             let clickListener = (event: MouseEvent) => {
                 if (event.buttons == 1 && this.onClick) {
@@ -84,8 +94,8 @@ export class ColoredGridSvg {
                 }
             }
             //back.addEventListener("mousemove", clickListener)
-            back.addEventListener("mousedown", clickListener)
-            back.addEventListener("mouseover", (event) => {
+            highlight.addEventListener("mousedown", clickListener)
+            highlight.addEventListener("mouseover", (event) => {
                 this.hover(i, j)
             })
             let label = createSvgNode(textGroup, "text", {
@@ -103,6 +113,7 @@ export class ColoredGridSvg {
                 label: label,
                 border: border,
                 back: back,
+                highlight: highlight,
             }
         })
         this.svg = svg
@@ -132,6 +143,14 @@ export class ColoredGridSvg {
         this.backgroundCellColor(x, y, this.neutralColor)
     }
 
+    cellHighlight(x: number, y: number, color: string) {
+        this.cells[x][y].highlight.setAttribute("fill", color)
+    }
+
+    clearCellHighlight(x: number, y: number) {
+        this.cellHighlight(x, y, "transparent")
+    }
+
     cellLabel(x: number, y: number, text: string) {
         this.cells[x][y].label.textContent = text
     }
@@ -141,13 +160,18 @@ export class ColoredGridSvg {
     }
 }
 
-export function renderColoredGrid(svg: ColoredGridSvg, colorGrid: PartialGrid<string | null>, labelGrid: PartialGrid<string>) {
-    colorGrid.forEach((i, j, color) => {
-        if (color !== null) {
-            svg.cellColor(i, j, color)
-            svg.cellBorder(i, j, "#121")
-        } else {
-            svg.clearCell(i, j)
+export function renderColoredGrid(svg: ColoredGridSvg, stoneGrid: PartialGrid<StoneStyle>, labelGrid: PartialGrid<string>) {
+    stoneGrid.forEach((i, j, style) => {
+        svg.clearCell(i, j)
+        if (style !== null) {
+            if (style.type === "circle") {
+                svg.cellColor(i, j, style.color)
+                svg.cellBorder(i, j, "#121")
+            } else if (style.type === "block") {
+                svg.backgroundCellColor(i, j, style.color)
+            } else if (style.type === "nothing") {
+                svg.backgroundCellColor(i, j, "transparent")
+            }
         }
     })
     labelGrid.forEach((i, j, value) => {
@@ -158,15 +182,15 @@ export function renderColoredGrid(svg: ColoredGridSvg, colorGrid: PartialGrid<st
 export function highlightGrid(svg: ColoredGridSvg, highlight: PartialGrid<boolean>, color: string) {
     highlight.forEach((i, j, value) => {
         if (value) {
-            svg.backgroundCellColor(i, j, color)
+            svg.cellHighlight(i, j, color)
         } else {
-            svg.clearBackgroundCell(i, j)
+            svg.clearCellHighlight(i, j)
         }
     })
 }
 
 export function clearGridHighlight(svg: ColoredGridSvg, highlight: PartialGrid<unknown>) {
     highlight.forEach((i, j, value) => {
-        svg.clearBackgroundCell(i, j)
+        svg.clearCellHighlight(i, j)
     })
 }

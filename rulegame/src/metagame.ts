@@ -119,6 +119,12 @@ function applyGridRule<T>(grid: PartialGrid<T>, match: RuleMatch<T>) {
     return putSubgrid(grid, match.offset, match.rule.after)
 }
 
+function applyMultiRule<T>(grid: PartialGrid<T>, match: MultiRuleMatch<T>) {
+    for (let patch of match) {
+        applyGridRule(grid, patch)
+    }
+}
+
 type RuleMatchGrid<T> = PartialGrid<Set<MultiRuleMatch<T>>>
 
 function binAtAllChanges<T>(matchGrid: RuleMatchGrid<T>, matches: MultiRuleMatch<T>) {
@@ -152,6 +158,24 @@ export interface IHumanPlayInterface<T> {
     selectCell(board: PartialGrid<T>, selectable: PartialGrid<boolean>, path: GridPos[]): Promise<GridPos>
 }
 
+function isUniqueChangeSet<T>(grid: PartialGrid<T>, matches: MultiRuleMatch<T>[]) {
+    if (matches.length === 1) {
+        return true
+    }
+    let delta: PartialGrid<T> = PartialGrid.emptyLike(grid)
+    let [first, ...rest] = matches
+    applyMultiRule(delta, first)
+    let count = delta.count((i,j,v) => true)
+    for (let match of rest) {
+        let otherDelta: PartialGrid<T> = PartialGrid.emptyLike(delta)
+        applyMultiRule(otherDelta, match)
+        if (!delta.equals(otherDelta)) {
+            return false
+        }
+    }
+    return true
+}
+
 export class Player<T> implements IPlayer<T> {
     constructor(private name: string, private ui: IHumanPlayInterface<T>, private allowedRules: MultiRule<T>[]) {}
 
@@ -161,27 +185,32 @@ export class Player<T> implements IPlayer<T> {
             console.log("No possible moves found for", this.name)
             return null
         }
+        let uniqueChoice = isUniqueChangeSet(board, matches)
         do {
-            console.log("Player", this.name, "chooses move.")
+            console.log("Player", this.name, "chooses move from", matches.length, "possible moves")
             let changeGrid = makeChangeGrid(board, matches)
             //changeGrid = filterToCanonicalCell(matches, changeGrid)
-            let selectable = changeGrid.map((set) => set.size > 0 && (set.size < matches.length || matches.length === 1))
+            let selectable = changeGrid.map((set) => set.size > 0 && (set.size < matches.length || uniqueChoice))
             let pos = await this.ui.selectCell(board, selectable, [])
             let newMatches = Array.from(changeGrid.get(...pos)!)
             assert(newMatches.length > 0, "should only select occupied cells")
             matches = newMatches
-            console.log(matches.length, "matches left")
-        } while (matches.length > 1)
+            uniqueChoice = isUniqueChangeSet(board, matches)
+        } while (!uniqueChoice)
         return matches[0]
     }
 }
 
-async function runNature<T>(board: PartialGrid<T>, nature: IPlayer<T>) {
+// let player make moves until no more moves are possible
+async function exhaustPlayer<T>(board: PartialGrid<T>, player: IPlayer<T>, ui: IBoardUserInterface<T>): Promise<boolean> {
+    let didSomething = false
     while(true) {
-        let move = await nature.chooseMove(board)
+        ui.drawBoard(board)
+        let move = await player.chooseMove(board)
         if (!move) {
-            return
+            return didSomething
         }
+        didSomething = true
         for (let patch of move) {
             applyGridRule(board, patch)
         }
@@ -194,13 +223,9 @@ export async function runGame<T>(initialBoard: PartialGrid<T>, ui: IBoardUserInt
     while(!terminated) {
         terminated = true
         for (let player of players) {
-            ui.drawBoard(board)
-            let move = await player.chooseMove(board)
-            if (move !== null) {
+            let moved = await exhaustPlayer(board, player, ui)
+            if (moved) {
                 terminated = false
-                for (let patch of move) {
-                    applyGridRule(board, patch)
-                }
             }
         }
     }

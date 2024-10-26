@@ -6,9 +6,10 @@ import {
     requireSymbol,
     shiftOrFail,
     prettyPrint,
+    ParsingError,
 } from "../../localgraphs/src/prover/lisphelper";
 import { assert, assertExists, unreachable } from "../../shared/utils";
-import { Color, GameRules, PlayerMoves, Stone } from "./games";
+import { Color, GameRules, PlayerDescription, PlayerRole, PlayerMoves, Stone, StoneStyle } from "./games";
 import { PartialGrid } from "./partialgrid";
 import { GridRule, MultiRule, Rule } from "./metagame";
 import { makeDiagonalGrid } from "./rulehelpers";
@@ -60,7 +61,7 @@ export function expandFor(
                     );
                 });
             } else {
-                throw `invalid binder ${prettyPrint(binder)}`;
+                throw new ParsingError(`invalid binder: ${prettyPrint(binder)}`);
             }
         } else {
             return [
@@ -94,11 +95,25 @@ function parseColor(expr: SExpr): Color {
     return color;
 }
 
-function parseStone(expr: SExpr): [Stone, Color] {
+function parseStoneStyle(expr: SExpr): StoneStyle {
+    let args = requireList(expr).args.slice();
+    let kind = requireSymbol(shiftOrFail(args));
+    if (kind == "nothing") {
+        return { type: kind }
+    } else if (kind == "circle" || kind == "block") {
+        return {
+            type: kind,
+            color: parseColor(shiftOrFail(args))
+        }
+    }
+    throw new ParsingError(`invalid stone kind: ${kind}`);
+}
+
+function parseStone(expr: SExpr): [Stone, StoneStyle] {
     expr = requireList(expr);
     let args = expr.args.slice();
     let name = requireSymbol(shiftOrFail(args));
-    let color = parseColor(shiftOrFail(args));
+    let color = parseStoneStyle(shiftOrFail(args));
     return [name, color];
 }
 
@@ -112,9 +127,29 @@ function parseBoard(rows: SExpr[]): PartialGrid<Stone> {
     return PartialGrid.fromArray(board);
 }
 
-function parsePlayer(expr: SExpr): [string, Color] {
+function parsePlayerRole(expr: SExpr): PlayerRole {
+    let args = requireList(expr).args.slice();
+    let kind = requireSymbol(shiftOrFail(args))
+    requireNoMoreArgs(args, expr, "role")
+    if (kind !== "nature" && kind !== "human" && kind !== "robot") {
+        throw new ParsingError(`unknown player kind: ${kind}`)
+    }
+    return kind
+}
+
+function parsePlayer(expr: SExpr): PlayerDescription {
     // actually the same
-    return parseStone(expr);
+    let args = requireList(expr).args.slice();
+    let name = requireSymbol(shiftOrFail(args));
+    let role = parsePlayerRole(shiftOrFail(args))
+    let color = parseColor(shiftOrFail(args));
+    return {name, color, role};
+}
+
+function requireNoMoreArgs(args: unknown[], expr: SExpr, context: string) {
+    if (args.length > 0) {
+        throw new ParsingError(`Too many arguments in ${context} expression: ${prettyPrint(expr)}`)
+    }
 }
 
 function parseRule(expr: SExpr): GridRule<Stone> {
@@ -126,6 +161,7 @@ function parseRule(expr: SExpr): GridRule<Stone> {
         let dir = requireSymbol(shiftOrFail(args));
         let rowBefore = parseBoardRow(shiftOrFail(args));
         let rowAfter = parseBoardRow(shiftOrFail(args));
+        requireNoMoreArgs(args, expr, "rule")
         let orthoIndex = orthoDirs.indexOf(dir);
         if (orthoIndex != -1) {
             // orthogonal line
@@ -153,9 +189,9 @@ function parseRule(expr: SExpr): GridRule<Stone> {
                 after: gridAfter,
             };
         }
-        throw `invalid direction ${dir} in row rule`;
+        throw new ParsingError(`invalid row direction: ${dir}`);
     }
-    throw `unknown rule type ${tag}`;
+    throw new ParsingError(`unknown rule type ${tag}`);
 }
 
 function parseMultiRule(expr: SExpr): [string, MultiRule<Stone>] {
@@ -163,6 +199,7 @@ function parseMultiRule(expr: SExpr): [string, MultiRule<Stone>] {
         let args = requireList(expr).args.slice();
         let player = requireSymbol(shiftOrFail(args));
         let ruleExpr = requireList(shiftOrFail(args))
+        requireNoMoreArgs(args, expr, "multirule")
         let tag = requireTag(ruleExpr);
         if (tag == "and") {
             let ruleArgs = requireList(ruleExpr).args.slice(1);
@@ -173,7 +210,10 @@ function parseMultiRule(expr: SExpr): [string, MultiRule<Stone>] {
             return [player, [rule]];
         }
     } catch (e) {
-        throw `error while parsing ${prettyPrint(expr)}: ${e}`;
+        if (e instanceof ParsingError) {
+            throw new ParsingError(`error while parsing ${prettyPrint(expr)}: ${e}`);
+        }
+        throw e
     }
 }
 
@@ -201,7 +241,7 @@ function parseGameExpr(gameExpr: SExpr): GameRules {
     let initialBoard = parseBoard(groups.initialBoard);
     let playerList = groups.players.map(parsePlayer);
     let rules = new Map<string, MultiRule<Stone>[]>(
-        playerList.map(([name, _]) => [name, []]),
+        playerList.map(p => [p.name, []]),
     );
     for (let [player, rule] of groups.rules.map(parseMultiRule)) {
         let playerRules = rules.get(player);
@@ -212,11 +252,10 @@ function parseGameExpr(gameExpr: SExpr): GameRules {
     return {
         stones,
         initialBoard,
-        players: playerList.map(([name, color]) => {
+        players: playerList.map(p => {
             return <PlayerMoves>{
-                name,
-                color,
-                rules: rules.get(name)!,
+                ...p,
+                rules: rules.get(p.name)!,
             };
         }),
     };

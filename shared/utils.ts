@@ -51,13 +51,13 @@ export function randomSubset<T>(arr: readonly T[], count: number): T[] {
 
 export function assert(condition: boolean, message: string): asserts condition {
     if (!condition) {
-        throw message
+        throw new Error(message)
     }
 }
 
 export function assertExists<T>(value: T | null | undefined, message: string = "value should not be undefined"): asserts value is T {
     if (value === undefined || value === null) {
-        throw message
+        throw new Error(message)
     }
 }
 

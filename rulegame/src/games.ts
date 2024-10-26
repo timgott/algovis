@@ -11,24 +11,40 @@ import {
 export type Stone = string;
 export type Color = string;
 
-export type PlayerMoves = {
+export type PlayerRole = "nature" | "human" | "robot"
+export type PlayerDescription = {
     name: string;
     color: string;
+    role: PlayerRole;
+}
+
+export type PlayerMoves = PlayerDescription & {
     rules: MultiRule<Stone>[];
 };
 
+export type StoneStyle = {
+    type: "nothing"
+} | {
+    type: "circle" | "block",
+    color: Color
+}
+
 export type GameRules = {
-    stones: { [key: Stone]: Color };
+    stones: { [key: Stone]: StoneStyle };
     initialBoard: PartialGrid<Stone>;
     players: PlayerMoves[];
 };
 
+function circleStone(color: Color): StoneStyle {
+    return { type: "circle", color };
+}
+
+/*
 export function makeFoxGame(): GameRules {
     return {
         stones: {
-            f: "maroon",
-            g: "green",
-            "#": "black",
+            f: circleStone("maroon"),
+            g: circleStone("green"),
         },
         initialBoard: makeCharGrid([
             "##ggg##",
@@ -60,8 +76,8 @@ export function makeFoxGame(): GameRules {
 export function makeBlocksWorld(): GameRules {
     return {
         stones: {
-            b: "gray",
-            "#": "black",
+            b: circleStone("gray"),
+            "#": circleStone("black"),
         },
         initialBoard: makeCharGrid([
             "____bbb#",
@@ -101,15 +117,15 @@ export function makeBlocksWorld(): GameRules {
 export function makeGlueWorld(): GameRules {
     return {
         stones: {
-            b: "gray",
-            f: "orange",
-            u: "darkred",
-            x: "red",
-            y: "blue",
-            z: "green",
-            w: "darkred",
-            k: "white",
-            "#": "black",
+            b: circleStone("gray"),
+            f: circleStone("orange"),
+            u: circleStone("darkred"),
+            x: circleStone("red"),
+            y: circleStone("blue"),
+            z: circleStone("green"),
+            w: circleStone("darkred"),
+            k: circleStone("white"),
+            "#": circleStone("black"),
         },
         initialBoard: makeCharGrid([
             "S0__bbb#",
@@ -182,8 +198,8 @@ export function makeGlueWorld(): GameRules {
 export function makeDraughts(): GameRules {
     return {
         stones: {
-            b: "gray",
-            w: "white",
+            b: circleStone("gray"),
+            w: circleStone("white")
         },
         initialBoard: makeCharGrid([
             "b_b_b_b_",
@@ -227,3 +243,4 @@ export function makeDraughts(): GameRules {
         ],
     }
 }
+*/

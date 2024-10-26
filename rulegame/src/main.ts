@@ -1,18 +1,18 @@
 import { parseLispy } from "../../localgraphs/src/prover/sparser";
 import { assert, assertExists, randomChoice, sleep } from "../../shared/utils";
 import { evalGameLisp } from "./gameparser";
-import { makeFoxGame, makeBlocksWorld, Stone, makeGlueWorld, makeDraughts, GameRules } from "./games";
+import { Stone, GameRules, StoneStyle } from "./games";
 import { IHumanPlayInterface, IBoardUserInterface, runGame, Player, GridPos } from "./metagame";
 import { PartialGrid } from "./partialgrid";
 import { clearGridHighlight, ColoredGridSvg, highlightGrid, renderColoredGrid } from "./svggrid";
 
 class BoardUi implements IBoardUserInterface<Stone> {
-    constructor(private svgGrid: ColoredGridSvg, private stoneColors: {[key: Stone]: string}) {
+    constructor(private svgGrid: ColoredGridSvg, private stoneColors: {[key: Stone]: StoneStyle}) {
     }
 
     drawBoard(board: PartialGrid<Stone>): void {
-        const colorGrid = board.map(stone => stone === "_" ? null : this.stoneColors[stone] ?? "magenta")
-        const labels = board.map(stone => stone === "_" ? "" : stone)
+        const colorGrid = board.map(stone => stone === "_" ? null : this.stoneColors[stone] ?? null)
+        const labels = board.map(stone => (stone === "_" || this.stoneColors[stone]) ? "" : stone)
         renderColoredGrid(this.svgGrid, colorGrid, labels)
     }
 }
@@ -36,10 +36,9 @@ class SelectionUi implements IHumanPlayInterface<Stone> {
 }
 
 class RandomController implements IHumanPlayInterface<Stone> {
-    constructor(private delay: number, private boardUi: IBoardUserInterface<Stone>) { }
+    constructor(private delay: number, private playerColor: string, private svg?: ColoredGridSvg) { }
     selectCell(board: PartialGrid<string>, selectable: PartialGrid<boolean>, path: GridPos[]): Promise<GridPos> {
         return new Promise((resolve, reject) => {
-            this.boardUi.drawBoard(board)
             let cells: GridPos[] = []
             selectable.forNonEmpty((i, j, value) => {
                 if (value) {
@@ -49,7 +48,15 @@ class RandomController implements IHumanPlayInterface<Stone> {
             assert(cells.length > 0, "no selectable cells")
             let result = randomChoice(cells)
             if (this.delay > 0) {
-                setTimeout(() => resolve(result), this.delay)
+                if (this.svg) {
+                    highlightGrid(this.svg, selectable, this.playerColor)
+                }
+                setTimeout(() => {
+                    if (this.svg) {
+                        clearGridHighlight(this.svg, selectable)
+                    }
+                    resolve(result)
+                }, this.delay)
             } else {
                 resolve(result)
             }
@@ -79,8 +86,17 @@ async function main() {
     let ui = new BoardUi(svg, game.stones)
 
     let players = game.players.map(
-        ({name, color, rules}, index: number) => {
-            let controller = true ? new SelectionUi(svg, color) : new RandomController(200, ui)
+        ({name, color, role, rules}, index: number) => {
+            let controller: IHumanPlayInterface<Stone>
+            if (role === "nature") {
+                controller = new RandomController(0, color)
+            } else if (role === "robot") {
+                controller = new RandomController(300, color, svg)
+            } else {
+                // human
+                controller = new SelectionUi(svg, color)
+            }
+
             return new Player(name, controller, rules)
         }
     )

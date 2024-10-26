@@ -1,15 +1,17 @@
-import { createEmptyGrid } from "../../shared/utils";
+import { assert, createEmptyGrid, ensured } from "../../shared/utils";
 
 // partially colored grid
 export class PartialGrid<T> {
     cells: (T | null)[][];
     rows: number;
     columns: number;
+    nonEmptyCells: [number, number][]
 
     constructor(rows: number, columns: number) {
         this.rows = rows
         this.columns = columns
         this.cells = createEmptyGrid(this.rows, this.columns)
+        this.nonEmptyCells = []
     }
 
     toString(): string {
@@ -29,7 +31,14 @@ export class PartialGrid<T> {
         let rows = array.length
         let columns = array[0].length
         let grid = new PartialGrid<T>(rows, columns)
-        grid.cells = array
+        for (let i = 0; i < array.length; i++) {
+            for (let j = 0; j < array[0].length; j++) {
+                let val = array[i][j]
+                if (val !== null) {
+                    grid.put(i, j, val)
+                }
+            }
+        }
         return grid
     }
 
@@ -39,7 +48,7 @@ export class PartialGrid<T> {
 
     copy(): PartialGrid<T> {
         let result = new PartialGrid<T>(this.rows, this.columns)
-        this.forEach((i, j) => {
+        this.forNonEmpty((i, j) => {
             result.put(i, j, this.get(i, j)!)
         })
         return result
@@ -53,6 +62,10 @@ export class PartialGrid<T> {
     }
 
     put(x: number, y: number, value: T) {
+        assert(value != null, "null is reserved for empty cells")
+        if (this.cells[x][y] === null) {
+            this.nonEmptyCells.push([x, y])
+        }
         this.cells[x][y] = value
     }
 
@@ -86,11 +99,14 @@ export class PartialGrid<T> {
     }
 
     forNonEmpty<S>(callback: (i: number, j: number, value: T) => S | null | undefined): S | null {
-        return this.forEach((i, j, value) => {
-            if (value !== null) {
-                return callback(i, j, value)
+        for (let [i,j] of this.nonEmptyCells) {
+            let value = ensured(this.get(i, j))
+            let result = callback(i, j, value)
+            if (result) {
+                return result
             }
-        })
+        }
+        return null
     }
 
     emptyCells(): [number, number][] {
@@ -104,7 +120,7 @@ export class PartialGrid<T> {
     // rotate by 90 degrees
     rotate(): PartialGrid<T> {
         let result = new PartialGrid<T>(this.columns, this.rows)
-        this.forEach((i, j, value) => {
+        this.forNonEmpty((i, j, value) => {
             result.put(j, this.rows - i - 1, value!)
         })
         return result
@@ -113,16 +129,19 @@ export class PartialGrid<T> {
     // mirror in 2nd axis
     mirror(): PartialGrid<T> {
         let result = new PartialGrid<T>(this.rows, this.columns)
-        this.forEach((i, j, value) => {
+        this.forNonEmpty((i, j, value) => {
             result.put(i, this.columns - j - 1, value!)
         })
         return result
     }
 
-    map<S>(f: (v: T, i: number, j: number) => S): PartialGrid<S> {
+    map<S>(f: (v: T, i: number, j: number) => S | null): PartialGrid<S> {
         let result = PartialGrid.emptyLike<S,T>(this)
         this.forNonEmpty((i: number, j: number, value) => {
-            result.put(i, j, f(value, i, j))
+            let newValue = f(value, i, j)
+            if (newValue !== null) {
+                result.put(i, j, newValue)
+            }
         })
         return result
     }
@@ -155,5 +174,19 @@ export class PartialGrid<T> {
             }
         })
         return result
+    }
+
+    equals(other: PartialGrid<T>): boolean {
+        if (this.columns !== other.columns || this.rows !== other.rows) {
+            return false
+        }
+        if (this.nonEmptyCells.length != other.nonEmptyCells.length) {
+            return false
+        }
+        let mismatch = this.forNonEmpty((i,j,val) => other.get(i,j) !== val)
+        if (mismatch) {
+            return false
+        }
+        return true
     }
 }
