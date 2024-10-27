@@ -33,6 +33,8 @@ export type GameRules = {
     stones: { [key: Stone]: StoneStyle };
     initialBoard: PartialGrid<Stone>;
     players: PlayerMoves[];
+    title: string;
+    description: string;
 };
 
 function circleStone(color: Color): StoneStyle {

@@ -7,6 +7,7 @@ import {
     shiftOrFail,
     prettyPrint,
     ParsingError,
+    requireString,
 } from "../../localgraphs/src/prover/lisphelper";
 import { assert, assertExists, unreachable } from "../../shared/utils";
 import { Color, GameRules, PlayerDescription, PlayerRole, PlayerMoves, Stone, StoneStyle } from "./games";
@@ -231,6 +232,8 @@ function parseGameExpr(gameExpr: SExpr): GameRules {
     assertExists(groups.players, "missing players");
     assertExists(groups.rules, "missing rules");
 
+    let description = groups.description ? requireString(groups.description[0]) : "";
+    let title = groups.title ? requireString(groups.title[0]) : "";
     let stones = Object.fromEntries(groups.stones.map(parseStone));
     let initialBoard = parseBoard(groups.initialBoard);
     let playerList = groups.players.map(parsePlayer);
@@ -252,6 +255,8 @@ function parseGameExpr(gameExpr: SExpr): GameRules {
                 rules: rules.get(p.name)!,
             };
         }),
+        description,
+        title
     };
 }
 

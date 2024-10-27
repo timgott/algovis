@@ -74,14 +74,12 @@ async function loadGames() {
     return evalGameLisp(text)
 }
 
-async function main() {
-    console.log("Hello")
-    let allGames = await loadGames()
-    let game = allGames.get("wuziqi")
-    //let game = makeFoxGame()
-    assertExists(game, "game not found")
-    console.log("Game loaded")
-    let svgRoot = document.getElementById("grid_root")!
+function createGameNode(template: HTMLTemplateElement, game: GameRules) {
+    let container = template.content.cloneNode(true) as HTMLElement
+    let svgRoot = container.querySelector(".grid_root")!
+    container.querySelector(".game_description")!.textContent = game.description
+    container.querySelector(".game_name")!.textContent = game.title
+
     let svg = new ColoredGridSvg(svgRoot, game.initialBoard.rows, game.initialBoard.columns, 30)
     let ui = new BoardUi(svg, game.stones)
 
@@ -101,6 +99,23 @@ async function main() {
         }
     )
     runGame(game.initialBoard, ui, players)
+
+    return container
+}
+
+async function main() {
+    console.log("Hello")
+    let allGames = await loadGames()
+    console.log("Games loaded")
+    let template = document.getElementById("game_template") as HTMLTemplateElement
+    let gamesRoot = document.getElementById("games_root") as HTMLElement
+
+    let gameNames = ["fox+geese", "checkers", "glueworld", "wuziqi", "go"];
+    for (let gameName of gameNames) {
+        let game = allGames.get(gameName)
+        assertExists(game, `game ${gameName} not found`)
+        gamesRoot.appendChild(createGameNode(template, game))
+    }
 }
 
 console.log

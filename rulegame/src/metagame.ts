@@ -155,10 +155,8 @@ function makeNthChangeGrid<T>(grid: PartialGrid<T>, index: number, ruleMatches: 
             let delta = rule.update
             return delta.nonEmptyCells.map(([u,v]) => [i+u, j+v])
         })
-        console.log(index)
         if (index < cells.length) {
             let [i,j] = cells[index]
-            console.log("index", index, "i", i, "j", j)
             changeGrid.get(i,j)!.add(patches)
         }
     }

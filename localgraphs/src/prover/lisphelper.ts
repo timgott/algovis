@@ -10,6 +10,13 @@ export function requireSymbol(expr: SExpr): string {
     return expr.value;
 }
 
+export function requireString(expr: SExpr): string {
+    if (expr.type != "string") {
+        throw new ParsingError(`expected string, got: ${prettyPrint(expr)}`);
+    }
+    return expr.value;
+}
+
 export function requireList(expr: SExpr): SList {
     if (expr.type != "list") {
         throw new ParsingError(`expected list, got: ${prettyPrint(expr)}`);

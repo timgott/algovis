@@ -12,6 +12,14 @@
         body {
             margin: 0;
             padding: 0;
+            font-family: sans-serif;
+            background: #eee;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            font-family: serif;
+        }
+        .container p {
+            margin-bottom: 2em
         }
         #grid_root svg text {
             pointer-events: none;
@@ -20,12 +28,20 @@
         .container {
             padding: 50px;
             background-color: #eee;
+            max-width: 50em;
+            margin: auto;
         }
     </style>
 </head>
 <body>
-    <div class="container" id="grid_root">
-    </div>
+    <template id="game_template">
+        <div class="container">
+            <h1 class="game_name"></h1>
+            <p class="game_description"></p>
+            <div class="grid_root"></div>
+        </div>
+    </template>
+    <div id="games_root"></div>
     <!-- Include the compiled JavaScript file -->
     <script type="module" src="src/main.ts"></script>
 </body>

@@ -1,5 +1,7 @@
 (define fox+geese
   (game
+    (title "Fox and Geese")
+    (description "Ancient game. The fox captures geese by jumping over them. The geese win if the fox cannot move, the fox wins when there are not enough geese left to trap him.")
     (stones
       (f (circle (color maroon)))
       (g (circle (color green)))
@@ -34,6 +36,8 @@
 
 (define minicheckers
   (game
+    (title "Minicheckers")
+    (description "A simplified version of checkers, without queens, mandatory capturing and capture chains. Look at the other checkers instead.")
     (stones
       (b (circle (color gray)))
       (w (circle (color white)))
@@ -50,8 +54,8 @@
       (# # # # # # # #)
       (P w # # # # # #))
     (players
-      (Black (human) (color tan))
-      (White (human) (color lightblue)))
+      (Black (human) (color chocolate))
+      (White (human) (color deepskyblue)))
     (rules
       (for (player x y dirs) ((Black b w (SE SW)) (White w b (NE NW)))
            (for dir dirs
@@ -75,6 +79,10 @@
 ; bug: if multiple captures at different locations are possible, both are done in one round
 (define checkers
   (game
+    (title "Checkers")
+    (description "Pieces move forward diagonally, and capture by jumping over other pieces.
+                 Capturing is mandatory. A piece can jump multiple times in one turn.
+                 Pieces that reach the opposite end of the board are promoted to queens.")
     (stones
       (b (circle (color gray)))
       (B (circle (color darkblue))) ; queen
@@ -137,6 +145,8 @@
 
 (define blocksworld
   (game
+    (title "Blocksworld")
+    (description "Stack blocks.")
     (stones
       (b (circle (color green)))
       (# (block (color gray))))
@@ -162,6 +172,8 @@
 
 (define glueworld
   (game
+    (title "Glue World")
+    (description "Place blocks. Use glue to prevent them from falling.")
     (stones
       (b (circle (color green)))
       (g (circle (color yellow)))
@@ -224,25 +236,33 @@
 
 (define wuziqi
   (game
+    (title "Wuziqi")
+    (description "This is a variant of Gomoku: Players take turns placing stones. When a player gets a line of 5 stones, they can remove it and replace one enemy stone with their own.")
     (stones
       (w (circle (color white)))
       (b (circle (color black)))
       (# (nothing)))
     (initialBoard
-      (_ _ _ _ _ _ _ _ _ _ _ _)
-      (_ _ _ _ _ _ _ _ _ _ _ _)
-      (_ _ _ _ _ _ _ _ _ _ _ _)
-      (_ _ _ _ _ _ _ _ _ _ _ _)
-      (_ _ _ _ _ _ _ _ _ _ _ _)
-      (_ _ _ _ _ _ _ _ _ _ _ _)
-      (_ _ _ _ _ _ _ _ _ _ _ _)
-      (_ _ _ _ _ _ _ _ _ _ _ _)
-      (_ _ _ _ _ _ _ _ _ _ _ _)
-      (_ _ _ _ _ _ _ _ _ _ _ _)
-      (_ _ _ _ _ _ _ _ _ _ _ _)
-      (_ _ _ _ _ _ _ _ _ _ _ _)
-      (# # # # # # # # # # # #)
-      (P b # # # # # # # # # #))
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (# # # # # # # # # # # # # # # # # # # # #)
+      (P b # # # # # # # # # # # # # # # # # # #))
     (players
       (White (human) (color deepskyblue))
       (Black (human) (color chocolate)))
@@ -256,9 +276,64 @@
           (player
             (and
               (row dir (x x x x x) (_ _ _ _ _))
-              (row N (y) (_))
-              (row E (P y) (S x)))))
-        (player
-          (and
-            (row N (_) (x))
-            (row E (S x) (P y))))))))
+              (row E (y) (x)))))))))
+
+(define go
+  (game
+    (title "Go (?)")
+    (description "Players take turns placing stones. Pieces that are completely surrounded by the other color are captured.")
+    (stones
+      (w (circle (color white)))
+      (b (circle (color black)))
+      (f (circle (color red)))
+      (# (nothing)))
+    (initialBoard
+      (_ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _)
+      (# # # # # # # # # # # # #)
+      (P b # # # # # # # # # # #))
+    (players
+      (White (human) (color deepskyblue))
+      (Black (human) (color chocolate))
+      (PreFlooder (nature) (color purple))
+      (Flooder (nature) (color purple))
+      (Capturer (robot) (color purple))
+      (NextTurn (nature) (color purple)))
+    (rules
+      (for (player x y) ((White w b) (Black b w))
+           (player
+             (and
+               (row N (_) (x))
+               (row E (P x) (C x))))
+           (NextTurn
+             (row E (C x) (P y)))
+           (PreFlooder
+              (and
+                (row N (y) (f))
+                (row E (C x) (C x))))
+           (for dir (N S W E)
+                ; detect freedom
+                (Flooder
+                  (and
+                    (row dir (_ f) (_ y))
+                    (row E (C x) (C x))))
+                (Flooder
+                  (and
+                    (row dir (y f) (y y))
+                    (row E (C x) (C x))))
+                ; capture pieces without freedom
+                (Capturer
+                  (and
+                    (row N (f) (_)))))))))
+
