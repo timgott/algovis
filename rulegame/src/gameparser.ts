@@ -12,7 +12,7 @@ import { assert, assertExists, unreachable } from "../../shared/utils";
 import { Color, GameRules, PlayerDescription, PlayerRole, PlayerMoves, Stone, StoneStyle } from "./games";
 import { PartialGrid } from "./partialgrid";
 import { GridRule, MultiRule, Rule } from "./metagame";
-import { makeDiagonalGrid } from "./rulehelpers";
+import { makeDiagonalGrid, makeRule } from "./rulehelpers";
 
 function assertExactlyOne<T>(list: T[], message: string) {
     assert(list.length == 1, message);
@@ -171,10 +171,7 @@ function parseRule(expr: SExpr): GridRule<Stone> {
                 gridBefore = gridBefore.rotate();
                 gridAfter = gridAfter.rotate();
             }
-            return {
-                pattern: gridBefore,
-                after: gridAfter,
-            };
+            return makeRule(gridBefore, gridAfter);
         }
         let diagonalIndex = diagonalDirs.indexOf(dir);
         if (diagonalIndex != -1) {
@@ -184,10 +181,7 @@ function parseRule(expr: SExpr): GridRule<Stone> {
                 gridBefore = gridBefore.rotate();
                 gridAfter = gridAfter.rotate();
             }
-            return {
-                pattern: gridBefore,
-                after: gridAfter,
-            };
+            return makeRule(gridBefore, gridAfter);
         }
         throw new ParsingError(`invalid row direction: ${dir}`);
     }

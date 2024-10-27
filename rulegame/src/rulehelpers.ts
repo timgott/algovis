@@ -1,4 +1,4 @@
-import { MultiRule, Rule } from "./metagame";
+import { GridRule, MultiRule, Rule } from "./metagame";
 import { PartialGrid } from "./partialgrid";
 
 export function ruleRotations<T>(rule: MultiRule<T>): MultiRule<T>[] {
@@ -8,7 +8,7 @@ export function ruleRotations<T>(rule: MultiRule<T>): MultiRule<T>[] {
         rule = rule.map(subrule => {
            return {
                 pattern: subrule.pattern.rotate(),
-                after: subrule.after.rotate()
+                after: subrule.update.rotate()
             }
         })
     }
@@ -22,7 +22,7 @@ export function ruleSymmetriesH<T>(rule: MultiRule<T>): MultiRule<T>[] {
         rule = rule.map(subrule => {
             return {
                 pattern: subrule.pattern.mirror(),
-                after: subrule.after.mirror()
+                after: subrule.update.mirror()
             }
         })
     }
@@ -54,7 +54,7 @@ export function makeCharGrid(strings: string[]): PartialGrid<string> {
 export function makeDiagonalRule(before: string, after: string): Rule<PartialGrid<string>> {
     return {
         pattern: makeDiagonalGrid(before.split("")),
-        after: makeDiagonalGrid(after.split("")),
+        update: makeDiagonalGrid(after.split("")),
     }
 }
 
@@ -63,7 +63,7 @@ export function makeCharRule(before: string[], after: string[]): Rule<PartialGri
     const delta = makeCharGrid(after).differenceTo(pattern)
     return {
         pattern: makeCharGrid(before),
-        after: delta,
+        update: delta,
     }
 }
 
@@ -108,4 +108,11 @@ export function transformGridToAxes<T>(grid: PartialGrid<T>, axes: [Direction, D
         result.put(p[0], p[1], value)
     })
     return result
+}
+
+export function makeRule<T>(before: PartialGrid<T>, after: PartialGrid<T>): GridRule<T> {
+    return {
+        pattern: before,
+        update: after.differenceTo(before)
+    }
 }

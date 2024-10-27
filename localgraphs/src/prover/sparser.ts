@@ -39,10 +39,13 @@ export class Tokenizer {
         return this.position >= this.code.length;
     }
 
-    private skipWhitespace() {
+    private skipWhitespace(): boolean {
+        let skipped = false
         while (!this.eof() && this.isWhitespace(this.code[this.position])) {
+            skipped = true
             this.position++;
         }
+        return skipped
     }
 
     private skipWord() {
@@ -59,17 +62,25 @@ export class Tokenizer {
         this.position++;
     }
 
-    private skipLineComment(): void {
+    private skipLineComment(): boolean {
+        let skipped = false
         if (this.code[this.position] == ';') {
+            skipped = true
             do { this.position++; }
             while (!this.eof() && this.code[this.position] != '\n')
         }
+        return skipped
+    }
+
+    private skipToNextToken(): void {
+        let skipped = false
+        do {
+            skipped = this.skipWhitespace() || this.skipLineComment();
+        } while (skipped)
     }
 
     next(): Token {
-        this.skipWhitespace();
-        this.skipLineComment();
-        this.skipWhitespace();
+        this.skipToNextToken();
         if (this.eof()) {
             return { type: "EOF" };
         }

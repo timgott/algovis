@@ -2,7 +2,7 @@ import { parseLispy } from "../../localgraphs/src/prover/sparser";
 import { assert, assertExists, randomChoice, sleep } from "../../shared/utils";
 import { evalGameLisp } from "./gameparser";
 import { Stone, GameRules, StoneStyle } from "./games";
-import { IHumanPlayInterface, IBoardUserInterface, runGame, Player, GridPos } from "./metagame";
+import { IHumanPlayInterface, IBoardUserInterface, runGame, Player, GridPos, CellMatchType } from "./metagame";
 import { PartialGrid } from "./partialgrid";
 import { clearGridHighlight, ColoredGridSvg, highlightGrid, renderColoredGrid } from "./svggrid";
 
@@ -21,7 +21,7 @@ class SelectionUi implements IHumanPlayInterface<Stone> {
     constructor(private svgGrid: ColoredGridSvg, private playerColor: string) {
     }
 
-    selectCell(board: PartialGrid<Stone>, selectable: PartialGrid<boolean>, path: [number, number][]): Promise<[number, number]> {
+    selectCell(board: PartialGrid<Stone>, selectable: PartialGrid<CellMatchType>, path: [number, number][]): Promise<[number, number]> {
         highlightGrid(this.svgGrid, selectable, this.playerColor)
         return new Promise((resolve, reject) => {
             this.svgGrid.onClick = (i, j) => {
@@ -37,7 +37,7 @@ class SelectionUi implements IHumanPlayInterface<Stone> {
 
 class RandomController implements IHumanPlayInterface<Stone> {
     constructor(private delay: number, private playerColor: string, private svg?: ColoredGridSvg) { }
-    selectCell(board: PartialGrid<string>, selectable: PartialGrid<boolean>, path: GridPos[]): Promise<GridPos> {
+    selectCell(board: PartialGrid<string>, selectable: PartialGrid<CellMatchType>, path: GridPos[]): Promise<GridPos> {
         return new Promise((resolve, reject) => {
             let cells: GridPos[] = []
             selectable.forNonEmpty((i, j, value) => {
@@ -77,7 +77,7 @@ async function loadGames() {
 async function main() {
     console.log("Hello")
     let allGames = await loadGames()
-    let game = allGames.get("checkers")
+    let game = allGames.get("wuziqi")
     //let game = makeFoxGame()
     assertExists(game, "game not found")
     console.log("Game loaded")
@@ -91,7 +91,7 @@ async function main() {
             if (role === "nature") {
                 controller = new RandomController(0, color)
             } else if (role === "robot") {
-                controller = new RandomController(300, color, svg)
+                controller = new RandomController(500, color, svg)
             } else {
                 // human
                 controller = new SelectionUi(svg, color)

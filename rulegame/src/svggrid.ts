@@ -2,6 +2,7 @@ import { createEmptyGrid, createGrid } from "../../shared/utils.js"
 import { PartialGrid } from "./partialgrid.js"
 import { createSvgNode } from "../../shared/svg.js"
 import { StoneStyle } from "./games.js"
+import { CellMatchType } from "./metagame.js"
 
 export class ColoredGridSvg {
     neutralColor = "#dddddd"
@@ -143,8 +144,10 @@ export class ColoredGridSvg {
         this.backgroundCellColor(x, y, this.neutralColor)
     }
 
-    cellHighlight(x: number, y: number, color: string) {
-        this.cells[x][y].highlight.setAttribute("fill", color)
+    cellHighlight(x: number, y: number, color: string, opacity: string) {
+        let cell = this.cells[x][y].highlight
+        cell.setAttribute("opacity", opacity)
+        cell.setAttribute("fill", color)
     }
 
     clearCellHighlight(x: number, y: number) {
@@ -179,10 +182,11 @@ export function renderColoredGrid(svg: ColoredGridSvg, stoneGrid: PartialGrid<St
     })
 }
 
-export function highlightGrid(svg: ColoredGridSvg, highlight: PartialGrid<boolean>, color: string) {
+export function highlightGrid(svg: ColoredGridSvg, highlight: PartialGrid<CellMatchType>, color: string) {
     highlight.forEach((i, j, value) => {
         if (value) {
-            svg.cellHighlight(i, j, color)
+            let opacity = value == "primary" ? "0.4" : "0.15"
+            svg.cellHighlight(i, j, color, opacity)
         } else {
             svg.clearCellHighlight(i, j)
         }

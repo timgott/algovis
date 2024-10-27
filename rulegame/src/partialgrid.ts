@@ -146,6 +146,10 @@ export class PartialGrid<T> {
         return result
     }
 
+    filter(predicate: (v: T, i: number, j: number) => boolean): PartialGrid<T> {
+        return this.map((v, i, j) => predicate(v, i, j) ? v : null)
+    }
+
     count(predicate: (v: T, i: number, j: number) => boolean): number {
         let count = 0
         this.forNonEmpty((i, j, value) => {

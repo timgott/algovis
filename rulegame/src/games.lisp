@@ -14,7 +14,7 @@
       (@ # _ _ _ # #)
       (g # # # # # #))
     (players
-      (Geese (human) (color green))
+      (Geese (robot) (color green))
       (Fox (human) (color maroon)))
     (rules
       (for dir (N S W E)
@@ -72,6 +72,7 @@
 
 
 ; with mandatory captures and multiple hops
+; bug: if multiple captures at different locations are possible, both are done in one round
 (define checkers
   (game
     (stones
@@ -137,18 +138,18 @@
 (define blocksworld
   (game
     (stones
-      (b (circle (color chocolate)))
+      (b (circle (color green)))
       (# (block (color gray))))
     (initialBoard
+      (_ _ _ _ _ b b #)
+      (_ _ _ b b b b #)
       (_ _ _ _ _ b b #)
       (_ _ _ _ _ _ b #)
       (_ _ _ _ _ _ _ #)
       (_ _ _ _ _ _ _ #)
-      (_ _ _ _ _ _ _ #)
-      (_ _ _ _ _ _ _ #)
       (_ _ _ _ _ _ _ #))
     (players
-      (Human (human) (color blue)))
+      (Human (human) (color green)))
     (rules
       (Human
         (and
@@ -159,4 +160,105 @@
           (row E (_ b) (_ _))
           (row E (_ b) (b b)))))))
 
+(define glueworld
+  (game
+    (stones
+      (b (circle (color green)))
+      (g (circle (color yellow)))
+      (u (circle (color purple)))
+      (v (circle (color pink)))
+      (+ (block (color gray)))
+      (k (circle (color white)))
+      (# (nothing)))
+    (initialBoard
+      (_ _ _ _ _ b b +)
+      (_ _ _ b b b b +)
+      (_ _ _ _ _ b b +)
+      (_ _ _ _ _ _ b +)
+      (_ _ _ + + _ _ +)
+      (_ _ _ + C _ _ +)
+      (_ _ _ + + _ _ +)
+      (# # # # # # # #)
+      (P # # G L U E !)
+      (H # # k k k k k)
+      (# # # k k k k k))
+    (players
+      (Human (human) (color green))
+      (grounder (nature) (color purple))
+      (gravity (robot) (color purple))
+      (degrounder (nature) (color purple))
+      (let-human-play (nature) (color purple)))
+    (rules
+      (let-human-play
+        (row S (P ...) (P H)))
+      (for rule
+          (((row E (b) (_))
+            (row E (_) (b)))
+           ((row E (g) (b)))
+           ((row E (C _ _) (C b _)))
+           (for dir (N S W)
+                (for x (g b)
+                     ((row E (# k) (# #))
+                      (row E (b) (_))
+                      (row dir (_ x) (g x))))))
+          (Human
+            (and
+              (for r rule r)
+              (row S (P H) (P ...)))))
+      ; f = free falling guaranteed
+      (gravity
+        (row E (b _) (_ b)))
+      ; detect connection of blocks to ground
+      ; g = glued is connected in all directions
+      (for (x y dirs) ((b u (E)) (g v (N E S W)))
+           (grounder
+             (row E (x +) (y +)))
+           (for dir dirs
+                (for z (u v)
+                     (grounder
+                       (row dir (x z) (y z)))))
+           (degrounder
+             (row E (y) (x))))
+      (gravity
+        (row E (g) (b))))))
 
+(define wuziqi
+  (game
+    (stones
+      (w (circle (color white)))
+      (b (circle (color black)))
+      (# (nothing)))
+    (initialBoard
+      (_ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _)
+      (# # # # # # # # # # # #)
+      (P b # # # # # # # # # #))
+    (players
+      (White (human) (color deepskyblue))
+      (Black (human) (color chocolate)))
+    (rules
+      (for (player x y) ((White w b) (Black b w))
+        (player
+          (and
+            (row N (_) (x))
+            (row E (P x) (P y))))
+        (for dir (N S E W NE NW SE SW)
+          (player
+            (and
+              (row dir (x x x x x) (_ _ _ _ _))
+              (row N (y) (_))
+              (row E (P y) (S x)))))
+        (player
+          (and
+            (row N (_) (x))
+            (row E (S x) (P y))))))))

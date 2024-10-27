@@ -4,7 +4,7 @@ import { PartialGrid } from "./partialgrid";
 //
 export type Rule<S> = {
     pattern: S
-    after: S
+    update: S
 }
 
 // S: subpattern type, e.g. subgrid or partial subgrid
@@ -84,7 +84,7 @@ function haveIndependentDelta<T>(grid: PartialGrid<T>, matches: RuleMatch<T>[]) 
     }
     for (let match of matches) {
         let [i,j] = match.offset
-        let overlaps = match.rule.after.forNonEmpty((u, v, value) => {
+        let overlaps = match.rule.update.forNonEmpty((u, v, value) => {
             for (let [otherValue, otherMatches] of jointPattern.get(i + u, j + v)!) {
                 if (otherValue !== value && (!otherMatches.has(match) || otherMatches.size > 1)) {
                     return true
@@ -116,7 +116,7 @@ function putSubgrid<T>(grid: PartialGrid<T>, [i, j]: GridPos, subgrid: PartialGr
 }
 
 function applyGridRule<T>(grid: PartialGrid<T>, match: RuleMatch<T>) {
-    return putSubgrid(grid, match.offset, match.rule.after)
+    return putSubgrid(grid, match.offset, match.rule.update)
 }
 
 function applyMultiRule<T>(grid: PartialGrid<T>, match: MultiRuleMatch<T>) {
@@ -131,8 +131,9 @@ function binAtAllChanges<T>(matchGrid: RuleMatchGrid<T>, matches: MultiRuleMatch
     // write rule match at all cells that it would change
     for (let match of matches) {
         const [i,j] = match.offset
-        const area = match.rule.pattern.or(match.rule.after)
-        area.forNonEmpty((u,v) => {
+        const delta = match.rule.update
+        const area = match.rule.update.or(match.rule.pattern)
+        delta.forNonEmpty((u,v) => {
             matchGrid.get(i+u, j+v)!.add(matches)
         })
     }
@@ -143,7 +144,25 @@ function makeChangeGrid<T>(grid: PartialGrid<T>, ruleMatches: Iterable<MultiRule
     for (const match of ruleMatches) {
         binAtAllChanges(changeGrid, match)
     }
-    return changeGrid
+    return changeGrid.filter((set) => set.size > 0)
+}
+
+function makeNthChangeGrid<T>(grid: PartialGrid<T>, index: number, ruleMatches: Iterable<MultiRuleMatch<T>>): RuleMatchGrid<T> {
+    let changeGrid = grid.map(() => new Set<MultiRuleMatch<T>>())
+    for (const patches of ruleMatches) {
+        let cells = patches.flatMap(({offset, rule}) => {
+            let [i,j] = offset
+            let delta = rule.update
+            return delta.nonEmptyCells.map(([u,v]) => [i+u, j+v])
+        })
+        console.log(index)
+        if (index < cells.length) {
+            let [i,j] = cells[index]
+            console.log("index", index, "i", i, "j", j)
+            changeGrid.get(i,j)!.add(patches)
+        }
+    }
+    return changeGrid.filter((set) => set.size > 0)
 }
 
 export interface IPlayer<T> {
@@ -155,7 +174,7 @@ export interface IBoardUserInterface<T> {
 }
 
 export interface IHumanPlayInterface<T> {
-    selectCell(board: PartialGrid<T>, selectable: PartialGrid<boolean>, path: GridPos[]): Promise<GridPos>
+    selectCell(board: PartialGrid<T>, selectable: PartialGrid<CellMatchType>, path: GridPos[]): Promise<GridPos>
 }
 
 function isUniqueChangeSet<T>(grid: PartialGrid<T>, matches: MultiRuleMatch<T>[]) {
@@ -176,6 +195,8 @@ function isUniqueChangeSet<T>(grid: PartialGrid<T>, matches: MultiRuleMatch<T>[]
     return true
 }
 
+export type CellMatchType = "primary" | "area"
+
 export class Player<T> implements IPlayer<T> {
     constructor(private name: string, private ui: IHumanPlayInterface<T>, private allowedRules: MultiRule<T>[]) {}
 
@@ -186,13 +207,28 @@ export class Player<T> implements IPlayer<T> {
             return null
         }
         let uniqueChoice = isUniqueChangeSet(board, matches)
+        let index = 0
         do {
             console.log("Player", this.name, "chooses move from", matches.length, "possible moves")
+            // TODO: Nth change for disambiguation with special highlight
+            let indexGrid = makeNthChangeGrid(board, index, matches)
             let changeGrid = makeChangeGrid(board, matches)
-            //changeGrid = filterToCanonicalCell(matches, changeGrid)
-            let selectable = changeGrid.map((set) => set.size > 0 && (set.size < matches.length || uniqueChoice))
+            if (!uniqueChoice) {
+                changeGrid = changeGrid.filter(set => (set.size < matches.length))
+            }
+            let selectGrid = indexGrid.or(changeGrid)
+            let selectable = selectGrid.map((set,i,j) => {
+                if (indexGrid.has(i, j)) {
+                    return "primary"
+                } else {
+                    return "area"
+                }
+            })
             let pos = await this.ui.selectCell(board, selectable, [])
-            let newMatches = Array.from(changeGrid.get(...pos)!)
+            if (indexGrid.has(...pos)) {
+                index++
+            }
+            let newMatches = Array.from(selectGrid.get(...pos)!)
             assert(newMatches.length > 0, "should only select occupied cells")
             matches = newMatches
             uniqueChoice = isUniqueChangeSet(board, matches)
