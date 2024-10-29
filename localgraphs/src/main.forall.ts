@@ -2,7 +2,7 @@
 import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, distanceToPointSqr, findClosestNode, moveSlightly } from "./interaction/graphsim.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
 import { AnimationFrame, InteractionController, UiStack } from "./interaction/controller.js";
-import { Graph, GraphEdge, GraphNode, clearAllEdges, clearNeighbors, copySubgraphTo, createEdge, createEmptyGraph, createNode, deleteNode } from "./graph.js";
+import { Graph, GraphEdge, GraphNode, clearAllEdges, clearNeighbors, copySubgraphTo, createEdge, createEmptyGraph, createNode, deleteNode, mapSubgraphTo } from "./graph.js";
 import { assert, ensured, hasStaticType, unreachable } from "../../shared/utils.js";
 import { UndoHistory } from "./interaction/undo.js";
 import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction } from "./interaction/tools.js";
@@ -209,8 +209,18 @@ function rotationSymmetrize(count: number, locality: number, center: Node, graph
 
     // make new copies so that we have the subgraph count times
     let maps: Map<Node, Node>[] = [];
+    let centerAnnotation = center.data.annotation
+    let prefix = "";
     for (let i=1; i<count; i++) {
-        maps.push(copySubgraphTo(otherNodes, graph))
+        if (centerAnnotation.length > 1) {
+            prefix += "(" + centerAnnotation + ")"
+        } else {
+            prefix += centerAnnotation
+        }
+        maps.push(mapSubgraphTo(otherNodes, graph, (data) => ({
+            ...data,
+            annotation: data.annotation? prefix + data.annotation : data.annotation,
+        })))
     }
 
     // fix labels and variable connectors
@@ -220,16 +230,12 @@ function rotationSymmetrize(count: number, locality: number, center: Node, graph
         }
         for (let [n, m] of map) {
             if (isNormalNode(n) && n.data.pin) {
+                assert(isNormalNode(m), "m has same data as n, mr typechecker")
                 let label = n.data.pin.label
-                m.data = {
-                    ...n.data,
-                    pin: { label: mapNode(label) }
-                }
+                m.data.pin = { label: mapNode(label) }
             } else if (isVarNode(n)) {
-                m.data = {
-                    ...n.data,
-                    connectors: n.data.connectors.map(mapNode)
-                }
+                assert(isVarNode(m), "m has same data as n, mr typechecker")
+                m.data.connectors = n.data.connectors.map(mapNode)
             }
         }
     }
@@ -303,15 +309,6 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         ctx.save()
         const pinLevel = computePinLevel(graph.nodes, localityInput.valueAsNumber)
 
-        // nodes
-        for (let node of graph.nodes) {
-            let data = node.data
-            if (data.kind === "normal") {
-                this.drawNormalNode(ctx, node, pinLevel.get(node)!)
-            } else {
-                this.drawVariableNode(ctx, node, data)
-            }
-        }
         // edges
         for (let edge of graph.edges) {
             let orientation = getEdgeOrientation(edge)
@@ -323,6 +320,16 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
                 const levelB = pinLevel.get(edge.b)!
                 const free = levelA <= 1 && levelB <= 1
                 this.drawEdge(ctx, edge, free)
+            }
+        }
+
+        // nodes
+        for (let node of graph.nodes) {
+            let data = node.data
+            if (data.kind === "normal") {
+                this.drawNormalNode(ctx, node, pinLevel.get(node)!)
+            } else {
+                this.drawVariableNode(ctx, node, data)
             }
         }
 
@@ -407,8 +414,8 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         // label
         ctx.textAlign = "left"
         ctx.textBaseline = "top"
-        const fontWeight = "normal"
-        const fontSize = this.nodeRadius * 1.5
+        const fontWeight = "bold"
+        const fontSize = 12
         ctx.font = `${fontWeight} ${fontSize}px sans-serif`
         let label = node.data.annotation
         const textX = node.x + this.nodeRadius * 0.2
