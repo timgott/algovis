@@ -1,6 +1,6 @@
 //#region Imports
 import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, distanceToPointSqr, findClosestNode, moveSlightly } from "./interaction/graphsim.js";
-import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
+import { drawArrowTip, getCursorPosition, initFullscreenCanvas } from "../../shared/canvas.js"
 import { AnimationFrame, InteractionController, UiStack } from "./interaction/controller.js";
 import { Graph, GraphEdge, GraphNode, clearAllEdges, clearNeighbors, copySubgraphTo, createEdge, createEmptyGraph, createNode, deleteNode, mapSubgraphTo } from "./graph.js";
 import { assert, ensured, hasStaticType, unreachable } from "../../shared/utils.js";
@@ -303,6 +303,8 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
     strokeWidth: number = this.nodeRadius / 3
     arrowWidth: number = 1
     committedColor: string = "darkmagenta"
+    hoverPosition: Vector | null = null
+
     constructor(private nodeRadius: number) {}
 
     public drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<NodeData>) {
@@ -330,6 +332,22 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
                 this.drawNormalNode(ctx, node, pinLevel.get(node)!)
             } else {
                 this.drawVariableNode(ctx, node, data)
+            }
+        }
+
+        // annotation
+        if (graph.nodes.length < 20) {
+            for (let node of graph.nodes) {
+                if (node.data.annotation) {
+                    this.drawHint(ctx, node)
+                }
+            }
+        } else {
+            if (this.hoverPosition) {
+                let hoveredNode = findClosestNode(this.hoverPosition.x, this.hoverPosition.y, graph.nodes)
+                if (hoveredNode && hoveredNode.data.annotation) {
+                    this.drawHint(ctx, hoveredNode)
+                }
             }
         }
 
@@ -404,10 +422,6 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
             ctx.stroke()
         }
         ctx.globalAlpha = 1
-
-        if (hasHint) {
-            this.drawHint(ctx, node)
-        }
     }
 
     protected drawHint(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>) {
@@ -785,13 +799,20 @@ function replaceGlobalState(newState: State) {
     controller.requestFrame()
 }
 
+canvas.addEventListener("pointermove", (ev) => {
+    const [x,y] = getCursorPosition(canvas, ev)
+    painter.hoverPosition = { x, y }
+    controller.requestFrame()
+})
+
 /* Global init */
 
 const history = new UndoHistory<State>()
 let globalState = makeInitialState()
 
 const layoutPhysics = new GraphLayoutPhysics(layoutStyle, [applyCustomPhysics])
-const globalSim = new GraphPhysicsSimulator<NodeData>(globalState.graph, layoutPhysics, new OurGraphPainter(layoutStyle.nodeRadius))
+const painter = new OurGraphPainter(layoutStyle.nodeRadius)
+const globalSim = new GraphPhysicsSimulator<NodeData>(globalState.graph, layoutPhysics, painter)
 globalSim.setInteractionMode(buildInteraction)
 
 const globalWindows = new WindowController(globalState.windows, animateWindowContent)
