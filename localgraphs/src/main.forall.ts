@@ -286,19 +286,6 @@ function drawLineBetweenCircles(ctx: CanvasRenderingContext2D, a: Vector, b: Vec
     ctx.lineTo(newB.x, newB.y)
 }
 
-function getEdgeOrientation(edge: GraphEdge<NodeData>): [Node, Node] | null {
-    if (edge.a.data.kind === "normal" && edge.b.data.kind === "normal") {
-        if (edge.a.data.pin?.label === edge.b) {
-            console.assert(edge.b.data.pin === null, "inconsistent orientation")
-            return [edge.a, edge.b]
-        } else if (edge.b.data.pin?.label === edge.a) {
-            console.assert(edge.a.data.pin === null, "inconsistent orientation")
-            return [edge.b, edge.a]
-        }
-    }
-    return null
-}
-
 export class OurGraphPainter implements GraphPainter<NodeData> {
     strokeWidth: number = this.nodeRadius / 3
     arrowWidth: number = 1
@@ -313,15 +300,17 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
 
         // edges
         for (let edge of graph.edges) {
-            let orientation = getEdgeOrientation(edge)
-            if (orientation) {
-                let [a, b] = orientation
-                this.drawArrow(ctx, a, b)
-            } else {
-                const levelA = pinLevel.get(edge.a)!
-                const levelB = pinLevel.get(edge.b)!
-                const free = levelA <= 1 && levelB <= 1
-                this.drawEdge(ctx, edge, free)
+            const levelA = pinLevel.get(edge.a)!
+            const levelB = pinLevel.get(edge.b)!
+            const free = levelA <= 1 && levelB <= 1
+            this.drawEdge(ctx, edge, free)
+        }
+
+        // arrows
+        for (let node of graph.nodes) {
+            let data = node.data
+            if (data.kind === "normal" && data.pin) {
+                this.drawArrow(ctx, node, data.pin.label)
             }
         }
 
