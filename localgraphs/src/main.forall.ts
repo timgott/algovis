@@ -81,10 +81,22 @@ type State = {
 
 function makeInitialState(): State {
     let state: State = {
-        graph: createEmptyGraph(),
+        graph: makeConflictGraph(200,200),
         windows: []
     }
     return state
+}
+
+function makeConflictGraph(x: number, y: number): MainGraph {
+    let graph = createEmptyGraph<NodeData>()
+    let a = createNode(graph, { kind: "normal", pin: null, annotation: "A" }, x, y)
+    let b = createNode(graph, { kind: "normal", pin: null, annotation: "B" }, x + layoutStyle.minEdgeLength, y)
+    assert(isNormalNode(a), "type: a should be normal node")
+    assert(isNormalNode(b), "type: b should be normal node")
+    createEdge(graph, a, b)
+    setArrow(a, b)
+    setArrow(b, a)
+    return graph
 }
 
 function putNewNode(graph: MainGraph, x: number, y: number): Node {
