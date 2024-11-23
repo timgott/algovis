@@ -857,14 +857,27 @@ function toggleNodeVariable(node: GraphNode<NodeData>) {
     }
 }
 
+function toggleNodePinned(n: GraphNode<NodeData>) {
+    if (n.data.kind === "normal") {
+        if (n.data.pin) {
+            n.data.pin = null
+        } else {
+            n.data.pin = { label: n }
+        }
+    }
+}
+
+
 const buildInteraction = () => new BuildGraphInteraction<NodeData>(makeUndoable(putNewNode), makeUndoable(makeEdgeOrConnector))
 const arrowInteraction = () => new ArrowTool(pushUndoPoint)
 const labelInteraction = () => new ClickNodeInteraction<NodeData>(makeUndoable(askNodeLabel))
+const pinInteraction = () => new ClickNodeInteraction<NodeData>(makeUndoable(toggleNodePinned))
 
 toolButton("tool_move", () => new MoveComponentInteraction())
 toolButton("tool_drag", () => new DragNodeInteraction())
 toolButton("tool_build", buildInteraction)
-toolButton("tool_arrow", arrowInteraction)
+//toolButton("tool_arrow", arrowInteraction)
+toolButton("tool_pin", pinInteraction)
 toolButton("tool_label", labelInteraction)
 
 toolButton("tool_box", () => new SpanWindowTool(createBoxWindow))
