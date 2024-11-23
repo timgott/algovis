@@ -2,8 +2,8 @@
 import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, distanceToPointSqr, findClosestNode, moveSlightly } from "./interaction/graphsim.js";
 import { drawArrowTip, getCursorPosition, initFullscreenCanvas } from "../../shared/canvas.js"
 import { AnimationFrame, InteractionController, UiStack } from "./interaction/controller.js";
-import { Graph, GraphEdge, GraphNode, clearAllEdges, clearNeighbors, copySubgraphTo, createEdge, createEmptyGraph, createNode, deleteNode, mapSubgraphTo } from "./graph.js";
-import { assert, ensured, hasStaticType, unreachable } from "../../shared/utils.js";
+import { Graph, GraphEdge, GraphNode, clearAllEdges, clearNeighbors, copyGraph, copyGraphTo, copySubgraphTo, createEdge, createEmptyGraph, createNode, deleteNode, mapSubgraphTo } from "./graph.js";
+import { assert, ensured, hasStaticType, mapFromFunction, unreachable } from "../../shared/utils.js";
 import { UndoHistory } from "./interaction/undo.js";
 import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction } from "./interaction/tools.js";
 import { bfsSimple, computeDistances } from "./graphalgos.js";
@@ -11,6 +11,7 @@ import { normalize, Positioned, vec, vecadd, vecdir, vecscale, vecset, vecsub, V
 import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
 import { drawWindowTitle, WindowBounds as BoundedWindow, WindowController, satisfyMinBounds } from "./interaction/windows.js";
 import { Rect } from "../../shared/rectangle.js";
+import { mkRelation, mkMutRelation, Relation, relationUnionLazy, relationProduct, relationDifference, relationOneWay, relationDedup } from "../../shared/relation.js";
 //#endregion
 
 // Forall quantified construction calculus
@@ -88,9 +89,10 @@ function makeInitialState(): State {
 }
 
 function makeConflictGraph(x: number, y: number): MainGraph {
+    const labeled = false
     let graph = createEmptyGraph<NodeData>()
-    let a = createNode(graph, { kind: "normal", pin: null, annotation: "A" }, x, y)
-    let b = createNode(graph, { kind: "normal", pin: null, annotation: "B" }, x + layoutStyle.minEdgeLength, y)
+    let a = createNode(graph, { kind: "normal", pin: null, annotation: labeled ? "A" : "" }, x, y)
+    let b = createNode(graph, { kind: "normal", pin: null, annotation: labeled ? "B" : "" }, x + layoutStyle.minEdgeLength, y)
     assert(isNormalNode(a), "type: a should be normal node")
     assert(isNormalNode(b), "type: b should be normal node")
     createEdge(graph, a, b)
@@ -289,6 +291,81 @@ function computePinLevel(nodes: Node[], radius: number): Map<Node, number> {
     )
 }
 
+function graphUndirectedSquare<T>(graph: Graph<T>): Graph<T> {
+    let newgraph = createEmptyGraph<T>()
+    let nodeMap = copyGraphTo(graph, newgraph)
+    let newEdges: GraphEdge<T>[] = []
+    for (let node of graph.nodes) {
+        for (let neighbor of node.neighbors) {
+            for (let neighborsneighbor of neighbor.neighbors) {
+                let a = ensured(nodeMap.get(node))
+                let b = ensured(nodeMap.get(neighborsneighbor))
+                if (!a.neighbors.has(b)) {
+                    createEdge(newgraph, a, b)
+                }
+            }
+        }
+    }
+    return newgraph
+}
+
+function graphIteratedSquare<T>(graph: Graph<T>, count: number): Graph<T>[] {
+    let results = []
+    for (let i = 0; i < count; i++) {
+        let newgraph = graphUndirectedSquare(graph)
+        results.push(newgraph)
+        graph = newgraph
+    }
+    return results
+}
+
+type GraphRelation<T> = Relation<GraphNode<T>, GraphNode<T>>
+
+function graphAdjacency<T>(graph: Graph<T>): GraphRelation<T> {
+    return mkRelation({
+        get: (a) => a.neighbors,
+        keys: () => graph.nodes,
+    })
+}
+
+function graphIteratedSquareEdges<T>(graph: Graph<T>, count: number): GraphRelation<T>[] {
+    let results: GraphRelation<T>[] = []
+    let lastAdj = graphAdjacency(graph)
+    let transAdj = lastAdj
+    for (let i = 0; i < count; i++) {
+        let newAdj = mkMutRelation<GraphNode<T>,GraphNode<T>>()
+        for (let [a, b] of lastAdj) {
+            for (let c of lastAdj.get(b)) {
+                if (!transAdj.has(a,c)) {
+                    newAdj.add(a,c)
+                }
+            }
+        }
+        lastAdj = newAdj
+        transAdj = relationUnionLazy(transAdj, newAdj)
+        results.push(newAdj)
+    }
+    return results
+}
+
+function graphIteratedProduct<T>(graph: Graph<T>, maxDepth: number): Relation<GraphNode<T>,GraphNode<T>>[] {
+    let results: Relation<GraphNode<T>,GraphNode<T>>[] = []
+    let adj = graphAdjacency(graph)
+    let transAdj = adj
+    let lastAdj = adj
+    results.push(adj)
+    for (let i = 0; i < maxDepth-1; i++) {
+        lastAdj = relationProduct(lastAdj, adj)
+        let delta = relationDifference(lastAdj, transAdj)
+        if (delta.size == 0) {
+            return results
+        }
+        transAdj = relationUnionLazy(transAdj, lastAdj)
+        results.push(delta)
+    }
+    return results
+}
+
 function drawLineBetweenCircles(ctx: CanvasRenderingContext2D, a: Vector, b: Vector, radiusA: number, radiusB: number = radiusA) {
     const dir = vecdir(a, b)
     const newA = vecadd(a, vecscale(radiusA, dir))
@@ -300,15 +377,25 @@ function drawLineBetweenCircles(ctx: CanvasRenderingContext2D, a: Vector, b: Vec
 
 export class OurGraphPainter implements GraphPainter<NodeData> {
     strokeWidth: number = this.nodeRadius / 3
-    arrowWidth: number = 1
+    arrowWidth: number = 6
     committedColor: string = "darkmagenta"
     hoverPosition: Vector | null = null
+    powerEdges: GraphEdge<NodeData>[][] = []
+    showArrows: boolean = false
 
     constructor(private nodeRadius: number) {}
 
     public drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<NodeData>) {
         ctx.save()
         const pinLevel = computePinLevel(graph.nodes, localityInput.valueAsNumber)
+
+        // power edges
+        let maxPower = (localityInput.valueAsNumber+1)*2-1
+        let powerRels = graphIteratedProduct(graph, maxPower)
+        for (let i = powerRels.length; i > 0; i--) {
+            let rel = powerRels[i-1]
+            this.drawPowerRel(ctx, rel, i)
+        }
 
         // edges
         for (let edge of graph.edges) {
@@ -319,10 +406,12 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         }
 
         // arrows
-        for (let node of graph.nodes) {
-            let data = node.data
-            if (data.kind === "normal" && data.pin) {
-                this.drawArrow(ctx, node, data.pin.label)
+        if (this.showArrows) {
+            for (let node of graph.nodes) {
+                let data = node.data
+                if (data.kind === "normal" && data.pin) {
+                    this.drawArrow(ctx, node, data.pin.label)
+                }
             }
         }
 
@@ -337,21 +426,24 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         }
 
         // annotation
-        if (graph.nodes.length < 20) {
-            for (let node of graph.nodes) {
-                if (node.data.annotation) {
-                    this.drawHint(ctx, node)
+        let showLabels = true
+        if (showLabels) {
+            let allLabels = graph.nodes.length < 20
+            if (allLabels) {
+                for (let node of graph.nodes) {
+                    if (node.data.annotation) {
+                        this.drawHint(ctx, node)
+                    }
                 }
-            }
-        } else {
-            if (this.hoverPosition) {
-                let hoveredNode = findClosestNode(this.hoverPosition.x, this.hoverPosition.y, graph.nodes)
-                if (hoveredNode && hoveredNode.data.annotation) {
-                    this.drawHint(ctx, hoveredNode)
+            } else {
+                if (this.hoverPosition) {
+                    let hoveredNode = findClosestNode(this.hoverPosition.x, this.hoverPosition.y, graph.nodes)
+                    if (hoveredNode && hoveredNode.data.annotation) {
+                        this.drawHint(ctx, hoveredNode)
+                    }
                 }
             }
         }
-
         ctx.restore()
     }
 
@@ -455,10 +547,25 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         ctx.stroke()
     }
 
+    protected drawPowerRel(ctx: CanvasRenderingContext2D, rel: GraphRelation<NodeData>, level: number) {
+        //const t = 1 / ((level)/4 + 1)
+        const t = Math.exp(-level/6)
+        const alpha = 1.0 
+        ctx.strokeStyle = `hsla(${((level-2)/2)*47}, 90%, ${10+80*t}%, ${alpha})`
+        ctx.lineWidth = this.nodeRadius * 2
+        ctx.beginPath()
+        for (let [a,b] of relationOneWay(rel)) {
+            if (isPinned(a) && isPinned(b)) {
+                ctx.moveTo(a.x, a.y)
+                ctx.lineTo(b.x, b.y)
+            }
+        }
+        ctx.stroke()
+    }
+
     protected drawArrow(ctx: CanvasRenderingContext2D, from: GraphNode<NodeData>, to: GraphNode<NodeData>) {
         ctx.lineWidth = this.arrowWidth
         ctx.strokeStyle = this.committedColor
-        ctx.lineWidth = 6
         ctx.beginPath()
         const offset = vecscale(this.nodeRadius * 1.5, vecdir(from, to))
         let a = vecadd(from, offset)
@@ -768,9 +875,9 @@ toolButton("tool_forallbox", () => new SpanWindowTool(createForallWindow))
 toolButton("tool_varnode", () => new ClickNodeInteraction(makeUndoable(toggleNodeVariable)))
 
 toolButton("tool_symmetrize", () => new ClickNodeInteraction(
-    makeUndoable((n,g) => rotationSymmetrize(3, localityInput.valueAsNumber, n, g))))
+    makeUndoable((n,g) => rotationSymmetrize(3, Infinity, n, g))))
 toolButton("tool_symmetrize2", () => new ClickNodeInteraction(
-    makeUndoable((n,g) => rotationSymmetrize(2, localityInput.valueAsNumber, n, g))))
+    makeUndoable((n,g) => rotationSymmetrize(2, Infinity, n, g))))
 toolButton("tool_delete", () => new ClickNodeInteraction(makeUndoable(ourDeleteNode)))
 
 undoButton.addEventListener("click", () => {
