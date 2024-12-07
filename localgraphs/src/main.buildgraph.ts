@@ -1,13 +1,13 @@
 import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring } from "./coloring.js";
-import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, findClosestNode, dragNodes, offsetNodes, moveSlightly } from "./interaction/graphsim.js";
+import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, findClosestNode, offsetNodes, moveSlightly } from "./interaction/graphsim.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
-import { Graph, GraphEdge, GraphNode, MappedNode, copyGraph, copyGraphTo, copySubgraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, filteredGraphView, mapGraph, mapGraphLazy } from "./graph.js";
-import { assert, assertExists, degToRad, ensured, invertBijectiveMap, min, sleep } from "../../shared/utils.js";
+import { Graph, GraphEdge, GraphNode, MappedNode, copySubgraphTo, createEdge, createEmptyGraph, createNode, filteredGraphView, mapGraph, mapGraphLazy } from "./graph.js";
+import { assertExists, ensured, invertBijectiveMap } from "../../shared/utils.js";
 import { collectNeighborhood, computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js";
 import { DynamicLocal } from "./partialgrid.js";
-import { CommandTreeAdversary, executeEdgeCommand, make3Tree, runAdversary } from "./adversary.js";
+import { CommandTreeAdversary, executeEdgeCommand, make3Tree } from "./adversary.js";
 import { InteractionController } from "./interaction/controller.js";
-import { ClickNodeInteraction, BuildGraphInteraction, MoveComponentInteraction } from "./interaction/tools.js";
+import { ClickNodeInteraction, BuildGraphInteraction, MoveComponentInteraction, DuplicateInteraction } from "./interaction/tools.js";
 import { UndoHistory } from "./interaction/undo.js";
 import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
 
@@ -118,52 +118,6 @@ function putNewNode(graph: Graph<NodeData>, x: number, y: number): GraphNode<Nod
 function putNewEdge(graph: Graph<NodeData>, a: GraphNode<NodeData>, b: GraphNode<NodeData>) {
     const edge = createEdge(graph, a, b)
     algoStepEdge(graph, edge)
-}
-
-function duplicateSubgraph<T>(rootNode: GraphNode<T>): [Graph<T>, GraphNode<T>] {
-    let radius = Infinity
-    let [subgraph, nodeMap] = extractSubgraph(collectNeighborhood(rootNode, radius))
-    return [subgraph, ensured(nodeMap.get(rootNode))]
-}
-
-class DuplicateInteraction implements GraphInteraction<NodeData> {
-    state: {
-        subgraph: Graph<NodeData>,
-        root: GraphNode<NodeData>,
-        visibleSubgraph: Graph<NodeData>
-    } | null = null
-    painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
-
-    onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
-        let rootNode = findClosestNode(mouseX, mouseY, visible)
-        if (rootNode !== null) {
-            let [subgraph, newRoot] = duplicateSubgraph(rootNode)
-            this.state = {
-                subgraph: subgraph,
-                root: newRoot,
-                visibleSubgraph: filteredGraphView(subgraph, (node) => !node.data.collapsed)
-            }
-        }
-    }
-    onDragStep(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
-        // draw preview
-        let state = this.state
-        if (state !== null) {
-            offsetNodes(state.subgraph.nodes, mouseX - state.root.x, mouseY - state.root.y)
-            this.painter.drawGraph(drawCtx, state.visibleSubgraph)
-        }
-    }
-    onMouseUp(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
-        let state = this.state
-        if (state !== null) {
-            pushToHistory(graph)
-            for (let node of state.subgraph.nodes) {
-                moveSlightly(node)
-            }
-            copyGraphTo(state.subgraph, graph)
-            this.state = null
-        }
-    }
 }
 
 function collapse(node: GraphNode<NodeData>) {
@@ -465,7 +419,7 @@ const collapseInteraction = () => new ClickNodeInteraction<NodeData>(makeUndoabl
 toolButton("tool_move", () => new MoveComponentInteraction())
 toolButton("tool_drag", () => new DragNodeInteraction())
 toolButton("tool_build", buildInteraction)
-toolButton("tool_duplicate", () => new DuplicateInteraction())
+toolButton("tool_duplicate", () => new DuplicateInteraction(new ColoredGraphPainter(layoutStyle.nodeRadius), pushToHistory))
 toolButton("tool_collapse", collapseInteraction)
 toolButton("tool_mark", markInteraction)
 toolButton("tool_macro",  () => new MacroDuplicateInteraction())

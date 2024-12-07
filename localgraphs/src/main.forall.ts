@@ -5,7 +5,7 @@ import { AnimationFrame, InteractionController, UiStack } from "./interaction/co
 import { Graph, GraphEdge, GraphNode, clearAllEdges, clearNeighbors, copyGraph, copyGraphTo, copySubgraphTo, createEdge, createEmptyGraph, createNode, deleteNode, mapSubgraphTo } from "./graph.js";
 import { assert, ensured, hasStaticType, mapFromFunction, unreachable } from "../../shared/utils.js";
 import { UndoHistory } from "./interaction/undo.js";
-import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction } from "./interaction/tools.js";
+import { BuildGraphInteraction, ClickNodeInteraction, DuplicateInteraction, MoveComponentInteraction } from "./interaction/tools.js";
 import { bfsSimple, computeDistances } from "./graphalgos.js";
 import { normalize, Positioned, vec, vecadd, vecdir, vecscale, vecset, vecsub, Vector } from "../../shared/vector.js";
 import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
@@ -274,6 +274,26 @@ function rotationSymmetrize(count: number, locality: number, center: Node, graph
     }
 }
 
+function copyNodeData(data: NodeData, map: Map<GraphNode<NodeData>, GraphNode<NodeData>>): NodeData {
+    if (data.kind === "normal") {
+        if (data.pin) {
+            return {
+                ...data,
+                pin: { label: ensured(map.get(data.pin.label)) }
+            }
+        } else {
+            return {
+                ...data
+            }
+        }
+    } else {
+        return {
+            ...data,
+            connectors: data.connectors.map(n => ensured(map.get(n)))
+        }
+    }
+}
+
 //#endregion
 
 
@@ -381,7 +401,7 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
     committedColor: string = "darkmagenta"
     hoverPosition: Vector | null = null
     powerEdges: GraphEdge<NodeData>[][] = []
-    showArrows: boolean = false
+    showArrows: boolean = true
 
     constructor(private nodeRadius: number) {}
 
@@ -876,7 +896,7 @@ const pinInteraction = () => new ClickNodeInteraction<NodeData>(makeUndoable(tog
 toolButton("tool_move", () => new MoveComponentInteraction())
 toolButton("tool_drag", () => new DragNodeInteraction())
 toolButton("tool_build", buildInteraction)
-//toolButton("tool_arrow", arrowInteraction)
+toolButton("tool_arrow", arrowInteraction)
 toolButton("tool_pin", pinInteraction)
 toolButton("tool_label", labelInteraction)
 
@@ -891,6 +911,7 @@ toolButton("tool_symmetrize", () => new ClickNodeInteraction(
     makeUndoable((n,g) => rotationSymmetrize(3, Infinity, n, g))))
 toolButton("tool_symmetrize2", () => new ClickNodeInteraction(
     makeUndoable((n,g) => rotationSymmetrize(2, Infinity, n, g))))
+toolButton("tool_duplicate", () => new DuplicateInteraction(painter, _ => pushUndoPoint, copyNodeData))
 toolButton("tool_delete", () => new ClickNodeInteraction(makeUndoable(ourDeleteNode)))
 
 undoButton.addEventListener("click", () => {

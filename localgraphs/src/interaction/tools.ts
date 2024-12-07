@@ -1,7 +1,8 @@
+import { ensured } from "../../../shared/utils"
 import { Positioned, distance } from "../../../shared/vector"
-import { Graph, GraphEdge, GraphNode } from "../graph"
+import { copyGraphTo, extractSubgraph, filteredGraphView, Graph, GraphEdge, GraphNode, NodeDataTranster } from "../graph"
 import { collectNeighborhood } from "../graphalgos"
-import { GraphInteraction, dragNodes, findClosestEdge, findClosestNode } from "./graphsim"
+import { GraphInteraction, GraphPainter, dragNodes, findClosestEdge, findClosestNode, moveSlightly, offsetNodes } from "./graphsim"
 
 export class BuildGraphInteraction<T> implements GraphInteraction<T> {
     moveThreshold: number = 20
@@ -127,4 +128,51 @@ export class ClickEdgeInteraction<T> implements GraphInteraction<T> {
     }
     onDragStep() {}
     onMouseUp() {}
+}
+
+function duplicateSubgraph<T>(rootNode: GraphNode<T>, cloneData?: NodeDataTranster<T,T>): [Graph<T>, GraphNode<T>, Map<GraphNode<T>, GraphNode<T>>] {
+    let radius = Infinity
+    let [subgraph, nodeMap] = extractSubgraph(collectNeighborhood(rootNode, radius), cloneData)
+    return [subgraph, ensured(nodeMap.get(rootNode)), nodeMap]
+}
+
+export class DuplicateInteraction<T> implements GraphInteraction<T> {
+    state: {
+        subgraph: Graph<T>,
+        root: GraphNode<T>,
+        visibleSubgraph: Graph<T>
+    } | null = null
+    constructor (private painter: GraphPainter<T>, private pushToHistory: (graph: Graph<T>) => unknown, private cloneData: (data: T, nodeMap: Map<GraphNode<T>, GraphNode<T>>) => T = x => x) {}
+
+    onMouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number): void {
+        let rootNode = findClosestNode(mouseX, mouseY, visible)
+        if (rootNode !== null) {
+            let [subgraph, newRoot, nodeMap] = duplicateSubgraph(rootNode, this.cloneData)
+            let visibleSet = new Set(visible).map(node => nodeMap.get(node))
+            this.state = {
+                subgraph: subgraph,
+                root: newRoot,
+                visibleSubgraph: filteredGraphView(subgraph, (node) => visibleSet.has(node))
+            }
+        }
+    }
+    onDragStep(graph: Graph<T>, visible: unknown, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
+        // draw preview
+        let state = this.state
+        if (state !== null) {
+            offsetNodes(state.subgraph.nodes, mouseX - state.root.x, mouseY - state.root.y)
+            this.painter.drawGraph(drawCtx, state.visibleSubgraph)
+        }
+    }
+    onMouseUp(graph: Graph<T>, visible: unknown, mouseX: number, mouseY: number): void {
+        let state = this.state
+        if (state !== null) {
+            this.pushToHistory(graph)
+            for (let node of state.subgraph.nodes) {
+                moveSlightly(node)
+            }
+            copyGraphTo(state.subgraph, graph, this.cloneData)
+            this.state = null
+        }
+    }
 }
