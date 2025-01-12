@@ -89,10 +89,10 @@ function makeInitialState(): State {
 }
 
 function makeConflictGraph(x: number, y: number): MainGraph {
-    const labeled = false
+    const labeled = true
     let graph = createEmptyGraph<NodeData>()
-    let a = createNode(graph, { kind: "normal", pin: null, annotation: labeled ? "A" : "" }, x, y)
-    let b = createNode(graph, { kind: "normal", pin: null, annotation: labeled ? "B" : "" }, x + layoutStyle.minEdgeLength, y)
+    let a = createNode(graph, { kind: "normal", pin: null, annotation: labeled ? "0" : "" }, x, y)
+    let b = createNode(graph, { kind: "normal", pin: null, annotation: labeled ? "1" : "" }, x + layoutStyle.minEdgeLength, y)
     assert(isNormalNode(a), "type: a should be normal node")
     assert(isNormalNode(b), "type: b should be normal node")
     createEdge(graph, a, b)
@@ -226,14 +226,8 @@ function rotationSymmetrize(count: number, locality: number, center: Node, graph
     let centerAnnotation = center.data.annotation
     let prefix = "";
     for (let i=1; i<count; i++) {
-        if (centerAnnotation.length > 1) {
-            prefix += "(" + centerAnnotation + ")"
-        } else {
-            prefix += centerAnnotation
-        }
         maps.push(mapSubgraphTo(otherNodes, graph, (data) => ({
             ...data,
-            annotation: data.annotation? prefix + data.annotation : data.annotation,
         })))
     }
 
@@ -272,6 +266,27 @@ function rotationSymmetrize(count: number, locality: number, center: Node, graph
     if (isNormalNode(center)) {
         clearArrow(center)
     }
+
+    let branches = [otherNodes, ...maps.map((m) => [...m.values()])]
+    for (let i = 0; i < branches.length; i++) {
+        let prefix = i.toString()
+        for (let node of branches[i]) {
+            node.data.annotation = prefix + node.data.annotation
+        }
+    }
+    center.data.annotation = "*" + centerAnnotation
+}
+
+function old_nodePrefix(centerAnnotation: string, k: number) {
+    let prefix = ""
+    for (let i = 0; i < k; i++) {
+        if (centerAnnotation.length > 1) {
+            prefix += "(" + centerAnnotation + ")"
+        } else {
+            prefix += centerAnnotation
+        }
+    }
+    return prefix
 }
 
 function copyNodeData(data: NodeData, map: Map<GraphNode<NodeData>, GraphNode<NodeData>>): NodeData {
@@ -570,7 +585,7 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
     protected drawPowerRel(ctx: CanvasRenderingContext2D, rel: GraphRelation<NodeData>, level: number) {
         //const t = 1 / ((level)/4 + 1)
         const t = Math.exp(-level/6)
-        const alpha = 1.0 
+        const alpha = 1.0
         ctx.strokeStyle = `hsla(${((level-2)/2)*47}, 90%, ${10+80*t}%, ${alpha})`
         ctx.lineWidth = this.nodeRadius * 2
         ctx.beginPath()
@@ -908,9 +923,9 @@ toolButton("tool_forallbox", () => new SpanWindowTool(createForallWindow))
 toolButton("tool_varnode", () => new ClickNodeInteraction(makeUndoable(toggleNodeVariable)))
 
 toolButton("tool_symmetrize", () => new ClickNodeInteraction(
-    makeUndoable((n,g) => rotationSymmetrize(3, Infinity, n, g))))
+    makeUndoable((n,g) => rotationSymmetrize(3, localityInput.valueAsNumber, n, g))))
 toolButton("tool_symmetrize2", () => new ClickNodeInteraction(
-    makeUndoable((n,g) => rotationSymmetrize(2, Infinity, n, g))))
+    makeUndoable((n,g) => rotationSymmetrize(2, localityInput.valueAsNumber, n, g))))
 toolButton("tool_duplicate", () => new DuplicateInteraction(painter, _ => pushUndoPoint, copyNodeData))
 toolButton("tool_delete", () => new ClickNodeInteraction(makeUndoable(ourDeleteNode)))
 
