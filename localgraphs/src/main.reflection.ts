@@ -18,6 +18,7 @@ import { mkRelation, mkMutRelation, Relation, relationUnionLazy, relationProduct
 
 //#region Declare UI elements
 let localityInput = document.getElementById("locality") as HTMLInputElement
+let showLabelsCheckbox = document.getElementById("show_labels") as HTMLInputElement
 let undoButton = document.getElementById("undo") as HTMLButtonElement
 let redoButton = document.getElementById("redo") as HTMLButtonElement
 let resetButton = document.getElementById("reset") as HTMLButtonElement
@@ -91,8 +92,8 @@ function makeInitialState(): State {
 function makeConflictGraph(x: number, y: number): MainGraph {
     const labeled = true
     let graph = createEmptyGraph<NodeData>()
-    let a = createNode(graph, { kind: "normal", pin: null, annotation: labeled ? "0" : "" }, x, y)
-    let b = createNode(graph, { kind: "normal", pin: null, annotation: labeled ? "1" : "" }, x + layoutStyle.minEdgeLength, y)
+    let a = createNode(graph, { kind: "normal", pin: null, annotation: labeled ? "1" : "" }, x, y)
+    let b = createNode(graph, { kind: "normal", pin: null, annotation: labeled ? "2" : "" }, x + layoutStyle.minEdgeLength, y)
     assert(isNormalNode(a), "type: a should be normal node")
     assert(isNormalNode(b), "type: b should be normal node")
     createEdge(graph, a, b)
@@ -269,7 +270,7 @@ function rotationSymmetrize(count: number, locality: number, center: Node, graph
 
     let branches = [otherNodes, ...maps.map((m) => [...m.values()])]
     for (let i = 0; i < branches.length; i++) {
-        let prefix = i.toString()
+        let prefix = (i+1).toString()
         for (let node of branches[i]) {
             node.data.annotation = prefix + node.data.annotation
         }
@@ -418,7 +419,7 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
     powerEdges: GraphEdge<NodeData>[][] = []
     showArrows: boolean = true
 
-    constructor(private nodeRadius: number) {}
+    constructor(private nodeRadius: number, public showLabels: boolean) {}
 
     public drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<NodeData>) {
         ctx.save()
@@ -461,8 +462,7 @@ export class OurGraphPainter implements GraphPainter<NodeData> {
         }
 
         // annotation
-        let showLabels = true
-        if (showLabels) {
+        if (this.showLabels) {
             let allLabels = graph.nodes.length < 20
             if (allLabels) {
                 for (let node of graph.nodes) {
@@ -947,6 +947,11 @@ resetButton.addEventListener("click", () => {
 localityInput.addEventListener("input", () => {
     controller.requestFrame()
 })
+
+showLabelsCheckbox.addEventListener("change", () => {
+    painter.showLabels = showLabelsCheckbox.checked
+    controller.requestFrame()
+})
 //#endregion
 
 function replaceGlobalState(newState: State) {
@@ -968,7 +973,7 @@ const history = new UndoHistory<State>()
 let globalState = makeInitialState()
 
 const layoutPhysics = new GraphLayoutPhysics(layoutStyle, [applyCustomPhysics])
-const painter = new OurGraphPainter(layoutStyle.nodeRadius)
+const painter = new OurGraphPainter(layoutStyle.nodeRadius, showLabelsCheckbox.checked)
 const globalSim = new GraphPhysicsSimulator<NodeData>(globalState.graph, layoutPhysics, painter)
 globalSim.setInteractionMode(buildInteraction)
 
