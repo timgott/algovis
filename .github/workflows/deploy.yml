@@ -30,7 +30,7 @@ jobs:
         npx parcel build index.html --public-url /${{ github.event.repository.name }}
 
     - name: Upload pages artifact
-      uses: actions/upload-pages-artifact@v2
+      uses: actions/upload-pages-artifact@v3
       with:
         path: './dist' # parcel build output folder
 
