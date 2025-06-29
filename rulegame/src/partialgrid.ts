@@ -1,4 +1,4 @@
-import { assert, createEmptyGrid, ensured } from "../../shared/utils";
+import { assert, createEmptyGrid, ensured, maxValue } from "../../shared/utils";
 
 // partially colored grid
 export class PartialGrid<T> {
@@ -29,10 +29,10 @@ export class PartialGrid<T> {
 
     static fromArray<T>(array: (T|null)[][]): PartialGrid<T> {
         let rows = array.length
-        let columns = array[0].length
+        let columns = maxValue(array, row => row.length);
         let grid = new PartialGrid<T>(rows, columns)
         for (let i = 0; i < array.length; i++) {
-            for (let j = 0; j < array[0].length; j++) {
+            for (let j = 0; j < array[i].length; j++) {
                 let val = array[i][j]
                 if (val !== null) {
                     grid.put(i, j, val)
@@ -62,7 +62,8 @@ export class PartialGrid<T> {
     }
 
     put(x: number, y: number, value: T) {
-        assert(value != null, "null is reserved for empty cells")
+        assert(value !== null, "null is reserved for empty cells")
+        assert(value !== undefined, "got undefined")
         if (this.cells[x][y] === null) {
             this.nonEmptyCells.push([x, y])
         }

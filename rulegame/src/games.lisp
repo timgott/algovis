@@ -197,7 +197,7 @@
     (players
       (Human (human) (color green))
       (grounder (nature) (color purple))
-      (gravity (robot) (color purple))
+      (gravity (nature) (color purple))
       (degrounder (nature) (color purple))
       (let-human-play (nature) (color purple)))
     (rules
@@ -337,3 +337,30 @@
                   (and
                     (row N (f) (_)))))))))
 
+(define editortest
+  (game
+    (title "Editor Test")
+    (description "WIP pixel editor")
+    (for pieces ((A B C D E F U V W X Y Z))
+         (stones
+           (x (circle (color red)))
+           (o (circle (color white)))
+           (# (nothing)))
+         (initialBoard
+           ((for i pieces i) 🗑️)
+           (x (for bla pieces o))
+           (for size ((1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16))
+                ((for i size #))
+                (for i size ((for j size _)))))
+         (players
+           (You (human) (color lightblue)))
+         (rules
+           (for piece pieces
+                (You
+                  (and
+                    (row S (piece o) (piece x))
+                    (row S (x) (o))))
+                (You
+                  (and
+                    (row N (_) (piece))
+                    (row S (piece x) (piece x)))))))))

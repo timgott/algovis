@@ -110,7 +110,7 @@ async function main() {
     let template = document.getElementById("game_template") as HTMLTemplateElement
     let gamesRoot = document.getElementById("games_root") as HTMLElement
 
-    let gameNames = ["fox+geese", "checkers", "glueworld", "wuziqi", "go"];
+    let gameNames = ["fox+geese", "checkers", "glueworld", "wuziqi", "go", "editortest"];
     for (let gameName of gameNames) {
         let game = allGames.get(gameName)
         assertExists(game, `game ${gameName} not found`)
@@ -118,5 +118,4 @@ async function main() {
     }
 }
 
-console.log
 main()
