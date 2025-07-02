@@ -2,7 +2,7 @@ import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimula
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, MappedNode, copySubgraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, filteredGraphView, mapGraph, mapGraphLazy } from "../../localgraphs/src/graph.js";
 import { assertExists, ensured, invertBijectiveMap, randomChoice } from "../../shared/utils.js";
-import { collectNeighborhood, computeDistances, findConnectedComponents, getNodesByComponent } from "../../localgraphs/src/graphalgos.js";
+import { collectNeighborhood, computeDistances, findConnectedComponents, findConnectedComponentsSimple, getNodesByComponent } from "../../localgraphs/src/graphalgos.js";
 import { AnimationFrame, InteractionController, UiStack } from "../../localgraphs/src/interaction/controller.js";
 import { ClickNodeInteraction, BuildGraphInteraction, MoveComponentInteraction, DuplicateInteraction, SpanWindowTool } from "../../localgraphs/src/interaction/tools.js";
 import { UndoHistory } from "../../localgraphs/src/interaction/undo.js";
@@ -100,14 +100,17 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
     public drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<NodeData>): void {
         let highlightedNodes = new Set()
         for (let window of globalState.windows) {
-            let [containedSubgraph, _] = extractSubgraph(
+            let [containedSubgraph, _map] = extractSubgraph(
                 graph.nodes.filter(v => Rect.containsPos(window.bounds, v))
             )
-            let matches = findSubgraphMatches(graph, containedSubgraph, (a, b) => true)
-            console.log("Matches:", matches.length)
-            for (let match of matches) {
-                for (let [_, node] of match) {
-                    highlightedNodes.add(node)
+            let [componentCount, _componentMap] = findConnectedComponentsSimple(containedSubgraph);
+            if (componentCount === 1) {
+                let matches = findSubgraphMatches(graph, containedSubgraph, (a, b) => true)
+                console.log("Matches:", matches.length)
+                for (let match of matches) {
+                    for (let [_, node] of match) {
+                        highlightedNodes.add(node)
+                    }
                 }
             }
         }

@@ -1,4 +1,4 @@
-import { GraphNode } from "./graph"
+import { Graph, GraphNode } from "./graph"
 
 export enum SearchState {
     Continue,
@@ -148,6 +148,10 @@ export function findConnectedComponents<T>(seeds: Iterable<GraphNode<T>>, skip: 
         }
     }
     return [componentIndex, components]
+}
+
+export function findConnectedComponentsSimple<T>(graph: Graph<T>): [number, Map<GraphNode<T>, Component>] {
+    return findConnectedComponents(graph.nodes, () => false)
 }
 
 export function getNodesByComponent<T>(components: Map<GraphNode<T>, Component>, nodes: Iterable<GraphNode<T>>): Map<Component, GraphNode<T>[]> {
