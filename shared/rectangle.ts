@@ -1,4 +1,4 @@
-import { Vector } from "./vector"
+import { Positioned, Vector } from "./vector"
 
 export type Rect = {
     left: number,
@@ -67,6 +67,10 @@ export const Rect = {
 
     contains(rect: Rect, x: number, y: number): boolean {
         return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+    },
+
+    containsPos(rect: Rect, pos: Positioned): boolean {
+        return Rect.contains(rect, pos.x, pos.y)
     },
 
     splitVertical(rect: Rect, percent: number): [Rect, Rect] {

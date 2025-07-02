@@ -1,6 +1,7 @@
+import { Rect } from "../../../shared/rectangle"
 import { ensured } from "../../../shared/utils"
-import { Positioned, distance } from "../../../shared/vector"
-import { copyGraphTo, extractSubgraph, filteredGraphView, Graph, GraphEdge, GraphNode, NodeDataTranster } from "../graph"
+import { Positioned, Vector, distance, vec } from "../../../shared/vector"
+import { copyGraphTo, extractSubgraph, filteredGraphView, Graph, GraphEdge, GraphNode, NodeDataTransfer } from "../graph"
 import { collectNeighborhood } from "../graphalgos"
 import { GraphInteraction, GraphPainter, dragNodes, findClosestEdge, findClosestNode, moveSlightly, offsetNodes } from "./graphsim"
 
@@ -130,7 +131,7 @@ export class ClickEdgeInteraction<T> implements GraphInteraction<T> {
     onMouseUp() {}
 }
 
-function duplicateSubgraph<T>(rootNode: GraphNode<T>, cloneData?: NodeDataTranster<T,T>): [Graph<T>, GraphNode<T>, Map<GraphNode<T>, GraphNode<T>>] {
+function duplicateSubgraph<T>(rootNode: GraphNode<T>, cloneData?: NodeDataTransfer<T,T>): [Graph<T>, GraphNode<T>, Map<GraphNode<T>, GraphNode<T>>] {
     let radius = Infinity
     let [subgraph, nodeMap] = extractSubgraph(collectNeighborhood(rootNode, radius), cloneData)
     return [subgraph, ensured(nodeMap.get(rootNode)), nodeMap]
@@ -174,5 +175,46 @@ export class DuplicateInteraction<T> implements GraphInteraction<T> {
             copyGraphTo(state.subgraph, graph, this.cloneData)
             this.state = null
         }
+    }
+}
+
+
+export class SpanWindowTool<T> implements GraphInteraction<T> {
+    state: {
+        startPos: Vector,
+    } | null = null
+
+    constructor(
+        private createWindow: (bounds: Rect) => unknown,
+    ) {
+    }
+
+    onMouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number): void {
+        this.state = {
+            startPos : vec(mouseX, mouseY),
+        }
+    }
+
+    onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
+        let state = this.state
+        if (state !== null) {
+            let bounds = Rect.fromPoints([state.startPos, vec(mouseX, mouseY)])
+            // dashed gray rectangle
+            drawCtx.save()
+            drawCtx.strokeStyle = "gray"
+            drawCtx.setLineDash([5, 5])
+            drawCtx.lineWidth = 1
+            drawCtx.beginPath()
+            drawCtx.strokeRect(bounds.left, bounds.top, Rect.width(bounds), Rect.height(bounds))
+            drawCtx.restore()
+        }
+    }
+
+    onMouseUp(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number): void {
+        if (this.state === null) {
+            return
+        }
+        let bounds = Rect.fromPoints([this.state.startPos, vec(mouseX, mouseY)])
+        this.createWindow(bounds)
     }
 }

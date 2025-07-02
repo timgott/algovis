@@ -5,11 +5,11 @@ import { AnimationFrame, InteractionController, UiStack } from "./interaction/co
 import { Graph, GraphEdge, GraphNode, clearAllEdges, clearNeighbors, copyGraph, copyGraphTo, copySubgraphTo, createEdge, createEmptyGraph, createNode, deleteNode, mapSubgraphTo } from "./graph.js";
 import { assert, ensured, hasStaticType, mapFromFunction, unreachable } from "../../shared/utils.js";
 import { UndoHistory } from "./interaction/undo.js";
-import { BuildGraphInteraction, ClickNodeInteraction, DuplicateInteraction, MoveComponentInteraction } from "./interaction/tools.js";
+import { BuildGraphInteraction, ClickNodeInteraction, DuplicateInteraction, MoveComponentInteraction, SpanWindowTool } from "./interaction/tools.js";
 import { bfsSimple, computeDistances } from "./graphalgos.js";
 import { normalize, Positioned, vec, vecadd, vecdir, vecscale, vecset, vecsub, Vector } from "../../shared/vector.js";
 import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
-import { drawWindowTitle, WindowBounds as BoundedWindow, WindowController, satisfyMinBounds } from "./interaction/windows.js";
+import { drawWindowTitle, WindowBounds, WindowController, satisfyMinBounds } from "./interaction/windows.js";
 import { Rect } from "../../shared/rectangle.js";
 import { mkRelation, mkMutRelation, Relation, relationUnionLazy, relationProduct, relationDifference, relationOneWay, relationDedup } from "../../shared/relation.js";
 //#endregion
@@ -67,7 +67,7 @@ type NodeData = NormalNodeData | VariableNodeData
 type MainGraph = Graph<NodeData>
 type Node = GraphNode<NodeData>
 
-type WindowState = BoundedWindow & ({
+type WindowState = WindowBounds & ({
     kind: "box" | "output" | "either"
 } | {
     kind: "forall"
@@ -745,45 +745,6 @@ class ArrowTool implements GraphInteraction<NodeData> {
     }
 }
 
-class SpanWindowTool implements GraphInteraction<NodeData> {
-    state: {
-        startPos: Vector,
-    } | null = null
-
-    constructor(
-        private createWindow: (bounds: Rect) => unknown,
-    ) {
-    }
-
-    onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
-        this.state = {
-            startPos : vec(mouseX, mouseY),
-        }
-    }
-
-    onDragStep(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
-        let state = this.state
-        if (state !== null) {
-            let bounds = Rect.fromPoints([state.startPos, vec(mouseX, mouseY)])
-            // dashed gray rectangle
-            drawCtx.save()
-            drawCtx.strokeStyle = "gray"
-            drawCtx.setLineDash([5, 5])
-            drawCtx.lineWidth = 1
-            drawCtx.beginPath()
-            drawCtx.strokeRect(bounds.left, bounds.top, Rect.width(bounds), Rect.height(bounds))
-            drawCtx.restore()
-        }
-    }
-
-    onMouseUp(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
-        if (this.state === null) {
-            return
-        }
-        let bounds = Rect.fromPoints([this.state.startPos, vec(mouseX, mouseY)])
-        this.createWindow(bounds)
-    }
-}
 //#endregion
 
 //#region Tool buttons

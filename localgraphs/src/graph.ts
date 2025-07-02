@@ -78,7 +78,7 @@ export function deleteNode<T>(graph: Graph<T>, node: GraphNode<T>) {
     graph.nodes = graph.nodes.filter(n => n !== node)
 }
 
-export type NodeDataTranster<S,T> = (data: S, nodeMap: Map<GraphNode<S>, GraphNode<T>>) => T
+export type NodeDataTransfer<S,T> = (data: S, nodeMap: Map<GraphNode<S>, GraphNode<T>>) => T
 
 // copies the given nodes with data transformed by mapping and the edges between them to targetGraph
 // returns a map from old nodes to new nodes
@@ -106,23 +106,23 @@ export function mapSubgraphTo<S,T>(nodes: Iterable<GraphNode<S>>, targetGraph: G
 
 // copies the given nodes and the edges between them to targetGraph
 // returns a map from old nodes to new nodes
-export function copySubgraphTo<T>(nodes: Iterable<GraphNode<T>>, targetGraph: Graph<T>, copyData: NodeDataTranster<T,T> = x => structuredClone(x)): Map<GraphNode<T>, GraphNode<T>> {
+export function copySubgraphTo<T>(nodes: Iterable<GraphNode<T>>, targetGraph: Graph<T>, copyData: NodeDataTransfer<T,T> = x => structuredClone(x)): Map<GraphNode<T>, GraphNode<T>> {
     return mapSubgraphTo(nodes, targetGraph, copyData)
 }
 
 // copies the entire graph into targetGraph
-export function copyGraphTo<T>(source: Graph<T>, target: Graph<T>, copyData?: NodeDataTranster<T,T>): Map<GraphNode<T>, GraphNode<T>> {
+export function copyGraphTo<T>(source: Graph<T>, target: Graph<T>, copyData?: NodeDataTransfer<T,T>): Map<GraphNode<T>, GraphNode<T>> {
     return copySubgraphTo(source.nodes, target, copyData)
 }
 
-export function copyGraph<T>(graph: Graph<T>, copyData?: NodeDataTranster<T,T>) {
+export function copyGraph<T>(graph: Graph<T>, copyData?: NodeDataTransfer<T,T>) {
     let result = createEmptyGraph<T>()
     copyGraphTo(graph, result, copyData)
     return result
 }
 
 // returns a new graph containing the given nodes and the edges between them
-export function extractSubgraph<T>(nodes: Iterable<GraphNode<T>>, copyData?: NodeDataTranster<T,T>): [Graph<T>, Map<GraphNode<T>, GraphNode<T>>] {
+export function extractSubgraph<T>(nodes: Iterable<GraphNode<T>>, copyData?: NodeDataTransfer<T,T>): [Graph<T>, Map<GraphNode<T>, GraphNode<T>>] {
     let subgraph = createEmptyGraph<T>()
     let map = copySubgraphTo(nodes, subgraph, copyData)
     return [subgraph, map]

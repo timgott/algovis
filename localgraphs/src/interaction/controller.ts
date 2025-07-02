@@ -152,7 +152,7 @@ export class InteractionController {
         if (sleepState === "Running") {
             this.requestFrame()
         } else {
-            console.log("Physics settled, sleeping")
+            //console.log("Physics settled, sleeping")
         }
     }
 
@@ -173,7 +173,7 @@ export class InteractionController {
         // start dragging node
         const result = this.system.onMouseDown(x, y, pointerId)
         if (result !== "Ignore") {
-            console.log(result)
+            //console.log(result)
             if (result === "Drag") {
                 this.dragState.set(pointerId, { x, y })
                 this.canvas.setPointerCapture(pointerId) // capture drag events
