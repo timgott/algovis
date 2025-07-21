@@ -1,6 +1,6 @@
 import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, findClosestNode, offsetNodes, moveSlightly } from "../../localgraphs/src/interaction/graphsim.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
-import { Graph, GraphEdge, GraphNode, MappedNode, copySubgraphTo, createEdge, createEmptyGraph, createNode, extractSubgraph, filteredGraphView, mapGraph, mapGraphLazy } from "../../localgraphs/src/graph.js";
+import { Graph, GraphEdge, GraphNode, MappedNode, copySubgraphTo, createEdge, createEmptyGraph, createNode, deleteNode, extractSubgraph, filteredGraphView, mapGraph, mapGraphLazy } from "../../localgraphs/src/graph.js";
 import { assertExists, ensured, invertBijectiveMap, randomChoice } from "../../shared/utils.js";
 import { collectNeighborhood, computeDistances, findConnectedComponents, findConnectedComponentsSimple, getNodesByComponent } from "../../localgraphs/src/graphalgos.js";
 import { AnimationFrame, InteractionController, UiStack } from "../../localgraphs/src/interaction/controller.js";
@@ -42,6 +42,14 @@ type NodeData = {
     label: string
 }
 
+type LabeledGraphEdge<T,E> = {
+    data: E,
+} & GraphEdge<T>
+
+type LabeledGraph<T,E> = {
+    nodes: GraphNode<T>[]
+    edges: LabeledGraphEdge<T,E>[]
+}
 
 type MainGraph = Graph<NodeData>
 type Node = GraphNode<NodeData>
@@ -126,8 +134,17 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
         ctx.beginPath()
         ctx.lineWidth = 3
         ctx.strokeStyle = "black"
-        ctx.moveTo(edge.a.x, edge.a.y)
-        ctx.lineTo(edge.b.x, edge.b.y)
+        if (edge.a == edge.b) {
+            // self loop
+            ctx.lineWidth = 1
+            let cx = edge.a.x + this.nodeRadius;
+            let cy = edge.a.y - this.nodeRadius;
+            ctx.arc(cx, cy, this.nodeRadius, -Math.PI, Math.PI / 2, false);
+            //drawArrowTip(edge.a.x + this.nodeRadius * 8, edge.a.y - this.nodeRadius, edge.a.x + this.nodeRadius, edge.a.y, this.nodeRadius / 2, ctx)
+        } else {
+            ctx.moveTo(edge.a.x, edge.a.y)
+            ctx.lineTo(edge.b.x, edge.b.y)
+        }
         ctx.stroke()
     }
 
@@ -237,13 +254,16 @@ function makeUndoable<T extends (...args: any) => any>(f: T): T {
     } as T
 }
 
-const buildInteraction = () => new BuildGraphInteraction(makeUndoable(putNewNode), makeUndoable(putNewEdge))
+const buildInteraction = () => new BuildGraphInteraction(makeUndoable(putNewNode), makeUndoable(putNewEdge)).withSelfLoops()
 
 toolButton("tool_move", () => new MoveComponentInteraction())
 toolButton("tool_drag", () => new DragNodeInteraction())
 toolButton("tool_build", buildInteraction)
 toolButton("tool_duplicate", () => new DuplicateInteraction(new ColoredGraphPainter(layoutStyle.nodeRadius), pushToHistory))
 toolButton("tool_rulebox", () => new SpanWindowTool(putNewWindow))
+toolButton("tool_delete", () => new ClickNodeInteraction(makeUndoable((node, graph) => deleteNode(graph, node))))
+//toolButton("tool_insertion", () => _)
+//toolButton("tool_modification", () => _)
 
 const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
 initFullscreenCanvas(canvas)

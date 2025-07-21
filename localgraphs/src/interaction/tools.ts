@@ -7,7 +7,9 @@ import { GraphInteraction, GraphPainter, dragNodes, findClosestEdge, findClosest
 
 export class BuildGraphInteraction<T> implements GraphInteraction<T> {
     moveThreshold: number = 20
-    connectConeFactor: number = 0.7 // weight factor for connecting existing nodes instead of adding a new node
+    connectDistFactor: number = 0.7 // weight factor for connecting existing nodes instead of adding a new node
+    selfLoopsAllowed: boolean = false
+    selfLoopDistance: number = 30 // max distance to node when building self-loop
 
     startNode: GraphNode<T> | null = null
     startX: number = 0
@@ -15,6 +17,11 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
     hasMoved: boolean = false
 
     constructor(private buildNode: (graph: Graph<T>, x: number, y: number) => GraphNode<T>, private buildEdge: (graph: Graph<T>, a: GraphNode<T>, b: GraphNode<T>) => unknown) {
+    }
+
+    withSelfLoops() {
+        this.selfLoopsAllowed = true;
+        return this
     }
 
     findNode(x: number, y: number, visible: Iterable<GraphNode<T>>): GraphNode<T> | null {
@@ -31,15 +38,23 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
         let distance = Math.hypot(mouseX - this.startX, mouseY - this.startY)
         return distance >= this.moveThreshold
     }
-    shouldCreateEndpoint(mouseX: number, mouseY: number, closestNode: GraphNode<T>): boolean {
-        if (this.startNode === closestNode
-            || this.startNode?.neighbors.has(closestNode)) {
+    shouldCreateNewEndpoint(mouseX: number, mouseY: number, closestNode: GraphNode<T>): boolean {
+        if (!this.selfLoopsAllowed && this.startNode === closestNode) {
+            // no self loop
+            return true
+        }
+        if (this.startNode?.neighbors.has(closestNode)) {
+            // don't build edge twice
             return true
         }
         const mouse = { x: mouseX, y: mouseY }
-        const node = { x: closestNode.x, y: closestNode.y }
         const start = { x: this.startX, y: this.startY}
-        return distance(start, mouse)*this.connectConeFactor < distance(mouse, node)
+        if (this.selfLoopsAllowed && this.startNode === closestNode) {
+            // self loop
+            return distance(mouse, closestNode) > this.selfLoopDistance
+        }
+        // build edge if closest node is closer than start
+        return distance(start, mouse)*this.connectDistFactor < distance(mouse, closestNode)
     }
     onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D): void {
         if (!this.hasMoved && this.checkHasMoved(mouseX, mouseY)) {
@@ -50,7 +65,7 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
             drawCtx.lineWidth = 1
             drawCtx.beginPath()
             let endNode = this.findNode(mouseX, mouseY, visible)
-            if (endNode !== null && !this.shouldCreateEndpoint(mouseX, mouseY, endNode)) {
+            if (endNode !== null && !this.shouldCreateNewEndpoint(mouseX, mouseY, endNode)) {
                 drawCtx.moveTo(endNode.x, endNode.y)
                 drawCtx.quadraticCurveTo(mouseX, mouseY, this.startNode.x, this.startNode.y)
                 drawCtx.stroke()
@@ -68,7 +83,7 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
     onMouseUp(graph: Graph<T>, visible: Iterable<GraphNode<T>>, endX: number, endY: number): void {
         if (this.startNode !== null && this.hasMoved) {
             let endNode = this.findNode(endX, endY, visible)
-            if (endNode === null || this.shouldCreateEndpoint(endX, endY, endNode)) {
+            if (endNode === null || this.shouldCreateNewEndpoint(endX, endY, endNode)) {
                 endNode = this.buildNode(graph, endX, endY)
             }
             // create new edge

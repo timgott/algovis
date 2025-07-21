@@ -3,16 +3,6 @@ import { assert } from "../../shared/utils";
 
 type Embedding<T> = Map<GraphNode<unknown>, GraphNode<T>>
 
-function checkNeighborsMatch<S,T>(p: GraphNode<S>, h: GraphNode<T>, mapping: Embedding<T>) {
-    for (let np of p.neighbors) {
-        let nh = mapping.get(np)
-        if (nh && !h.neighbors.has(nh)) {
-            return false
-        }
-    }
-    return true
-}
-
 // ensures that two keys don't point to the same value
 class InjectiveEmbeddingBuilder<S,T> {
     mapping: Map<S,T> = new Map()
@@ -49,7 +39,18 @@ class InjectiveEmbeddingBuilder<S,T> {
     }
 }
 
-// TODO: should be optimized for the case that pattern is a connected graph, only generate extensions that are neighbors of existing matches
+// checks if all neighbors of pattern node p that are matched already map to neighbors of host node h
+function checkNeighborsMatch<S,T>(p: GraphNode<S>, h: GraphNode<T>, mapping: Embedding<T>) {
+    for (let np of p.neighbors) {
+        let nh = mapping.get(np)
+        if (nh && !h.neighbors.has(nh)) {
+            return false
+        }
+    }
+    return true
+}
+
+// TODO: Could be optimized for the case that pattern is a connected graph, only generate extensions that are neighbors of existing matches
 // allows edges in host that do not exist in pattern
 export function findSubgraphMatches<S, T>(host: Graph<T>, pattern: Graph<S>, dataMatcher: (a: S, b: T) => boolean): Embedding<T>[] {
     if (pattern.nodes.length === 0) {
@@ -76,17 +77,22 @@ export function findSubgraphMatches<S, T>(host: Graph<T>, pattern: Graph<S>, dat
             stack.pop()
             continue
         }
-        if (checkDataMatch(patternNode, next)
-            && checkNeighborsMatch(patternNode, next, partialMatch.toMap())
-            && !partialMatch.hasValue(next)) {
-            partialMatch.set(patternNode, next)
-            if (stack.length < pattern.nodes.length) {
-                stack.push(Array.from(host.nodes))
-            } else {
-                matches.push(partialMatch.toMap())
+        // each host node must be used at most one once (map (pattern -> host) is injective),
+        // otherwise e.g. a single node with self loop would match every pattern, or a k-clique would match every k-colorable pattern
+        if (!partialMatch.hasValue(next)) { 
+            if (checkDataMatch(patternNode, next)) { // labels must match
+                partialMatch.set(patternNode, next) // set current match before checking to match self loops correctly, will be deleted when backtracking
+                if (checkNeighborsMatch(patternNode, next, partialMatch.toMap())) {
+                    if (stack.length < pattern.nodes.length) {
+                        stack.push(Array.from(host.nodes))
+                    } else {
+                        matches.push(partialMatch.toMap())
+                    }
+                }
             }
         }
     }
 
     return matches
 }
+

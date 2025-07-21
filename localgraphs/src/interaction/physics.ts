@@ -69,25 +69,27 @@ function applyLayoutForces<T>(
 
     // pull together edges
     for (let edge of graph.edges) {
-        // don't check for active nodes because of edge cases like uncollapsing nodes
-        let dx = edge.b.x - edge.a.x;
-        let dy = edge.b.y - edge.a.y;
-        let dist = Math.sqrt(dx * dx + dy * dy);
-        console.assert(dist > 0, "Points on same spot");
-        let unitX = dx / dist;
-        let unitY = dy / dist;
-        let delta = 0;
-        let length = Math.max(edge.length, layout.minEdgeLength);
-        if (dist > length) {
-            delta = length - dist;
-        } else if (dist < layout.minEdgeLength) {
-            delta = layout.minEdgeLength - dist;
+        if (edge.a !== edge.b) { // skip self-loops
+            // don't check for active nodes because of edge cases like uncollapsing nodes
+            let dx = edge.b.x - edge.a.x;
+            let dy = edge.b.y - edge.a.y;
+            let dist = Math.sqrt(dx * dx + dy * dy);
+            console.assert(dist > 0, "Points on same spot");
+            let unitX = dx / dist;
+            let unitY = dy / dist;
+            let delta = 0;
+            let length = Math.max(edge.length, layout.minEdgeLength);
+            if (dist > length) {
+                delta = length - dist;
+            } else if (dist < layout.minEdgeLength) {
+                delta = layout.minEdgeLength - dist;
+            }
+            let force = delta * layout.edgeForce * dt;
+            edge.a.vx -= force * unitX;
+            edge.a.vy -= force * unitY;
+            edge.b.vx += force * unitX;
+            edge.b.vy += force * unitY;
         }
-        let force = delta * layout.edgeForce * dt;
-        edge.a.vx -= force * unitX;
-        edge.a.vy -= force * unitY;
-        edge.b.vx += force * unitX;
-        edge.b.vy += force * unitY;
     }
     // push apart nodes
     const targetDistSqr = layout.pushDistance * layout.pushDistance;
