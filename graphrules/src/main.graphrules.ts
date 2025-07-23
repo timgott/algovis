@@ -32,23 +32,6 @@ const layoutStyle: LayoutConfig = {
 type NodeData = {
     kind: "normal",
     label: string
-} | {
-    kind: "update",
-    label: string
-} | {
-    kind: "delete",
-} | {
-    kind: "insert",
-    label: string
-}
-
-type LabeledGraphEdge<T,E> = {
-    data: E,
-} & GraphEdge<T>
-
-type LabeledGraph<T,E> = {
-    nodes: GraphNode<T>[]
-    edges: LabeledGraphEdge<T,E>[]
 }
 
 type MainGraph = Graph<NodeData>
@@ -60,12 +43,14 @@ type WindowState = WindowBounds
 type State = {
     graph: MainGraph,
     windows: WindowState[],
+    selected: Set<GraphNode<NodeData>>,
 }
 
 function makeInitialState(): State {
     return {
         graph: createEmptyGraph(),
         windows: [],
+        selected: new Set<GraphNode<NodeData>>(),
     }
 }
 
@@ -89,19 +74,6 @@ function putNewWindow(bounds: Rect) {
     controller.requestFrame()
 }
 
-function putNewNode(graph: Graph<NodeData>, x: number, y: number): GraphNode<NodeData> {
-    let node = createNode(graph, {
-        kind: "normal",
-        label: "",
-    }, x, y)
-    moveSlightly(node)
-    return node
-}
-
-function putNewEdge(graph: Graph<NodeData>, a: GraphNode<NodeData>, b: GraphNode<NodeData>) {
-    const edge = createEdge(graph, a, b)
-}
-
 class ColoredGraphPainter implements GraphPainter<NodeData> {
     constructor(private nodeRadius: number, public showParities: boolean = false) { }
 
@@ -113,7 +85,7 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
             )
             let [componentCount, _componentMap] = findConnectedComponentsSimple(containedSubgraph);
             if (componentCount === 1) {
-                let matches = findSubgraphMatches(graph, containedSubgraph, (a, b) => true)
+                let matches = findSubgraphMatches(graph, containedSubgraph, (a, b) => a.kind === b.kind && a.label === b.label)
                 console.log("Matches:", matches.length)
                 for (let match of matches) {
                     for (let [_, node] of match) {
@@ -125,8 +97,9 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
         for (let edge of graph.edges) {
             this.drawEdge(ctx, edge)
         }
+        let selectedNodes = globalState.selected
         for (let node of graph.nodes) {
-            this.drawNode(ctx, node, highlightedNodes.has(node))
+            this.drawNode(ctx, node, highlightedNodes.has(node), selectedNodes.has(node))
         }
     }
 
@@ -148,7 +121,7 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
         ctx.stroke()
     }
 
-    drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>, highlight: boolean) {
+    drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<NodeData>, highlight: boolean, selected: boolean) {
         // circle
         ctx.fillStyle = highlight ? "red" : "white"
         ctx.strokeStyle = highlight ? "darkred" : "black"
@@ -157,8 +130,19 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
         ctx.fill()
         ctx.stroke()
 
+        // selection outline
+        if (selected) {
+            ctx.lineWidth = 2
+            ctx.strokeStyle = "blue"
+            ctx.setLineDash([5, 5])
+            ctx.circle(node.x, node.y, this.nodeRadius * 1.5)
+            ctx.stroke()
+            ctx.setLineDash([])
+        }
+
         // label
-        if (node.data.kind !== "delete") {
+        if (node.data.kind === "normal") {
+            ctx.strokeStyle = "black"
             ctx.fillStyle = ctx.strokeStyle // text in same color as outline
             ctx.textAlign = "center"
             ctx.textBaseline = "middle"
@@ -169,11 +153,11 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
             ctx.fillText(label, node.x, node.y)
         }
     }
+
 }
 
 
 function drawWindowContent(frame: AnimationFrame, window: WindowState, titleArea: Rect) {
-    let graph = globalState.graph
     let getWindowTitle = (window: WindowState): string => {
         return "Rule"
     }
@@ -243,7 +227,9 @@ redoButton.addEventListener("click", () => {
 
 function toolButton(id: string, tool: () => GraphInteraction<NodeData>) {
     document.getElementById(id)!.addEventListener("click", () => {
+        globalState.selected.clear()
         globalSim.setInteractionMode(tool)
+        controller.requestFrame()
     })
 }
 
@@ -254,7 +240,30 @@ function makeUndoable<T extends (...args: any) => any>(f: T): T {
     } as T
 }
 
-const buildInteraction = () => new BuildGraphInteraction(makeUndoable(putNewNode), makeUndoable(putNewEdge)).withSelfLoops()
+function putNewNode(graph: Graph<NodeData>, x: number, y: number): GraphNode<NodeData> {
+    let node = createNode<NodeData>(graph, {
+        kind: "normal",
+        label: "",
+    }, x, y)
+    moveSlightly(node)
+    globalState.selected = new Set([node])
+    return node
+}
+
+function putNewEdge(graph: Graph<NodeData>, a: GraphNode<NodeData>, b: GraphNode<NodeData>) {
+    return createEdge(graph, a, b)
+}
+
+function selectNode(node: GraphNode<NodeData>) {
+    if (globalState.selected.has(node)) {
+        globalState.selected.delete(node)
+    } else {
+        globalState.selected = new Set([node])
+    }
+    controller.requestFrame()
+}
+
+const buildInteraction = () => new BuildGraphInteraction(makeUndoable(putNewNode), makeUndoable(putNewEdge)).withSelfLoops().withClickAction(selectNode)
 
 toolButton("tool_move", () => new MoveComponentInteraction())
 toolButton("tool_drag", () => new DragNodeInteraction())
@@ -268,10 +277,25 @@ toolButton("tool_delete", () => new ClickNodeInteraction(makeUndoable((node, gra
 const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
 initFullscreenCanvas(canvas)
 
+function setSelectedLabel(label: string) {
+    pushToHistory()
+    for (let node of globalState.selected) {
+        if (node.data.kind === "normal" || node.data.kind === "insert") {
+            node.data.label = label
+        }
+    }
+    controller.requestFrame()
+}
+
+document.addEventListener("keypress", (e) => {
+    // set label of selected nodes
+    setSelectedLabel(e.key.trim())
+})
+
 let globalState = makeInitialState()
 let undoHistory = new UndoHistory<State>(undoHistorySize)
 const painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
-const physics = new GraphLayoutPhysics(layoutStyle, [windowForces])
+const physics = new GraphLayoutPhysics(layoutStyle, ) //[windowForces])
 const globalSim = new GraphPhysicsSimulator<NodeData>(globalState.graph, physics, painter)
 globalSim.setInteractionMode(buildInteraction)
 

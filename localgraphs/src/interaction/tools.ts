@@ -8,8 +8,12 @@ import { GraphInteraction, GraphPainter, dragNodes, findClosestEdge, findClosest
 export class BuildGraphInteraction<T> implements GraphInteraction<T> {
     moveThreshold: number = 20
     connectDistFactor: number = 0.7 // weight factor for connecting existing nodes instead of adding a new node
+
     selfLoopsAllowed: boolean = false
-    selfLoopDistance: number = 30 // max distance to node when building self-loop
+    selfLoopDistance: number = 30 // max distance to node when building self-loop or clicking node
+
+    nodeClickAction: ((node: GraphNode<T>, graph: Graph<T>) => void) | null = null
+    clickDistance: number = 30
 
     startNode: GraphNode<T> | null = null
     startX: number = 0
@@ -21,6 +25,11 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
 
     withSelfLoops() {
         this.selfLoopsAllowed = true;
+        return this
+    }
+
+    withClickAction(action: (node: GraphNode<T>, graph: Graph<T>) => void) {
+        this.nodeClickAction = action;
         return this
     }
 
@@ -92,10 +101,15 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
             this.buildEdge(graph, this.startNode, endNode)
         }
         else {
-            // create new node
-            //pushToHistory(graph)
-            //putNewNode(graph, endX, endY)
-            this.buildNode(graph, endX, endY)
+            if (this.startNode && this.nodeClickAction && distance({ x: endX, y: endY }, this.startNode) < this.clickDistance) {
+                // click
+                this.nodeClickAction(this.startNode, graph)
+            } else {
+                // create new node
+                //pushToHistory(graph)
+                //putNewNode(graph, endX, endY)
+                this.buildNode(graph, endX, endY)
+            }
         }
 
     }
