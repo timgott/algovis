@@ -159,7 +159,7 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
 
 function drawWindowContent(frame: AnimationFrame, window: WindowState, titleArea: Rect) {
     let getWindowTitle = (window: WindowState): string => {
-        return "Rule"
+        return "Pattern"
     }
     drawWindowTitle(frame.ctx, titleArea, getWindowTitle(window), window.borderColor)
 }
