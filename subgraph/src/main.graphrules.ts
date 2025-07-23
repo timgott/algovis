@@ -268,7 +268,7 @@ const buildInteraction = () => new BuildGraphInteraction(makeUndoable(putNewNode
 toolButton("tool_move", () => new MoveComponentInteraction())
 toolButton("tool_drag", () => new DragNodeInteraction())
 toolButton("tool_build", buildInteraction)
-toolButton("tool_duplicate", () => new DuplicateInteraction(new ColoredGraphPainter(layoutStyle.nodeRadius), pushToHistory))
+toolButton("tool_duplicate", () => new DuplicateInteraction(new ColoredGraphPainter(layoutStyle.nodeRadius), pushToHistory, (data) => structuredClone(data)))
 toolButton("tool_rulebox", () => new SpanWindowTool(putNewWindow))
 toolButton("tool_delete", () => new ClickNodeInteraction(makeUndoable((node, graph) => deleteNode(graph, node))))
 //toolButton("tool_insertion", () => _)
