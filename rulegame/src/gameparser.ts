@@ -131,10 +131,10 @@ function parseBoard(rows: SExpr[]): PartialGrid<Stone> {
 function parsePlayerRole(expr: SExpr): PlayerRole {
     let args = requireList(expr).args.slice();
     let kind = requireSymbol(shiftOrFail(args))
-    requireNoMoreArgs(args, expr, "role")
     if (kind !== "nature" && kind !== "human" && kind !== "robot") {
         throw new ParsingError(`unknown player kind: ${kind}`)
     }
+    requireNoMoreArgs(args, expr, "role")
     return kind
 }
 

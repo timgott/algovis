@@ -8,9 +8,9 @@ describe('parsing', () => {
         let code = `
             (define bling
                 (game
-                    (stones (r (color red)) (b (color blue)))
+                    (stones (r (circle (color red))) (b (block (color blue))))
                     (initialBoard (r _) (_ b))
-                    (players (human (color green)) (bot (color red)))
+                    (players (human (human) (color green)) (bot (robot) (color red)))
                     (rules
                         (human (row E (r) (b)))
                         (bot (and
