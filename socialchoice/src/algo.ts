@@ -31,7 +31,7 @@ export type MarketOutcome = {
   prices: Pricing;
 };
 
-const epsilon = 1e-6;
+const epsilon = 1e-12;
 
 function calcBangPerBuck(agent: Agent, prices: Pricing, item: Item): number {
   let u = agent.utility.get(item)!;
@@ -446,7 +446,7 @@ export function allocateEF1PO(agents: Agent[], items: Item[]): MarketOutcome {
   // swap and raise prices until termination
   let steps = 0;
   while (improveAllocationStep(market, agents, items)) steps++;
-  console.log("Increase Algo:", steps);
+  //console.log("Increase steps:", steps);
 
   return market;
 }
@@ -458,7 +458,7 @@ export function allocateEF1POAlt(agents: Agent[], items: Item[]): MarketOutcome 
   // swap and raise prices until termination
   let steps = 0;
   while (improveAllocationStepInverse(market, agents, items)) steps++;
-  console.log("Decrease Algo:", steps);
+  //console.log("Decrease steps:", steps);
 
   return market;
 }

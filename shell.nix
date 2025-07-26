@@ -4,5 +4,5 @@ let
   nodePkgs = pkgs.nodePackages;
 in
 pkgs.mkShell {
-  packages = [ pkgs.nodejs_20 nodePkgs.typescript-language-server ];
+  packages = [ pkgs.nodejs_24 nodePkgs.typescript-language-server pkgs.deno ];
 }
