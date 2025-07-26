@@ -29,8 +29,9 @@ import {
 } from "../../localgraphs/src/graph";
 import { UndoHistory } from "../../localgraphs/src/interaction/undo";
 import { NAMES, THINGS } from "./names";
-import { assert, ensured, mapFromFunction, randInt } from "../../shared/utils";
+import { assert, ensured, mapFromFunction } from "../../shared/utils";
 import { GraphLayoutPhysics, LayoutConfig } from "../../localgraphs/src/interaction/physics";
+import { ExpUtilityGenerator, HiddenInstanceState, LineUtilityGenerator } from "./generator";
 
 const canvas = document.getElementById("graph_canvas") as HTMLCanvasElement;
 initFullscreenCanvas(canvas);
@@ -52,26 +53,12 @@ function getUniqueName(names: string[], index: number) {
   return names[index % names.length] + suffix;
 }
 
-// maps x in [0, 1] to [0, 1] with a uniform exponent
-function niceExponential(x: number, b: number) {
-  return Math.pow(x, Math.log(1 - b) / Math.log(b));
-}
-
-// map x in [0,1] to exponential distribution
-function expDistributionInv(x: number, lambda: number) {
-  return -Math.log(1 - x) / lambda;
-}
-
-type DemoAgent = NamedAgent & {
-  // unique exponent to break identical distributions
-  utilityExponent: number;
-};
 class AllocationDemo {
   items: Item[];
-  agents: DemoAgent[];
+  agents: NamedAgent[];
   market: MarketOutcome;
 
-  constructor() {
+  constructor(public generatorState: HiddenInstanceState<unknown, unknown>) {
     this.items = [];
     this.agents = [];
     this.clearAllocation(); // empty market outcome
@@ -81,27 +68,18 @@ class AllocationDemo {
     const itemName = getUniqueName(THINGS, this.items.length);
     this.items.push(itemName);
     for (let agent of this.agents) {
-      agent.utility.set(itemName, this.randomUtility(agent.utilityExponent));
+      agent.utility.set(itemName, this.generatorState.generateUtility(agent.name, itemName));
     }
     return itemName;
   }
 
-  randomUtility(exponent: number) {
-    const discreteSteps = 24;
-    let r = (randInt(discreteSteps-1)+1) / discreteSteps; // excludes 0 and 1
-    return expDistributionInv(r, exponent);
-  }
-
   addAgent(): NamedAgent {
     const name = getUniqueName(NAMES, this.agents.length);
-    const utilityExponent = 1.0 / (Math.random()*0.9 + 0.1);
-    const utilities = mapFromFunction(this.items, () =>
-      this.randomUtility(utilityExponent),
-    );
-    const agent: DemoAgent = {
-      utility: utilities,
+    const agent: NamedAgent = {
       name,
-      utilityExponent,
+      utility: mapFromFunction(this.items, (item) =>
+        this.generatorState.generateUtility(name, item)
+      ),
     };
     this.agents.push(agent);
 
@@ -134,9 +112,10 @@ class AllocationDemo {
   }
 
   clone(): AllocationDemo {
-    let clone = new AllocationDemo();
+    // needed for undo history
+    let clone = new AllocationDemo(this.generatorState.clone());
     clone.items = this.items.slice();
-    clone.agents = this.agents.slice(); // agents are not immutable! utilities are added with new items
+    clone.agents = this.agents.slice();// agents are not immutable! utilities are added with new items (this does not cause issues currently because utilities are never removed)
     clone.market = {
       allocation: new Map(this.market.allocation),
       prices: new Map(this.market.prices),
@@ -323,7 +302,7 @@ class AllocationRenderer implements GraphPainter<NodeData> {
     let getRadiusForPrice = (price: number) =>
       Math.max(Math.sqrt(price * priceScale), priceOffset);
     let drawNames = true;
-    let showUtilities = false;
+    let showUtilities = utilitiesCheckbox.checked;
     let showSwaps = true;
     let agentNodes: GraphNode<AgentNodeData>[] = graph.nodes.filter(
       (n): n is GraphNode<AgentNodeData> => n.data.nodeType == "agent",
@@ -337,7 +316,7 @@ class AllocationRenderer implements GraphPainter<NodeData> {
         // TODO: show only on hover
         for (let [item, utility] of node.data.utilities) {
           ctx.lineWidth = utility * 20.0;
-          let alpha = utility * 0.75;
+          let alpha = utility * 0.15;
           ctx.strokeStyle = `rgba(10,100,50,${alpha})`;
           ctx.beginPath();
           ctx.moveTo(node.x, node.y);
@@ -440,21 +419,51 @@ class AllocationRenderer implements GraphPainter<NodeData> {
   }
 }
 
+function lineInstanceForces(generator: HiddenInstanceState<number, number>, dt: number, graph: Graph<NodeData>) {
+  for (let node of graph.nodes) {
+    let pos: number
+    if (node.data.nodeType == "agent") {
+      pos = ensured(generator.agentData.get(node.data.agent.name));
+    } else {
+      pos = ensured(generator.itemData.get(node.data.name));
+    }
+    const margin = 40;
+    let targetX = pos * (canvas.clientWidth - 2*margin) + margin;
+    node.x = targetX
+  }
+};
+
+function customInstanceForces(dt: number, graph: Graph<NodeData>) {
+  if (globalState.generatorState.generator === LineUtilityGenerator) {
+    let s = globalState.generatorState as HiddenInstanceState<number, number>;
+    lineInstanceForces(s, dt, graph);
+  }
+}
+
+// Option UI elements
+const lineCheckbox = document.getElementById("chk_line") as HTMLInputElement;
+const utilitiesCheckbox = document.getElementById("chk_utilities") as HTMLInputElement;
+
 // Global init
 type GlobalState = AllocationDemo;
 
-let globalState: GlobalState = new AllocationDemo();
+let globalState: GlobalState = newGlobalState();
 let allocationGraph: AllocationGraph = new AllocationGraph();
 
 const sim = new GraphPhysicsSimulator<NodeData>(
   allocationGraph.graph,
-  new GraphLayoutPhysics(layoutStyle),
+  new GraphLayoutPhysics(layoutStyle, [customInstanceForces]),
   new AllocationRenderer(),
 );
 sim.substeps = 10;
 sim.setInteractionMode(() => new DragNodeInteraction());
 
 const controller = new InteractionController(canvas, sim);
+
+function newGlobalState(): GlobalState {
+  let generator = lineCheckbox.checked ? LineUtilityGenerator : ExpUtilityGenerator;
+  return new AllocationDemo(new HiddenInstanceState<unknown, unknown>(generator));
+}
 
 function applyGlobalState(target: GlobalState) {
   globalState = target;
@@ -482,48 +491,57 @@ function repeat(count: number, f: (model: AllocationDemo) => unknown): (model: A
 }
 
 // action buttons
-let addAgentButton = document.getElementById("add_agent")!;
+const addAgentButton = document.getElementById("add_agent")!;
 addAgentButton.addEventListener(
   "click",
   globalAction(repeat(5, (g) => g.addAgent())),
 );
-let addItemButton = document.getElementById("add_item")!;
+const addItemButton = document.getElementById("add_item")!;
 addItemButton.addEventListener(
   "click",
   globalAction(repeat(10, (g) => g.addItem())),
 );
-let stepButton = document.getElementById("btn_step")!;
+const stepButton = document.getElementById("btn_step")!;
 stepButton.addEventListener(
   "click",
   globalAction((g) => g.algoStep()),
 );
-let clearButton = document.getElementById("btn_clear")!;
+const clearButton = document.getElementById("btn_clear")!;
 clearButton.addEventListener(
   "click",
   globalAction((g) => g.clearAllocation()),
 );
-let solveButton = document.getElementById("btn_solve")!;
+const solveButton = document.getElementById("btn_solve")!;
 solveButton.addEventListener(
   "click",
   globalAction((g) => g.computeAllocation()),
 );
 
 // meta buttons
-let resetButton = document.getElementById("btn_reset")!;
+const resetButton = document.getElementById("btn_reset")!;
 resetButton.addEventListener("click", () => {
-  applyGlobalState(new AllocationDemo());
+  history.push(globalState);
+  applyGlobalState(newGlobalState());
 });
-let undoButton = document.getElementById("btn_undo")!;
+const undoButton = document.getElementById("btn_undo")!;
 undoButton.addEventListener("click", () => {
   let lastState = history.undo(globalState);
   if (lastState == null) throw "End of undo history";
   applyGlobalState(lastState);
 });
-let redoButton = document.getElementById("btn_redo")!;
+const redoButton = document.getElementById("btn_redo")!;
 redoButton.addEventListener("click", () => {
   let nextState = history.redo();
   if (nextState == null) throw "End of redo history";
   applyGlobalState(nextState);
+});
+
+// checkboxes
+lineCheckbox.addEventListener("change", (e) => {
+  resetButton.click();
+});
+utilitiesCheckbox.addEventListener("change", (e) => {
+  controller.requestFrame();
 });
 
 // Run.
