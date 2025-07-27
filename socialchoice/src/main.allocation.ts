@@ -19,6 +19,7 @@ import {
   findBudgetViolatorsUpTo1,
   findLeastSpenders,
   findSwappableTowards,
+  getBundles,
   improveAllocationStep,
 } from "./algo";
 import {
@@ -29,7 +30,7 @@ import {
 } from "../../localgraphs/src/graph";
 import { UndoHistory } from "../../localgraphs/src/interaction/undo";
 import { NAMES, THINGS } from "./names";
-import { assert, ensured, mapFromFunction } from "../../shared/utils";
+import { assert, ensured, mapFromFunction, sum } from "../../shared/utils";
 import { GraphLayoutPhysics, LayoutConfig } from "../../localgraphs/src/interaction/physics";
 import { ExpUtilityGenerator, HiddenInstanceState, LineUtilityGenerator } from "./generator";
 
@@ -133,6 +134,7 @@ type AgentNodeData = {
   agent: NamedAgent;
   mbbItems: Set<ItemNode>;
   budget: number;
+  totalUtility: number;
   utilities: [ItemNode, number][];
   isViolator: boolean;
   isLeastSpender: boolean;
@@ -163,7 +165,8 @@ class AllocationGraph {
       utilities: [],
       isViolator: false,
       isLeastSpender: false,
-      swap: null
+      swap: null,
+      totalUtility: 0,
     });
     return node;
   }
@@ -223,6 +226,7 @@ class AllocationGraph {
   update(model: AllocationDemo) {
     this.updateGraphNodes(model);
 
+    let bundles = getBundles(model.agents, model.market.allocation);
     let budgets = calcBudgets(model.agents, model.market);
     let [leastSpenders, leastBudget] = findLeastSpenders(model.agents, budgets);
     let violators = new Set(
@@ -242,6 +246,11 @@ class AllocationGraph {
 
       // assign budget
       agentNode.data.budget = budgets.get(agent)!;
+
+      // assign total utility
+      agentNode.data.totalUtility = sum(
+        [...bundles.get(agent)!].map((item) => agent.utility.get(item)!)
+      );
 
       // connect utilities
       agentNode.data.utilities = model.items.map((item) => [
@@ -433,16 +442,53 @@ function lineInstanceForces(generator: HiddenInstanceState<number, number>, dt: 
   }
 };
 
+function priceYForces(dt: number, graph: Graph<NodeData>) {
+  let prices = new Map<GraphNode<unknown>, number>();
+  let maxPrice = 1;
+  for (let node of graph.nodes) {
+    // put price on y axis
+    let price: number | null
+    if (node.data.nodeType == "agent") {
+      // hypothetical price for value=1
+      // equal to the mbb ratio
+      if (node.data.budget == 0) {
+        price = null;
+      } else {
+        let mbb = node.data.totalUtility / node.data.budget;
+        price = 1 / mbb;
+      }
+    } else {
+      price = node.data.price;
+    }
+    if (price) {
+      if (price > maxPrice) {
+        maxPrice = price;
+      }
+      prices.set(node, price);
+    }
+  }
+  for (let node of graph.nodes) {
+    let price = prices.get(node);
+    if (price) {
+      node.y = (1 - price / maxPrice * 0.8) * canvas.clientHeight; // scale price to canvas height
+    }
+  }
+}
+
 function customInstanceForces(dt: number, graph: Graph<NodeData>) {
   if (globalState.generatorState.generator === LineUtilityGenerator) {
     let s = globalState.generatorState as HiddenInstanceState<number, number>;
     lineInstanceForces(s, dt, graph);
+  }
+  if (priceYCheckbox.checked) {
+    priceYForces(dt, graph);
   }
 }
 
 // Option UI elements
 const lineCheckbox = document.getElementById("chk_line") as HTMLInputElement;
 const utilitiesCheckbox = document.getElementById("chk_utilities") as HTMLInputElement;
+const priceYCheckbox = document.getElementById("chk_price_y") as HTMLInputElement;
 
 // Global init
 type GlobalState = AllocationDemo;
