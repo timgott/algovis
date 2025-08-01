@@ -10,7 +10,9 @@ import { GraphLayoutPhysics, LayoutConfig } from "../../localgraphs/src/interact
 import { drawWindowTitle, satisfyMinBounds, WindowBounds, WindowController,  } from "../../localgraphs/src/interaction/windows.js";
 import { Rect } from "../../shared/rectangle.js";
 import { vec, vecscale } from "../../shared/vector.js";
-import { ContextMatcher, findSubgraphMatches, findSubgraphMatchesWithContext } from "./subgraph.js";
+import { findSubgraphMatches } from "./subgraph.js";
+import { applyRule, makeTestExplodeRule } from "./reduction.js";
+import { makeUnlabeledGraphFromEdges } from "./pathgraph.js";
 
 let undoButton = document.getElementById("undo") as HTMLButtonElement
 let redoButton = document.getElementById("redo") as HTMLButtonElement
@@ -30,6 +32,7 @@ const layoutStyle: LayoutConfig = {
 }
 
 type NodeData = {
+    kind: "normal",
     label: string
 }
 
@@ -73,30 +76,6 @@ function putNewWindow(bounds: Rect) {
     controller.requestFrame()
 }
 
-function makeVariableMatcher(variables: Set<string>): ContextMatcher<NodeData, NodeData, Map<string, string>> {
-    return {
-        check(pattern: NodeData, host: NodeData, context: Map<string, string>): boolean {
-            let pl: string
-            if (variables.has(pattern.label)) {
-                pl = context.get(pattern.label) ?? host.label
-            } else {
-                pl = pattern.label
-            }
-            return pl === host.label
-        },
-        updated(pattern: NodeData, host: NodeData, context: Map<string, string>): Map<string, string> {
-            if (pattern.label === host.label || context.has(pattern.label)) {
-                return context
-            } else {
-                return new Map(context).set(pattern.label, host.label)
-            }
-        },
-        empty(): Map<string, string> {
-            return new Map();
-        }
-    }
-}
-
 class ColoredGraphPainter implements GraphPainter<NodeData> {
     constructor(private nodeRadius: number, public showParities: boolean = false) { }
 
@@ -108,11 +87,10 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
             )
             let [componentCount, _componentMap] = findConnectedComponentsSimple(containedSubgraph);
             if (componentCount === 1) {
-                let matcher = makeVariableMatcher(new Set(["x", "y", "z"]))
-                let matches = findSubgraphMatchesWithContext(graph, containedSubgraph, matcher)
-                //console.log("Matches:", matches.length)
-                for (let {embedding} of matches) {
-                    for (let [_, node] of embedding) {
+                let matches = findSubgraphMatches(graph, containedSubgraph, (a, b) => a.kind === b.kind && a.label === b.label)
+                console.log("Matches:", matches.length)
+                for (let match of matches) {
+                    for (let [_, node] of match) {
                         highlightedNodes.add(node)
                     }
                 }
@@ -165,7 +143,7 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
         }
 
         // label
-        if (node.data.label !== "") {
+        if (node.data.kind === "normal") {
             ctx.strokeStyle = "black"
             ctx.fillStyle = ctx.strokeStyle // text in same color as outline
             ctx.textAlign = "center"
@@ -183,7 +161,7 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
 
 function drawWindowContent(frame: AnimationFrame, window: WindowState, titleArea: Rect) {
     let getWindowTitle = (window: WindowState): string => {
-        return "Pattern"
+        return "Rule"
     }
     drawWindowTitle(frame.ctx, titleArea, getWindowTitle(window), window.borderColor)
 }
@@ -234,6 +212,16 @@ function replaceGlobalState(newState: State) {
     controller.requestFrame()
 }
 
+// special buttons
+
+document.getElementById("btn_test")!.addEventListener("click", () => {
+    let testRule = makeTestExplodeRule(makeUnlabeledGraphFromEdges([[1,2], [2,3], [1,3]]))
+    applyRule(globalState.graph, testRule)
+    controller.requestFrame()
+})
+
+// generic buttons
+
 function reset() {
     pushToHistory()
     replaceGlobalState(makeInitialState())
@@ -258,6 +246,8 @@ redoButton.addEventListener("click", () => {
     }
 })
 
+// tools
+
 function toolButton(id: string, tool: () => GraphInteraction<NodeData>) {
     document.getElementById(id)!.addEventListener("click", () => {
         globalState.selected.clear()
@@ -275,6 +265,7 @@ function makeUndoable<T extends (...args: any) => any>(f: T): T {
 
 function putNewNode(graph: Graph<NodeData>, x: number, y: number): GraphNode<NodeData> {
     let node = createNode<NodeData>(graph, {
+        kind: "normal",
         label: "",
     }, x, y)
     moveSlightly(node)
@@ -312,7 +303,9 @@ initFullscreenCanvas(canvas)
 function setSelectedLabel(label: string) {
     pushToHistory()
     for (let node of globalState.selected) {
-        node.data.label = label
+        if (node.data.kind === "normal" || node.data.kind === "insert") {
+            node.data.label = label
+        }
     }
     controller.requestFrame()
 }

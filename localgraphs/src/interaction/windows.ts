@@ -73,6 +73,7 @@ export class WindowController<T extends WindowBounds> implements InteractiveSyst
     constructor(
         public windows: T[],
         protected animateContents: (frame: AnimationFrame, window: T, titleArea: Rect) => unknown,
+        protected onMove: (window: T, dx: number, dy: number) => unknown = () => {;},
     ) {
     }
 
@@ -95,6 +96,7 @@ export class WindowController<T extends WindowBounds> implements InteractiveSyst
                 window.bounds.bottom += dy
             }
             if (this.dragState.mode === "move") {
+                this.onMove(window, dx, dy)
                 window.bounds = Rect.addOffset(window.bounds, dx, dy)
             }
             this.dragState.lastX = mouse.x
