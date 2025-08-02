@@ -1,9 +1,9 @@
-import { DragNodeInteraction, GraphPhysicsSimulator, SimpleGraphPainter, createGridGraph, createRandomGraph, createRegularTree, shuffleGraphPositions } from "./interaction/graphsim.js";
+import { GraphPhysicsSimulator, SimpleGraphPainter, shuffleGraphPositions } from "./interaction/graphsim.js";
 import { initFullscreenCanvas } from "../../shared/canvas.js";
 import { InteractionController } from "./interaction/controller.js";
-import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
 import { TreeLayoutConfig, TreeLayoutPhysics } from "./interaction/treephysics.js";
 import { ClickNodeInteraction } from "./interaction/tools.js";
+import { createRegularTree } from "./interaction/examplegraph.js";
 
 const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
 initFullscreenCanvas(canvas)

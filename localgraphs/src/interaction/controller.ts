@@ -14,14 +14,14 @@ export type AnimationFrame = {
     readonly totalTime: number
     readonly width: number
     readonly height: number
-    readonly ctx: CanvasRenderingContext2D
     readonly dragState: Map<PointerId, DragState>
 }
 
 export type MouseDownResponse = "Click" | "Drag" | "Ignore"
 
 export interface InteractiveSystem {
-    animate(frame: AnimationFrame): SleepState;
+    update(frame: AnimationFrame): SleepState;
+    draw(frame: AnimationFrame, ctx: CanvasRenderingContext2D): void;
     onMouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse;
     onDragEnd(x: number, y: number, pointerId: PointerId): void;
 }
@@ -40,13 +40,9 @@ export class UiStack implements InteractiveSystem {
     constructor(public systems: InteractiveSystem[]) {
     }
 
-    animate(frame: AnimationFrame): SleepState {
+    update(frame: AnimationFrame): SleepState {
         // run animation step on all systems
         const sleepStates = this.systems.map((system) => {
-            if (system.animate === undefined) {
-                return "Sleeping"
-            }
-
             // find pointers that are captured by this system
             const capturedDrags = frame.dragState.filter(
                 (pointerId, _) => this.pointerCaptures.get(pointerId) === system
@@ -56,14 +52,19 @@ export class UiStack implements InteractiveSystem {
                 dragState: capturedDrags,
             }
 
-            frame.ctx.save()
-            let state = system.animate(dragFrame)
-            frame.ctx.restore()
-            return state
+            return system.update(dragFrame)
         })
 
         // running if any subsystem is running
         return aggregateSleeping(sleepStates)
+    }
+
+    draw(frame: AnimationFrame, ctx: CanvasRenderingContext2D): void {
+        for (const system of this.systems) {
+            ctx.save()
+            system.draw(frame, ctx)
+            ctx.restore()
+        }
     }
 
     onMouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {
@@ -132,19 +133,19 @@ export class InteractionController {
         const width = this.canvas.clientWidth
         const height = this.canvas.clientHeight
 
-        this.ctx.save() // do not reset, since the scale has to be preserved
-        this.ctx.fillStyle = "transparent"
-        this.ctx.clearRect(0, 0, width, height)
-
-        const sleepState = this.system.animate({
+        let frame: AnimationFrame = {
             dt,
             totalTime: timeStamp,
             width,
             height,
-            ctx: this.ctx,
             dragState: this.dragState,
-        })
+        }
+        const sleepState = this.system.update(frame)
 
+        this.ctx.save() // do not reset, since the scale has to be preserved
+        this.ctx.fillStyle = "transparent"
+        this.ctx.clearRect(0, 0, width, height)
+        this.system.draw(frame, this.ctx)
         this.ctx.restore()
 
         this.previousTimeStamp = timeStamp

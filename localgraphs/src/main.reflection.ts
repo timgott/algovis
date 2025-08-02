@@ -234,7 +234,7 @@ function rotationSymmetrize(count: number, locality: number, center: Node, graph
 
     // fix labels and variable connectors
     for (let map of maps) {
-        function mapNode(n: Node) {
+        let mapNode = (n: Node) => {
             return n === center ? center : ensured(map.get(n))
         }
         for (let [n, m] of map) {
@@ -634,9 +634,9 @@ function getWindowTitle(window: WindowState): string {
     }
 }
 
-function animateWindowContent(frame: AnimationFrame, window: WindowState, titleArea: Rect) {
+function animateWindowContent(frame: AnimationFrame, ctx: CanvasRenderingContext2D, window: WindowState, titleArea: Rect) {
     let graph = globalState.graph
-    drawWindowTitle(frame.ctx, titleArea, getWindowTitle(window), window.borderColor)
+    drawWindowTitle(ctx, titleArea, getWindowTitle(window), window.borderColor)
     // todo: move to custom physics
     for (let node of graph.nodes) {
         if (Rect.contains(window.bounds, node.x, node.y)) {
@@ -697,7 +697,10 @@ class ArrowTool implements GraphInteraction<NodeData> {
         return endNode
     }
 
-    onDragStep(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
+    onDragStep(graph: Graph<NodeData>, visibleNodes: GraphNode<NodeData>[], mouseX: number, mouseY: number, deltaTime: number): void {
+    }
+
+    onDragDraw(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
         const state = this.state
         if (state !== null) {
             const startNode = state.startNode

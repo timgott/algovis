@@ -65,10 +65,12 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
         // build edge if closest node is closer than start
         return distance(start, mouse)*this.connectDistFactor < distance(mouse, closestNode)
     }
-    onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D): void {
+    onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number): void {
         if (!this.hasMoved && this.checkHasMoved(mouseX, mouseY)) {
             this.hasMoved = true
         }
+    }
+    onDragDraw(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void {
         if (this.startNode !== null && this.hasMoved) {
             drawCtx.strokeStyle = "black"
             drawCtx.lineWidth = 1
@@ -122,7 +124,7 @@ export class MoveComponentInteraction<T> implements GraphInteraction<T> {
         this.draggedNode = findClosestNode(mouseX, mouseY, visible)
     }
 
-    onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number, ctx: unknown, dt: number) {
+    onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number, dt: number) {
         if (this.draggedNode) {
             let nodes = collectNeighborhood(this.draggedNode, Infinity)
             dragNodes(nodes, mouseX - this.draggedNode.x, mouseY - this.draggedNode.y, dt)
@@ -186,11 +188,16 @@ export class DuplicateInteraction<T> implements GraphInteraction<T> {
             }
         }
     }
-    onDragStep(graph: Graph<T>, visible: unknown, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
+    onDragStep(graph: Graph<T>, visible: unknown, mouseX: number, mouseY: number, dt: number): void {
         // draw preview
         let state = this.state
         if (state !== null) {
             offsetNodes(state.subgraph.nodes, mouseX - state.root.x, mouseY - state.root.y)
+        }
+    }
+    onDragDraw(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void {
+        let state = this.state
+        if (state !== null) {
             this.painter.drawGraph(drawCtx, state.visibleSubgraph)
         }
     }
@@ -224,7 +231,9 @@ export class SpanWindowTool<T> implements GraphInteraction<T> {
         }
     }
 
-    onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
+    onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number, dt: number): void { }
+
+    onDragDraw(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void {
         let state = this.state
         if (state !== null) {
             let bounds = Rect.fromPoints([state.startPos, vec(mouseX, mouseY)])

@@ -1,8 +1,7 @@
-import { getCursorPosition } from "../../../shared/canvas"
 import { min } from "../../../shared/utils"
 import { Positioned } from "../../../shared/vector"
-import { Graph, GraphEdge, GraphNode, createEdge, createEmptyGraph, createNode, filteredGraphView } from "../graph"
-import { applyVelocityStep, findActiveNodes, LayoutConfig, LayoutPhysics } from "./physics"
+import { Graph, GraphEdge, GraphNode, filteredGraphView } from "../graph"
+import { LayoutPhysics } from "./physics"
 import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "./controller"
 
 export function distanceToPointSqr(x: number, y: number, node: Positioned) {
@@ -62,60 +61,11 @@ export function offsetNodes(nodes: Iterable<GraphNode<unknown>>, dx: number, dy:
     }
 }
 
-export function createRandomGraph(size: number, edgesPerNode: number): Graph<null> {
-    let graph = createEmptyGraph<null>()
-    createNode(graph, null)
-    for (let i = 0; i < size; i++) {
-        let node = createNode(graph, null)
-        for (let j = 0; j < edgesPerNode; j++) {
-            let otherNode = graph.nodes[Math.floor(Math.random() * (graph.nodes.length - 1))]
-            if (!node.neighbors.has(otherNode)) {
-                createEdge(graph, node, otherNode)
-            }
-        }
-    }
-    return graph
-}
-
-export function createGridGraph(size: number, edgeLength: number): Graph<null> {
-    let graph = createEmptyGraph<null>()
-    for (let i = 0; i < size; i++) {
-        for (let j = 0; j < size; j++) {
-            let node = createNode(graph, null, i * edgeLength, j * edgeLength)
-            if (i > 0) {
-                createEdge(graph, node, graph.nodes[(i - 1) * size + j])
-            }
-            if (j > 0) {
-                createEdge(graph, node, graph.nodes[i * size + j - 1])
-            }
-        }
-    }
-    return graph
-}
-
-export function createRegularTree(depth: number, degree: number): Graph<null> {
-    let graph = createEmptyGraph<null>()
-    let root = createNode(graph, null)
-    let lastLayer = [root]
-    while (depth > 0) {
-        let newLayer: GraphNode<null>[] = []
-        for (let parent of lastLayer) {
-            for (let i = 0; i < degree - 1; i++) {
-                let child = createNode(graph, null)
-                createEdge(graph, parent, child)
-                newLayer.push(child)
-            }
-        }
-        depth--;
-        lastLayer = newLayer;
-    }
-    return graph
-}
-
 
 export interface GraphInteraction<T> {
     onMouseDown(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number): void
-    onDragStep(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void
+    onDragStep(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, deltaTime: number): void
+    onDragDraw?(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void
     onMouseUp(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number): void
 }
 
@@ -126,7 +76,7 @@ export class DragNodeInteraction<T> implements GraphInteraction<T> {
         this.draggedNode = findClosestNode(mouseX, mouseY, visible)
     }
 
-    onDragStep(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number) {
+    onDragStep(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number, deltaTime: number) {
         if (this.draggedNode) {
             const dx = mouseX - this.draggedNode.x
             const dy = mouseY - this.draggedNode.y
@@ -177,7 +127,7 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
     private graph: Graph<T>
     private layout: LayoutPhysics<T>
     private painter: GraphPainter<T>
-    public visibleFilter: (node: GraphNode<T>) => boolean = () => true
+    public visibleFilter: null | ((node: GraphNode<T>) => boolean) = null
     public substeps = 1
 
     private interactionMode: (() => GraphInteraction<T>) | null = null
@@ -199,14 +149,22 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
     }
 
     getVisibleGraph() {
-        return filteredGraphView(this.graph, this.visibleFilter)
+        if (this.visibleFilter) {
+            return filteredGraphView(this.graph, this.visibleFilter)
+        } else {
+            return this.graph
+        }
     }
 
     getVisibleNodes() {
-        return this.graph.nodes.filter(this.visibleFilter)
+        if (this.visibleFilter) {
+            return this.graph.nodes.filter(this.visibleFilter)
+        } else {
+            return this.graph.nodes
+        }
     }
 
-    animate({dt, width, height, ctx, dragState}: AnimationFrame): SleepState {
+    update({dt, width, height, dragState}: AnimationFrame): SleepState {
         let visibleGraph = this.getVisibleGraph()
         let activeCount = 0
         for (let step = 0; step < this.substeps; step++) {
@@ -215,22 +173,32 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
               const drag = this.interactions.get(id)
               if (drag !== undefined) {
                   drag.onDragStep(this.graph, visibleGraph.nodes,
-                      pointerState.x, pointerState.y, ctx, subdt)
+                      pointerState.x, pointerState.y, subdt)
               }
           }
 
           // physics
           activeCount = this.layout.step(visibleGraph, width, height, subdt)
         }
-
-        // render
-        this.painter.drawGraph(ctx, visibleGraph)
-
         if (activeCount > 0 || dt == 0) {
             return "Running"
         } else {
             return "Sleeping"
         }
+    }
+
+    draw(frame: AnimationFrame, ctx: CanvasRenderingContext2D): void {
+        let visibleGraph = this.getVisibleGraph()
+        for (let [id, pointerState] of frame.dragState) {
+            const drag = this.interactions.get(id)
+            if (drag !== undefined && drag.onDragDraw) {
+                drag.onDragDraw(this.graph, visibleGraph.nodes,
+                    pointerState.x, pointerState.y, ctx, frame.dt)
+            }
+        }
+
+        // render
+        this.painter.drawGraph(ctx, visibleGraph)
     }
 
     onMouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {

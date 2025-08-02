@@ -11,6 +11,7 @@ import { drawWindowTitle, satisfyMinBounds, WindowBounds, WindowController,  } f
 import { Rect } from "../../shared/rectangle.js";
 import { vec, vecscale } from "../../shared/vector.js";
 import { ContextMatcher, findSubgraphMatches, findSubgraphMatchesWithContext } from "./subgraph.js";
+import { makeVariableMatcher, mapMatcher } from "./unification.js";
 
 let undoButton = document.getElementById("undo") as HTMLButtonElement
 let redoButton = document.getElementById("redo") as HTMLButtonElement
@@ -73,30 +74,6 @@ function putNewWindow(bounds: Rect) {
     controller.requestFrame()
 }
 
-function makeVariableMatcher(variables: Set<string>): ContextMatcher<NodeData, NodeData, Map<string, string>> {
-    return {
-        check(pattern: NodeData, host: NodeData, context: Map<string, string>): boolean {
-            let pl: string
-            if (variables.has(pattern.label)) {
-                pl = context.get(pattern.label) ?? host.label
-            } else {
-                pl = pattern.label
-            }
-            return pl === host.label
-        },
-        updated(pattern: NodeData, host: NodeData, context: Map<string, string>): Map<string, string> {
-            if (pattern.label === host.label || context.has(pattern.label)) {
-                return context
-            } else {
-                return new Map(context).set(pattern.label, host.label)
-            }
-        },
-        empty(): Map<string, string> {
-            return new Map();
-        }
-    }
-}
-
 class ColoredGraphPainter implements GraphPainter<NodeData> {
     constructor(private nodeRadius: number, public showParities: boolean = false) { }
 
@@ -108,7 +85,7 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
             )
             let [componentCount, _componentMap] = findConnectedComponentsSimple(containedSubgraph);
             if (componentCount === 1) {
-                let matcher = makeVariableMatcher(new Set(["x", "y", "z"]))
+                let matcher = mapMatcher((x: NodeData) => x.label, makeVariableMatcher(new Set(["x", "y", "z"])))
                 let matches = findSubgraphMatchesWithContext(graph, containedSubgraph, matcher)
                 //console.log("Matches:", matches.length)
                 for (let {embedding} of matches) {
@@ -181,11 +158,11 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
 }
 
 
-function drawWindowContent(frame: AnimationFrame, window: WindowState, titleArea: Rect) {
+function drawWindowContent(frame: AnimationFrame, ctx: CanvasRenderingContext2D, window: WindowState, titleArea: Rect) {
     let getWindowTitle = (window: WindowState): string => {
         return "Pattern"
     }
-    drawWindowTitle(frame.ctx, titleArea, getWindowTitle(window), window.borderColor)
+    drawWindowTitle(ctx, titleArea, getWindowTitle(window), window.borderColor)
 }
 
 function moveWindow(window: WindowState, dx: number, dy: number) {
@@ -325,7 +302,7 @@ document.addEventListener("keypress", (e) => {
 let globalState = makeInitialState()
 let undoHistory = new UndoHistory<State>(undoHistorySize)
 const painter = new ColoredGraphPainter(layoutStyle.nodeRadius)
-const physics = new GraphLayoutPhysics(layoutStyle, ) //[windowForces])
+const physics = new GraphLayoutPhysics(layoutStyle, [windowForces])
 const globalSim = new GraphPhysicsSimulator<NodeData>(globalState.graph, physics, painter)
 globalSim.setInteractionMode(buildInteraction)
 

@@ -1,7 +1,8 @@
-import { DragNodeInteraction, GraphPhysicsSimulator, SimpleGraphPainter, createGridGraph, createRandomGraph, shuffleGraphPositions } from "./interaction/graphsim.js";
+import { DragNodeInteraction, GraphPhysicsSimulator, SimpleGraphPainter, shuffleGraphPositions } from "./interaction/graphsim.js";
 import { initFullscreenCanvas } from "../../shared/canvas.js";
 import { InteractionController } from "./interaction/controller.js";
 import { GraphLayoutPhysics, LayoutConfig } from "./interaction/physics.js";
+import { createGridGraph, createRandomGraph } from "./interaction/examplegraph.js";
 
 const canvas = document.getElementById('graph_canvas') as HTMLCanvasElement;
 initFullscreenCanvas(canvas)

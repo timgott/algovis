@@ -72,11 +72,11 @@ export function satisfyMinBounds(window: WindowBounds) {
 export class WindowController<T extends WindowBounds> implements InteractiveSystem {
     constructor(
         public windows: T[],
-        protected animateContents: (frame: AnimationFrame, window: T, titleArea: Rect) => unknown,
+        protected drawContents: (frame: AnimationFrame, ctx: CanvasRenderingContext2D, window: T, titleArea: Rect) => unknown,
         protected onMove: (window: T, dx: number, dy: number) => unknown = () => {;},
     ) {
     }
-
+    
     dragState: null | {
         lastX: number,
         lastY: number,
@@ -85,7 +85,7 @@ export class WindowController<T extends WindowBounds> implements InteractiveSyst
         mode: "move" | "resize"
     } = null;
 
-    animate(frame: AnimationFrame): SleepState {
+    update(frame: AnimationFrame): SleepState {
         if (this.dragState) {
             const mouse = ensured(frame.dragState.get(this.dragState.pointerId))
             const dx = mouse.x - this.dragState.lastX
@@ -102,14 +102,17 @@ export class WindowController<T extends WindowBounds> implements InteractiveSyst
             this.dragState.lastX = mouse.x
             this.dragState.lastY = mouse.y
         }
-        for (let window of this.windows) {
-            let titleArea = this.titleArea(window)
-            drawWindowFrame(frame.ctx, window, titleArea);
-            this.animateContents(frame, window, titleArea)
-        }
         return "Sleeping"
     }
 
+    draw(frame: AnimationFrame, ctx: CanvasRenderingContext2D): void {
+        for (let window of this.windows) {
+            let titleArea = this.titleArea(window)
+            drawWindowFrame(ctx, window, titleArea);
+            this.drawContents(frame, ctx, window, titleArea)
+        }
+    }
+    
     // including entire window frame
     outerBounds(window: T): Rect {
         let contentArea = window.bounds
