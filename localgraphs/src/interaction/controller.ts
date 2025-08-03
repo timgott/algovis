@@ -22,8 +22,8 @@ export type MouseDownResponse = "Click" | "Drag" | "Ignore"
 export interface InteractiveSystem {
     update(frame: AnimationFrame): SleepState;
     draw(frame: AnimationFrame, ctx: CanvasRenderingContext2D): void;
-    onMouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse;
-    onDragEnd(x: number, y: number, pointerId: PointerId): void;
+    mouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse;
+    dragEnd(x: number, y: number, pointerId: PointerId): void;
 }
 
 export function aggregateSleeping(states: SleepState[]): SleepState {
@@ -67,7 +67,7 @@ export class UiStack implements InteractiveSystem {
         }
     }
 
-    onMouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {
+    mouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {
         // reverse order to give priority to what is drawn on top
         for (const system of this.systems.toReversed()) {
             if (system.onMouseDown !== undefined) {
@@ -83,10 +83,10 @@ export class UiStack implements InteractiveSystem {
         return "Ignore"
     }
 
-    onDragEnd(x: number, y: number, pointerId: PointerId): void {
+    dragEnd(x: number, y: number, pointerId: PointerId): void {
         const s = this.pointerCaptures.pop(pointerId)
-        if (s !== undefined && s.onDragEnd !== undefined) {
-            s.onDragEnd(x, y, pointerId)
+        if (s !== undefined && s.dragEnd !== undefined) {
+            s.dragEnd(x, y, pointerId)
         }
     }
 }
@@ -172,7 +172,7 @@ export class InteractionController {
 
     onMouseDown(x: number, y: number, pointerId: PointerId) {
         // start dragging node
-        const result = this.system.onMouseDown(x, y, pointerId)
+        const result = this.system.mouseDown(x, y, pointerId)
         if (result !== "Ignore") {
             //console.log(result)
             if (result === "Drag") {
@@ -194,7 +194,7 @@ export class InteractionController {
     onMouseUp(x: number, y: number, pointerId: PointerId) {
         // stop dragging node
         if (this.dragState.has(pointerId)) {
-            this.system.onDragEnd(x, y, pointerId)
+            this.system.dragEnd(x, y, pointerId)
             this.requestFrame()
             this.dragState.delete(pointerId) // release mouse capture
         }

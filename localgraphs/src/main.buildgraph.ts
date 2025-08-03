@@ -199,7 +199,7 @@ class MacroDuplicateInteraction implements GraphInteraction<NodeData> {
     } | null = null
     painter = new ColoredGraphPainter(layoutStyle.nodeRadius, true)
 
-    onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
+    mouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
         let rootNode = findClosestNode(mouseX, mouseY, visible)
         if (rootNode !== null) {
             this.state = {
@@ -207,7 +207,7 @@ class MacroDuplicateInteraction implements GraphInteraction<NodeData> {
             }
         }
     }
-    onDragStep(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
+    dragStep(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
         // draw preview?
         if (this.state !== null) {
             const startNode = this.state.startNode
@@ -226,7 +226,7 @@ class MacroDuplicateInteraction implements GraphInteraction<NodeData> {
             }
         }
     }
-    onMouseUp(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
+    mouseUp(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
         let state = this.state
         if (state !== null) {
             const startNode = state.startNode

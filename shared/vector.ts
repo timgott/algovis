@@ -59,6 +59,16 @@ export function distance(a: Positioned, b: Positioned): number {
     return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+export function distanceSqr(a: Positioned, b: Positioned): number {
+    let dx = a.x - b.x;
+    let dy = a.y - b.y;
+    return dx * dx + dy * dy;
+}
+
+export function isDistanceLess(a: Positioned, b: Positioned, limit: number): boolean {
+    return distanceSqr(a, b) < limit * limit;
+}
+
 export function vecset(v: Positioned, to: Vector) {
     v.x = to.x;
     v.y = to.y;

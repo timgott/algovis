@@ -228,11 +228,11 @@ class SelectNodeInteraction implements GraphInteraction<NodeData> {
         private onUnselect: () => unknown,
     ) { }
 
-    onMouseDown(graph: Graph<NodeData>, visibleNodes: GraphNode<NodeData>[], mouseX: number, mouseY: number): void {
+    mouseDown(graph: Graph<NodeData>, visibleNodes: GraphNode<NodeData>[], mouseX: number, mouseY: number): void {
     }
-    onDragStep(graph: Graph<NodeData>, visibleNodes: GraphNode<NodeData>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void {
+    dragStep(graph: Graph<NodeData>, visibleNodes: GraphNode<NodeData>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void {
     }
-    onMouseUp(graph: Graph<NodeData>, visibleNodes: GraphNode<NodeData>[], mouseX: number, mouseY: number): void {
+    mouseUp(graph: Graph<NodeData>, visibleNodes: GraphNode<NodeData>[], mouseX: number, mouseY: number): void {
         const selectDistance = 50
         const node = findClosestNode(mouseX, mouseY, visibleNodes, selectDistance)
         if (node) {

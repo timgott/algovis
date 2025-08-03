@@ -1,5 +1,5 @@
 import { copySubgraphTo, createEdge, createEmptyGraph, deleteNode, Graph, GraphNode, mapSubgraphTo, NodeDataTransfer } from "../../localgraphs/src/graph"
-import { ContextMatcher, findSubgraphMatches } from "../../subgraph/src/subgraph"
+import { findSubgraphMatches } from "../../subgraph/src/subgraph"
 
 export type PatternRule<S,T,C> = {
     pattern: Graph<S>,
@@ -24,10 +24,15 @@ export function makeTestExplodeRule<T>(graph: Graph<null>): PatternRule<null, T,
     }
 }
 
-export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator: (x: GraphNode<S>) => boolean, matcher: ContextMatcher<S,T,C>, copyData: NodeDataTransfer<S,S>, copyUnifiedData: (context: C) => NodeDataTransfer<S,T>): PatternRule<S, T, C> {
+export type NodeDataCloner<S,SU,C> = {
+    copyPatternData: NodeDataTransfer<S,S>,
+    copyUnifiedTargetData: (context: C) => NodeDataTransfer<S,SU>
+}
+
+export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator: (x: GraphNode<S>) => boolean, cloner: NodeDataCloner<S,T,C>): PatternRule<S, T, C> {
     let invariantNodes = ruleGraph.nodes.filter(n => !isOperator(n))
     let pattern = createEmptyGraph<S>()
-    let targetToPatternMap = copySubgraphTo(invariantNodes, pattern, copyData)
+    let targetToPatternMap = copySubgraphTo(invariantNodes, pattern, cloner.copyPatternData)
     // find the nodes that have to be added and the edges that have to be created
     let insertedNodes = ruleGraph.nodes.filter(n => isOperator(n))
     let betweenEdges = insertedNodes.flatMap(a => {
@@ -36,7 +41,7 @@ export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator
     return {
         pattern: pattern,
         apply(graph, embedding, context) {
-            let insertedToHostMap = mapSubgraphTo(insertedNodes, graph, copyUnifiedData(context))
+            let insertedToHostMap = mapSubgraphTo(insertedNodes, graph, cloner.copyUnifiedTargetData(context))
             // create edges between inserted nodes and invariant nodes
             for (let [a, b] of betweenEdges) {
                 let hostA = insertedToHostMap.get(a)!

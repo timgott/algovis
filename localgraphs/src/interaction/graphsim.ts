@@ -63,20 +63,20 @@ export function offsetNodes(nodes: Iterable<GraphNode<unknown>>, dx: number, dy:
 
 
 export interface GraphInteraction<T> {
-    onMouseDown(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number): void
-    onDragStep(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, deltaTime: number): void
-    onDragDraw?(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void
-    onMouseUp(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number): void
+    mouseDown(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number): void
+    dragStep(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, deltaTime: number): void
+    dragDraw?(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void
+    mouseUp(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number): void
 }
 
 export class DragNodeInteraction<T> implements GraphInteraction<T> {
     draggedNode: GraphNode<T> | null = null
 
-    onMouseDown(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number) {
+    mouseDown(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number) {
         this.draggedNode = findClosestNode(mouseX, mouseY, visible)
     }
 
-    onDragStep(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number, deltaTime: number) {
+    dragStep(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number, deltaTime: number) {
         if (this.draggedNode) {
             const dx = mouseX - this.draggedNode.x
             const dy = mouseY - this.draggedNode.y
@@ -84,7 +84,7 @@ export class DragNodeInteraction<T> implements GraphInteraction<T> {
         }
     }
 
-    onMouseUp() {
+    mouseUp() {
         this.draggedNode = null
     }
 }
@@ -172,7 +172,7 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
           for (let [id, pointerState] of dragState) {
               const drag = this.interactions.get(id)
               if (drag !== undefined) {
-                  drag.onDragStep(this.graph, visibleGraph.nodes,
+                  drag.dragStep(this.graph, visibleGraph.nodes,
                       pointerState.x, pointerState.y, subdt)
               }
           }
@@ -191,8 +191,8 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
         let visibleGraph = this.getVisibleGraph()
         for (let [id, pointerState] of frame.dragState) {
             const drag = this.interactions.get(id)
-            if (drag !== undefined && drag.onDragDraw) {
-                drag.onDragDraw(this.graph, visibleGraph.nodes,
+            if (drag !== undefined && drag.dragDraw) {
+                drag.dragDraw(this.graph, visibleGraph.nodes,
                     pointerState.x, pointerState.y, ctx, frame.dt)
             }
         }
@@ -201,22 +201,22 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
         this.painter.drawGraph(ctx, visibleGraph)
     }
 
-    onMouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {
+    mouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {
         // start dragging node
         if (this.interactionMode !== null) {
             const drag = this.interactionMode()
-            drag.onMouseDown(this.graph, this.getVisibleNodes(), x, y)
+            drag.mouseDown(this.graph, this.getVisibleNodes(), x, y)
             this.interactions.set(pointerId, drag)
             return "Drag"
         }
         return "Ignore"
     }
 
-    onDragEnd(x: number, y: number, pointerId: PointerId): void {
+    dragEnd(x: number, y: number, pointerId: PointerId): void {
         // stop dragging node
         const drag = this.interactions.pop(pointerId)
         if (drag !== undefined) {
-            drag.onMouseUp(this.graph, this.getVisibleNodes(), x, y)
+            drag.mouseUp(this.graph, this.getVisibleNodes(), x, y)
         }
     }
 

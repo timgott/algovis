@@ -37,7 +37,7 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
         return findClosestNode(x, y, visible)
     }
 
-    onMouseDown(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number): void {
+    mouseDown(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number): void {
         this.startX = mouseX
         this.startY = mouseY
         this.startNode = this.findNode(mouseX, mouseY, visible)
@@ -65,12 +65,12 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
         // build edge if closest node is closer than start
         return distance(start, mouse)*this.connectDistFactor < distance(mouse, closestNode)
     }
-    onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number): void {
+    dragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number): void {
         if (!this.hasMoved && this.checkHasMoved(mouseX, mouseY)) {
             this.hasMoved = true
         }
     }
-    onDragDraw(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void {
+    dragDraw(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void {
         if (this.startNode !== null && this.hasMoved) {
             drawCtx.strokeStyle = "black"
             drawCtx.lineWidth = 1
@@ -91,7 +91,7 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
             }
         }
     }
-    onMouseUp(graph: Graph<T>, visible: Iterable<GraphNode<T>>, endX: number, endY: number): void {
+    mouseUp(graph: Graph<T>, visible: Iterable<GraphNode<T>>, endX: number, endY: number): void {
         if (this.startNode !== null && this.hasMoved) {
             let endNode = this.findNode(endX, endY, visible)
             if (endNode === null || this.shouldCreateNewEndpoint(endX, endY, endNode)) {
@@ -120,18 +120,18 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
 export class MoveComponentInteraction<T> implements GraphInteraction<T> {
     draggedNode: GraphNode<T> | null = null
 
-    onMouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number) {
+    mouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number) {
         this.draggedNode = findClosestNode(mouseX, mouseY, visible)
     }
 
-    onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number, dt: number) {
+    dragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number, dt: number) {
         if (this.draggedNode) {
             let nodes = collectNeighborhood(this.draggedNode, Infinity)
             dragNodes(nodes, mouseX - this.draggedNode.x, mouseY - this.draggedNode.y, dt)
         }
     }
 
-    onMouseUp() {
+    mouseUp() {
         this.draggedNode = null
     }
 }
@@ -139,27 +139,27 @@ export class MoveComponentInteraction<T> implements GraphInteraction<T> {
 export class ClickNodeInteraction<T> implements GraphInteraction<T> {
     constructor(private callback: (node: GraphNode<T>, graph: Graph<T>) => void) {}
 
-    onMouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number) {
+    mouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number) {
         let node = findClosestNode(mouseX, mouseY, visible)
         if (node !== null) {
             this.callback(node, graph)
         }
     }
-    onDragStep() {}
-    onMouseUp() {}
+    dragStep() {}
+    mouseUp() {}
 }
 
 export class ClickEdgeInteraction<T> implements GraphInteraction<T> {
     constructor(private callback: (node: GraphEdge<T>, graph: Graph<T>) => void) {}
 
-    onMouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number) {
+    mouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number) {
         let edge = findClosestEdge(mouseX, mouseY, graph.edges)
         if (edge !== null) {
             this.callback(edge, graph)
         }
     }
-    onDragStep() {}
-    onMouseUp() {}
+    dragStep() {}
+    mouseUp() {}
 }
 
 function duplicateSubgraph<T>(rootNode: GraphNode<T>, cloneData?: NodeDataTransfer<T,T>): [Graph<T>, GraphNode<T>, Map<GraphNode<T>, GraphNode<T>>] {
@@ -176,7 +176,7 @@ export class DuplicateInteraction<T> implements GraphInteraction<T> {
     } | null = null
     constructor (private painter: GraphPainter<T>, private pushToHistory: (graph: Graph<T>) => unknown, private cloneData: (data: T, nodeMap: Map<GraphNode<T>, GraphNode<T>>) => T = x => x) {}
 
-    onMouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number): void {
+    mouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number): void {
         let rootNode = findClosestNode(mouseX, mouseY, visible)
         if (rootNode !== null) {
             let [subgraph, newRoot, nodeMap] = duplicateSubgraph(rootNode, this.cloneData)
@@ -188,20 +188,20 @@ export class DuplicateInteraction<T> implements GraphInteraction<T> {
             }
         }
     }
-    onDragStep(graph: Graph<T>, visible: unknown, mouseX: number, mouseY: number, dt: number): void {
+    dragStep(graph: Graph<T>, visible: unknown, mouseX: number, mouseY: number, dt: number): void {
         // draw preview
         let state = this.state
         if (state !== null) {
             offsetNodes(state.subgraph.nodes, mouseX - state.root.x, mouseY - state.root.y)
         }
     }
-    onDragDraw(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void {
+    dragDraw(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void {
         let state = this.state
         if (state !== null) {
             this.painter.drawGraph(drawCtx, state.visibleSubgraph)
         }
     }
-    onMouseUp(graph: Graph<T>, visible: unknown, mouseX: number, mouseY: number): void {
+    mouseUp(graph: Graph<T>, visible: unknown, mouseX: number, mouseY: number): void {
         let state = this.state
         if (state !== null) {
             this.pushToHistory(graph)
@@ -225,15 +225,15 @@ export class SpanWindowTool<T> implements GraphInteraction<T> {
     ) {
     }
 
-    onMouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number): void {
+    mouseDown(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number): void {
         this.state = {
             startPos : vec(mouseX, mouseY),
         }
     }
 
-    onDragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number, dt: number): void { }
+    dragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number, dt: number): void { }
 
-    onDragDraw(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void {
+    dragDraw(graph: Graph<T>, visibleNodes: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void {
         let state = this.state
         if (state !== null) {
             let bounds = Rect.fromPoints([state.startPos, vec(mouseX, mouseY)])
@@ -248,7 +248,7 @@ export class SpanWindowTool<T> implements GraphInteraction<T> {
         }
     }
 
-    onMouseUp(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number): void {
+    mouseUp(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number): void {
         if (this.state === null) {
             return
         }

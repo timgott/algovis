@@ -179,7 +179,7 @@ class TransferTool implements GraphInteraction<NodeData> {
     ) {
     }
 
-    onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
+    mouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
         let node = findClosestNode(mouseX, mouseY, visible)
         let opOutput = findClosestNode(mouseX, mouseY, this.getOutputNodes())
         const distNode = node !== null ? distanceToPointSqr(mouseX, mouseY, node) : Infinity
@@ -206,7 +206,7 @@ class TransferTool implements GraphInteraction<NodeData> {
             }
         }
     }
-    onDragStep(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
+    dragStep(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
         const state = this.state
         if (state !== null) {
             const startNode = state.startNode
@@ -229,7 +229,7 @@ class TransferTool implements GraphInteraction<NodeData> {
             }
         }
     }
-    onMouseUp(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
+    mouseUp(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
         let state = this.state
         if (state !== null) {
             if (state.mode === "duplicate") {

@@ -670,7 +670,7 @@ class ArrowTool implements GraphInteraction<NodeData> {
     ) {
     }
 
-    onMouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
+    mouseDown(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
         let normalNodes = [...graph.nodes].filter((n): n is GraphNode<NormalNodeData> => n.data.kind === "normal")
         let node = findClosestNode(mouseX, mouseY, normalNodes)
         if (node !== null) {
@@ -697,10 +697,10 @@ class ArrowTool implements GraphInteraction<NodeData> {
         return endNode
     }
 
-    onDragStep(graph: Graph<NodeData>, visibleNodes: GraphNode<NodeData>[], mouseX: number, mouseY: number, deltaTime: number): void {
+    dragStep(graph: Graph<NodeData>, visibleNodes: GraphNode<NodeData>[], mouseX: number, mouseY: number, deltaTime: number): void {
     }
 
-    onDragDraw(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
+    dragDraw(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
         const state = this.state
         if (state !== null) {
             const startNode = state.startNode
@@ -733,7 +733,7 @@ class ArrowTool implements GraphInteraction<NodeData> {
         }
     }
 
-    onMouseUp(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
+    mouseUp(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number): void {
         let state = this.state
         if (state !== null) {
             const startNode = state.startNode

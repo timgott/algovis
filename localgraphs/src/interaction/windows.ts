@@ -2,7 +2,7 @@ import { Rect } from "../../../shared/rectangle";
 import { ensured } from "../../../shared/utils";
 import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "./controller";
 
-function drawWindowFrame(ctx: CanvasRenderingContext2D, window: WindowBounds, titleArea: Rect) {
+export function drawWindowFrame(ctx: CanvasRenderingContext2D, window: WindowBounds, titleArea: Rect) {
     ctx.save()
     const cornerRadius = 4
     ctx.strokeStyle = window.borderColor;
@@ -68,6 +68,32 @@ export function satisfyMinBounds(window: WindowBounds) {
     }
 }
 
+// including entire window frame
+export function calcWindowOuterBounds(window: WindowBounds): Rect {
+    let contentArea = window.bounds
+    return Rect.new(
+        contentArea.left, contentArea.top - titleHeight, contentArea.right, contentArea.bottom
+    )
+}
+
+// top area of window frame where title belongs and that can be used to drag the window
+export function calcWindowTitleArea(window: WindowBounds): Rect {
+    let outerBounds = calcWindowOuterBounds(window)
+    let contentArea = window.bounds
+    return Rect.new(
+        outerBounds.left, outerBounds.top, outerBounds.right, contentArea.top
+    )
+}
+
+export function calcWindowResizeArea(window: WindowBounds): Rect {
+    let size = resizeHandleSize / 2
+    return Rect.new(
+        window.bounds.right - size, window.bounds.bottom - size, window.bounds.right + size, window.bounds.bottom + size
+    )
+}
+
+    
+
 // contains only input related data
 export class WindowController<T extends WindowBounds> implements InteractiveSystem {
     constructor(
@@ -107,39 +133,15 @@ export class WindowController<T extends WindowBounds> implements InteractiveSyst
 
     draw(frame: AnimationFrame, ctx: CanvasRenderingContext2D): void {
         for (let window of this.windows) {
-            let titleArea = this.titleArea(window)
+            let titleArea = calcWindowTitleArea(window)
             drawWindowFrame(ctx, window, titleArea);
             this.drawContents(frame, ctx, window, titleArea)
         }
     }
-    
-    // including entire window frame
-    outerBounds(window: T): Rect {
-        let contentArea = window.bounds
-        return Rect.new(
-            contentArea.left, contentArea.top - titleHeight, contentArea.right, contentArea.bottom
-        )
-    }
 
-    // top area of window frame where title belongs and that can be used to drag the window
-    titleArea(window: T): Rect {
-        let outerBounds = this.outerBounds(window)
-        let contentArea = window.bounds
-        return Rect.new(
-            outerBounds.left, outerBounds.top, outerBounds.right, contentArea.top
-        )
-    }
-
-    resizeArea(window: T): Rect {
-        let size = resizeHandleSize / 2
-        return Rect.new(
-            window.bounds.right - size, window.bounds.bottom - size, window.bounds.right + size, window.bounds.bottom + size
-        )
-    }
-
-    onMouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {
+    mouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {
         for (let window of this.windows) {
-            let titleArea = this.titleArea(window)
+            let titleArea = calcWindowTitleArea(window)
             if (Rect.contains(titleArea, x, y)) {
                 this.dragState = {
                     lastX: x,
@@ -150,7 +152,7 @@ export class WindowController<T extends WindowBounds> implements InteractiveSyst
                 }
                 return "Drag"
             }
-            let resizeArea = this.resizeArea(window)
+            let resizeArea = calcWindowResizeArea(window)
             if (Rect.contains(resizeArea, x, y)) {
                 this.dragState = {
                     lastX: x,
@@ -165,7 +167,7 @@ export class WindowController<T extends WindowBounds> implements InteractiveSyst
         return "Ignore"
     }
 
-    onDragEnd(x: number, y: number): void {
+    dragEnd(x: number, y: number): void {
         this.dragState = null
     }
 }
