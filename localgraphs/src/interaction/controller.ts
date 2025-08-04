@@ -70,8 +70,8 @@ export class UiStack implements InteractiveSystem {
     mouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {
         // reverse order to give priority to what is drawn on top
         for (const system of this.systems.toReversed()) {
-            if (system.onMouseDown !== undefined) {
-                const result = system.onMouseDown(x, y, pointerId)
+            if (system.mouseDown !== undefined) {
+                const result = system.mouseDown(x, y, pointerId)
                 if (result !== "Ignore") {
                     if (result === "Drag") {
                         this.pointerCaptures.set(pointerId, system)

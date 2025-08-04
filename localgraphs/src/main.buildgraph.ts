@@ -207,7 +207,9 @@ class MacroDuplicateInteraction implements GraphInteraction<NodeData> {
             }
         }
     }
-    dragStep(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
+    dragStep(graph: Graph<NodeData>, visibleNodes: GraphNode<NodeData>[], mouseX: number, mouseY: number, deltaTime: number): void {
+    }
+    dragStepDraw(graph: Graph<NodeData>, visible: Iterable<GraphNode<NodeData>>, mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, dt: number): void {
         // draw preview?
         if (this.state !== null) {
             const startNode = this.state.startNode

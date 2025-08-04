@@ -11,7 +11,7 @@ import { drawWindowTitle, satisfyMinBounds, WindowBounds, WindowController,  } f
 import { Rect } from "../../shared/rectangle.js";
 import { vec, vecscale } from "../../shared/vector.js";
 import { ContextMatcher, findSubgraphMatches, findSubgraphMatchesWithContext } from "./subgraph.js";
-import { makeVariableMatcher, mapMatcher } from "./unification.js";
+import { makeVariableMatcher, mapMatcher } from "./variables.js";
 
 let undoButton = document.getElementById("undo") as HTMLButtonElement
 let redoButton = document.getElementById("redo") as HTMLButtonElement

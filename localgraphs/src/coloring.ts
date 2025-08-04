@@ -828,7 +828,7 @@ class DirectedAcyclicGraph<T> {
     walkToLeaf(node: T) {
         let current = node
         while (this.adjacency.get(current)!.size > 0) {
-            current = this.getChild(current)
+            current = this.getChild(current)!
         }
         return current
     }
@@ -922,7 +922,7 @@ export function antiCollisionColoring(radius: number): DynamicLocal<NodeColor> {
                 // choose majority parity
                 let minority = 1 - parity
                 for (let component of parityBins[minority]) {
-                    componentGraph.addChild(component, parityBins[parity].values().next().value)
+                    componentGraph.addChild(component, parityBins[parity].values().next().value!)
                 }
             }
 

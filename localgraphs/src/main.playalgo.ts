@@ -230,7 +230,7 @@ class SelectNodeInteraction implements GraphInteraction<NodeData> {
 
     mouseDown(graph: Graph<NodeData>, visibleNodes: GraphNode<NodeData>[], mouseX: number, mouseY: number): void {
     }
-    dragStep(graph: Graph<NodeData>, visibleNodes: GraphNode<NodeData>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void {
+    dragStep(): void {
     }
     mouseUp(graph: Graph<NodeData>, visibleNodes: GraphNode<NodeData>[], mouseX: number, mouseY: number): void {
         const selectDistance = 50
