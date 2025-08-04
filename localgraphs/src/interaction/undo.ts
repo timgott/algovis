@@ -4,13 +4,16 @@ export class UndoHistory<T> {
     private history: T[] = []
     private index: number = 0
 
-    constructor(private limit: number = Infinity, private clone: (state: T) => T = s => structuredClone(s)) {
+    constructor(private limit: number = Infinity, public clone: (state: T) => T = s => structuredClone(s)) {
     }
 
     push(state: T) {
+        const copy = this.clone(state)
+        this.pushAlreadyCloned(copy)
+    }
+    pushAlreadyCloned(copy: T) {
         const newEnd = this.index
         this.history = this.history.slice(-this.limit, newEnd)
-        const copy = this.clone(state)
         this.history.push(copy)
         this.index = this.history.length
     }

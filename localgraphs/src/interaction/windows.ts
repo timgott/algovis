@@ -2,21 +2,21 @@ import { Rect } from "../../../shared/rectangle";
 import { ensured } from "../../../shared/utils";
 import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "./controller";
 
-export function drawWindowFrame(ctx: CanvasRenderingContext2D, window: WindowBounds, titleArea: Rect) {
+function drawWindowFrame(ctx: CanvasRenderingContext2D, contentArea: Rect, titleArea: Rect, borderColor: string, resizable: boolean) {
     ctx.save()
     const cornerRadius = 4
-    ctx.strokeStyle = window.borderColor;
+    ctx.strokeStyle = borderColor;
     //ctx.fillStyle = `rgba(200, 220, 255, 0.6)`;
-    ctx.fillStyle = `color-mix(in srgb, ${window.borderColor} 10%, rgba(255, 255, 255, 0.8))`;
+    ctx.fillStyle = `color-mix(in srgb, ${borderColor} 10%, rgba(255, 255, 255, 0.8))`;
     ctx.lineWidth = 1;
     ctx.beginPath()
-    ctx.roundRect(window.bounds.left, titleArea.top, Rect.width(window.bounds), Rect.height(titleArea), [cornerRadius, cornerRadius, 0, 0]);
+    ctx.roundRect(contentArea.left, titleArea.top, Rect.width(contentArea), Rect.height(titleArea), [cornerRadius, cornerRadius, 0, 0]);
     ctx.fill()
-    ctx.roundRect(window.bounds.left, titleArea.top, Rect.width(window.bounds), window.bounds.bottom - titleArea.top, cornerRadius);
-    ctx.moveTo(window.bounds.left, window.bounds.top);
-    ctx.lineTo(window.bounds.right, window.bounds.top);
+    ctx.roundRect(contentArea.left, titleArea.top, Rect.width(contentArea), contentArea.bottom - titleArea.top, cornerRadius);
+    ctx.moveTo(contentArea.left, contentArea.top);
+    ctx.lineTo(contentArea.right, contentArea.top);
     ctx.stroke();
-    if (window.resizing) {
+    if (resizable) {
         ctx.fillStyle = ctx.strokeStyle;
         // diagonal lines in the bottom right
         let offset = 6
@@ -24,8 +24,8 @@ export function drawWindowFrame(ctx: CanvasRenderingContext2D, window: WindowBou
         let count = 2;
         ctx.beginPath()
         for (let i=1; i<=count; i++) {
-            ctx.moveTo(window.bounds.right - padding, window.bounds.bottom - offset * i - padding);
-            ctx.lineTo(window.bounds.right - offset * i - padding, window.bounds.bottom - padding);
+            ctx.moveTo(contentArea.right - padding, contentArea.bottom - offset * i - padding);
+            ctx.lineTo(contentArea.right - offset * i - padding, contentArea.bottom - padding);
         }
         ctx.stroke();
     }
@@ -43,6 +43,18 @@ export function drawWindowTitle(ctx: CanvasRenderingContext2D, titleBounds: Rect
     ctx.restore()
     const measured = ctx.measureText(title);
     return left + measured.width
+}
+
+// simpler
+export function drawResizableWindowWithTitle(
+    ctx: CanvasRenderingContext2D,
+    contentArea: Rect,
+    title: string,
+    borderColor: string,
+) {
+    let titleArea = calcWindowTitleArea(contentArea);
+    drawWindowFrame(ctx, contentArea, titleArea, borderColor, true);
+    drawWindowTitle(ctx, titleArea, title, borderColor);
 }
 
 const titleHeight = 40
@@ -69,30 +81,30 @@ export function satisfyMinBounds(window: WindowBounds) {
 }
 
 // including entire window frame
-export function calcWindowOuterBounds(window: WindowBounds): Rect {
-    let contentArea = window.bounds
+export function calcWindowOuterBounds(contentArea: Rect): Rect {
     return Rect.new(
         contentArea.left, contentArea.top - titleHeight, contentArea.right, contentArea.bottom
     )
 }
 
 // top area of window frame where title belongs and that can be used to drag the window
-export function calcWindowTitleArea(window: WindowBounds): Rect {
-    let outerBounds = calcWindowOuterBounds(window)
-    let contentArea = window.bounds
+export function calcWindowTitleArea(contentArea: Rect): Rect {
+    let outerBounds = calcWindowOuterBounds(contentArea)
     return Rect.new(
         outerBounds.left, outerBounds.top, outerBounds.right, contentArea.top
     )
 }
 
-export function calcWindowResizeArea(window: WindowBounds): Rect {
+export function calcWindowResizeArea(contentArea: Rect): Rect {
     let size = resizeHandleSize / 2
     return Rect.new(
-        window.bounds.right - size, window.bounds.bottom - size, window.bounds.right + size, window.bounds.bottom + size
+        contentArea.right - size, contentArea.bottom - size, contentArea.right + size, contentArea.bottom + size
     )
 }
 
-    
+export function isWindowResizable(window: WindowBounds): boolean {
+    return window.resizing !== false
+}
 
 // contains only input related data
 export class WindowController<T extends WindowBounds> implements InteractiveSystem {
@@ -133,15 +145,15 @@ export class WindowController<T extends WindowBounds> implements InteractiveSyst
 
     draw(frame: AnimationFrame, ctx: CanvasRenderingContext2D): void {
         for (let window of this.windows) {
-            let titleArea = calcWindowTitleArea(window)
-            drawWindowFrame(ctx, window, titleArea);
+            let titleArea = calcWindowTitleArea(window.bounds)
+            drawWindowFrame(ctx, window.bounds, titleArea, window.borderColor, isWindowResizable(window));
             this.drawContents(frame, ctx, window, titleArea)
         }
     }
 
     mouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {
         for (let window of this.windows) {
-            let titleArea = calcWindowTitleArea(window)
+            let titleArea = calcWindowTitleArea(window.bounds)
             if (Rect.contains(titleArea, x, y)) {
                 this.dragState = {
                     lastX: x,
@@ -152,7 +164,7 @@ export class WindowController<T extends WindowBounds> implements InteractiveSyst
                 }
                 return "Drag"
             }
-            let resizeArea = calcWindowResizeArea(window)
+            let resizeArea = calcWindowResizeArea(window.bounds)
             if (Rect.contains(resizeArea, x, y)) {
                 this.dragState = {
                     lastX: x,

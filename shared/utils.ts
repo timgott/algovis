@@ -267,3 +267,21 @@ export function sum(array: number[]) {
     }
     return result;
 }
+
+// example usage:
+//     wrapWithLog = makeRunBeforeWrapper(() => console.log("Running before function"))
+//     myfunc2 = wrapWithLog(myfunc)
+export function makeRunBeforeWrapper(runBefore: () => void) {
+    return function <T extends (...args: any) => any>(f: T): T {
+        return function(this: any, ...args: Parameters<T>): ReturnType<T> {
+            runBefore()
+            return f.apply(this, args)
+        } as T
+    }
+}
+
+export function requireHtmlElement(id: string): HTMLElement {
+    let element = document.getElementById(id);
+    assertExists(element, `Element ${id} is missing in html.`)
+    return element
+}

@@ -2,10 +2,11 @@ import { filteredGraphView, Graph, GraphNode } from "../../localgraphs/src/graph
 import { InteractiveSystem, PointerId, AnimationFrame, SleepState, MouseDownResponse } from "../../localgraphs/src/interaction/controller"
 import { GraphInteraction, GraphPainter } from "../../localgraphs/src/interaction/graphsim"
 import { LayoutPhysics } from "../../localgraphs/src/interaction/physics"
-import { calcWindowTitleArea, WindowBounds } from "../../localgraphs/src/interaction/windows"
+import { UndoHistory } from "../../localgraphs/src/interaction/undo"
+import { calcWindowResizeArea, calcWindowTitleArea, WindowBounds } from "../../localgraphs/src/interaction/windows"
 import { Rect } from "../../shared/rectangle"
 import { ensured, unreachable } from "../../shared/utils"
-import { distance, isDistanceLess, vecsub } from "../../shared/vector"
+import { distance, isDistanceLess, vec, vecsub, Vector } from "../../shared/vector"
 
 // generalization to localgraphs interaction model
 // TODO: merge both and put into shared
@@ -40,9 +41,9 @@ class MapDragInteraction<S, T> implements MouseDragInteraction<S> {
     }
 }
 
-function mapInteraction<S, T>(f: (state: S) => T, interaction: MouseInteraction<T>): MouseInteraction<S> {
+export function mapTool<S, T>(f: (state: S) => T, interaction: (state: S) => MouseInteraction<T>): MouseInteraction<S> {
     return (state: S, mouseX: number, mouseY: number): MouseClickOrDragResponse<S> => {
-        let response = interaction(f(state), mouseX, mouseY)
+        let response = interaction(state)(f(state), mouseX, mouseY)
         if (response === "Ignore" || response === "Click") {
             return response
         } else {
@@ -51,8 +52,9 @@ function mapInteraction<S, T>(f: (state: S) => T, interaction: MouseInteraction<
     }
 }
 
-export function nestGraphTool<S, T>(f: (state: S) => Graph<T>, interaction: GraphInteraction<T>): MouseInteraction<S> {
+export function nestedGraphTool<S, T>(f: (state: S) => Graph<T>, tool: (state: S) => GraphInteraction<T>): MouseInteraction<S> {
     return (state: S, mouseX: number, mouseY: number): MouseClickOrDragResponse<S> => {
+        let interaction = tool(state)
         {
             let graph = f(state)
             interaction.mouseDown(graph, graph.nodes, mouseX, mouseY)
@@ -76,12 +78,24 @@ export function nestGraphTool<S, T>(f: (state: S) => Graph<T>, interaction: Grap
     }
 }
 
+export function wrapToolWithHistory<T>(undoHistory: UndoHistory<T>, tool: MouseInteraction<T>): MouseInteraction<T> {
+    return (state: T, mouseX: number, mouseY: number): MouseClickOrDragResponse<T> => {
+        // could be improved by not pushing a snapshot on "Ignore" response (e.g. call undo on ignore?)
+        let copy = undoHistory.clone(state)
+        let response = tool(state, mouseX, mouseY)
+        if (response !== "Ignore") {
+            undoHistory.pushAlreadyCloned(copy)
+        }
+        return response
+    }
+}
+
 export class ToolController<S> implements InteractiveSystem {
-    private tool: MouseInteraction<S> | null = null
     private interactions: Map<PointerId, MouseDragInteraction<S>> = new Map()
 
     constructor(
-      private getState: () => S,
+        private getState: () => S,
+        private tool: MouseInteraction<S> | null = null
     ) {
     }
 
@@ -162,8 +176,8 @@ export class OnlyGraphPhysicsSimulator<T> implements InteractiveSystem {
     }
 }
 
-interface StatePainter<S> {
-    draw<S>(ctx: CanvasRenderingContext2D, state: S, frame: AnimationFrame): unknown
+export interface StatePainter<S> {
+    draw(ctx: CanvasRenderingContext2D, state: S, frame: AnimationFrame): unknown
 }
 
 export class PaintingSystem<S> implements InteractiveSystem {
@@ -203,15 +217,15 @@ export type WindowEventHandler<T extends WindowBounds> = {
     clickWindow?: (window: T) => unknown
 }
 
-export function WindowMovingTool<T extends WindowBounds>(titleHeight: number, events: WindowEventHandler<T>): MouseInteraction<T[]> {
+export function makeWindowMovingTool<T extends WindowBounds>(events: WindowEventHandler<T>): MouseInteraction<T[]> {
     return function (windows: T[], mouseX: number, mouseY: number): MouseClickOrDragResponse<T[]> {
         for (let window of windows) {
             let hit: "move" | "resize" | null = null
-            let resizeArea = this.resizeArea(window)
+            let resizeArea = calcWindowResizeArea(window.bounds)
             if (Rect.contains(resizeArea, mouseX, mouseY)) {
                 hit = "resize"
             }
-            let titleArea = calcWindowTitleArea(window)
+            let titleArea = calcWindowTitleArea(window.bounds)
             if (Rect.contains(titleArea, mouseX, mouseY)) {
                 hit = "move"
             }
@@ -229,5 +243,28 @@ export function WindowMovingTool<T extends WindowBounds>(titleHeight: number, ev
             }
         }
         return "Ignore"
+    }
+}
+
+export function makeSpanWindowTool<S>(createWindow: (bounds: Rect, state: S) => unknown): MouseInteraction<S> {
+    return function (state: S, mouseX: number, mouseY: number): MouseDragInteraction<S> {
+        let startPos = vec(mouseX, mouseY)
+        return {
+            dragDraw(state, mouseX, mouseY, drawCtx, deltaTime) {
+                let bounds = Rect.fromPoints([startPos, vec(mouseX, mouseY)])
+                // dashed gray rectangle
+                drawCtx.save()
+                drawCtx.strokeStyle = "gray"
+                drawCtx.setLineDash([5, 5])
+                drawCtx.lineWidth = 1
+                drawCtx.beginPath()
+                drawCtx.strokeRect(bounds.left, bounds.top, Rect.width(bounds), Rect.height(bounds))
+                drawCtx.restore()
+            },
+            mouseUp(state, mouseX: number, mouseY: number): void {
+                let bounds = Rect.fromPoints([startPos, vec(mouseX, mouseY)])
+                createWindow(bounds, state)
+            }
+        }
     }
 }
