@@ -61,9 +61,9 @@ export function createPathGraph(length: number): Graph<null> {
     return graph
 }
 
-export function createGraphFromEdges<V>(edges: [V,V][]): Graph<null> {
-    let graph = createEmptyGraph<null>()
-    let vertices = new DefaultMap<V, GraphNode<null>>(() => createNode(graph, null))
+export function createGraphFromEdges<V>(edges: [V,V][]): Graph<V> {
+    let graph = createEmptyGraph<V>()
+    let vertices = new DefaultMap<V, GraphNode<V>>((key: V) => createNode(graph, key))
     for (let [a,b] of edges) {
         createEdge(graph, vertices.get(a), vertices.get(b))
     }

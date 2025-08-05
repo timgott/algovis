@@ -1,9 +1,13 @@
 import { extractSubgraph, Graph, GraphNode } from "../../localgraphs/src/graph"
 import { Rect } from "../../shared/rectangle"
+import { ContextMatcher } from "../../subgraph/src/subgraph"
+import { makeVariableMatcher, mapMatcher } from "../../subgraph/src/variables"
 import { makeRuleFromOperatorGraph, NodeDataCloner, PatternRule } from "./reduction"
 
 export const FORALL_SYMBOL="\u2200" // ∀
 export const OPERATOR_NEW = "new"
+export const OPERATOR_SET = "set"
+export const OPERATOR_DEL = "del"
 
 type NodeData = {
     label: string
@@ -17,21 +21,31 @@ function adjacentSet<T>(around: GraphNode<T>[]): Set<GraphNode<T>> {
     return new Set(around.flatMap(v => [...v.neighbors]))
 }
 
-export function extractRuleFromBox<T extends NodeData, S, C>(graph: Graph<T>, box: Rect, cloner: NodeDataCloner<T, S, C>): PatternRule<T, S, C> {
+export function extractVarRuleFromBox<T extends NodeData>(graph: Graph<T>, box: Rect, defaultData: T): PatternRule<T, T, VarMap> {
     let containedNodes = graph.nodes.filter(v => Rect.containsPos(box, v))
+    return extractVarRuleFromNodes(containedNodes, defaultData)
+}
+
+export function extractVarRuleFromNodes<T extends NodeData>(nodes: GraphNode<T>[], defaultData: T): PatternRule<T, T, VarMap> {
     // extract the nodes that are attached to forall quantifier nodes
-    let quantifierNodes = containedNodes.filter(v => v.data.label === FORALL_SYMBOL)
+    let quantifierNodes = nodes.filter(v => v.data.label === FORALL_SYMBOL)
     let quantifiedNodes = adjacentSet(quantifierNodes)
-    let normalNodes = containedNodes.filter(v => v.data.label !== FORALL_SYMBOL && !quantifiedNodes.has(v))
+    let normalNodes = nodes.filter(v => v.data.label !== FORALL_SYMBOL && !quantifiedNodes.has(v))
     // find subgraph of nodes inside rule box
     let [containedSubgraph, _map] = extractSubgraph(normalNodes)
     let variables = quantifiedNodes.map(v => v.data.label)
+    return makeVarRuleFromOperatorGraph(containedSubgraph, variables, defaultData)
+}
 
-    const operators = containedNodes.filter(v => v.data.label === OPERATOR_NEW)
+export function makeVarRuleFromOperatorGraph<T extends NodeData>(ruleGraph: Graph<T>, variables: Set<string>, defaultData: T): PatternRule<T, T, VarMap> {
+    const operators = ruleGraph.nodes.filter(v => v.data.label === OPERATOR_NEW)
     const operands = adjacentSet(operators)
     const allOpsAndArgs = new Set([...operators, ...operands])
 
-    return makeRuleFromOperatorGraph(containedSubgraph, (v) => allOpsAndArgs.has(v), cloner)
+    let matcher: ContextMatcher<T,T,VarMap> = mapMatcher((x: T) => x.label, makeVariableMatcher(variables))
+    let cloner = makeLabelNodeCloner<T>(defaultData)
+
+    return makeRuleFromOperatorGraph(ruleGraph, (v) => allOpsAndArgs.has(v), matcher, cloner)
 }
 
 function makeLabelNodeCloner<T extends NodeData>(defaultData: T): VarNodeCloner<T> {
@@ -45,9 +59,4 @@ function makeLabelNodeCloner<T extends NodeData>(defaultData: T): VarNodeCloner<
             label: context.get(data.label) || data.label,
         })
     }
-}
-
-export function extractVarRuleFromBox<T extends NodeData>(graph: Graph<T>, box: Rect, defaultData: T): VarRule<T> {
-    let cloner = makeLabelNodeCloner<T>(defaultData)
-    return extractRuleFromBox(graph, box, cloner)
 }

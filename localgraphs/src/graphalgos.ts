@@ -154,6 +154,10 @@ export function findConnectedComponentsSimple<T>(graph: Graph<T>): [number, Map<
     return findConnectedComponents(graph.nodes, () => false)
 }
 
+export function countConnectedComponents<T>(graph: Graph<T>): number {
+    return findConnectedComponentsSimple(graph)[0]
+}
+
 export function getNodesByComponent<T>(components: Map<GraphNode<T>, Component>, nodes: Iterable<GraphNode<T>>): Map<Component, GraphNode<T>[]> {
     let result = new Map<Component, GraphNode<T>[]>()
 

@@ -1,11 +1,15 @@
-import { createEdge, createEmptyGraph, createNode, Graph, GraphEdge, GraphNode } from "../../localgraphs/src/graph"
+import { createEdge, createEmptyGraph, createNode, filteredGraphView, Graph, GraphEdge, GraphNode } from "../../localgraphs/src/graph"
+import { countConnectedComponents } from "../../localgraphs/src/graphalgos"
 import { AnimationFrame } from "../../localgraphs/src/interaction/controller"
-import { DragNodeInteraction, GraphInteraction, SimpleGraphPainter } from "../../localgraphs/src/interaction/graphsim"
+import { DragNodeInteraction, findClosestNode, GraphInteraction, SimpleGraphPainter } from "../../localgraphs/src/interaction/graphsim"
+import { applyLayoutForcesOneSided, LayoutConfig as LayoutPhysicsConfig, settleNodes } from "../../localgraphs/src/interaction/physics"
 import { BuildGraphInteraction, DuplicateInteraction, MoveComponentInteraction } from "../../localgraphs/src/interaction/tools"
 import { UndoHistory } from "../../localgraphs/src/interaction/undo"
 import { drawResizableWindowWithTitle, satisfyMinBounds, WindowBounds } from "../../localgraphs/src/interaction/windows"
 import { Rect } from "../../shared/rectangle"
-import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool } from "./interaction"
+import { isDistanceLess, vec } from "../../shared/vector"
+import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick } from "./interaction"
+import { applyRuleEverywhere, findRuleMatches } from "./reduction"
 import { extractVarRuleFromBox, VarRule } from "./semantics"
 
 type UiNodeData = {
@@ -34,12 +38,77 @@ const defaultNodeData: UiNodeData = {
     label: "",
 }
 
+export function setSelectedLabel(state: MainState, label: string) {
+    for (let node of state.data.selectedNodes) {
+        node.data.label = label
+    }
+}
+
+export function pushToHistory(state: MainState) {
+    state.undoHistory.push(state.data)
+}
+
+function ruleFromBox(state: DataState, box: RuleBoxState): Rule {
+    return extractVarRuleFromBox(state.graph, box.bounds, defaultNodeData)
+}
+
+export function selectRule(state: DataState, ruleBox: RuleBoxState) {
+    state.activeRule = ruleBox
+}
+
+export function runActiveRuleTest(state: DataState) {
+    if (state.activeRule === null) {
+        return
+    }
+    let oldNodes = new Set(state.graph.nodes)
+    let rule = ruleFromBox(state, state.activeRule)
+    // FIXME: applyRuleEverywhere also modifies the rule itself
+    //applyRuleEverywhere(state.graph, rule)
+    let matches = findRuleMatches(getOutsideGraphFilter(state), rule)
+    for (let {context, embedding} of matches) {
+        rule.apply(state.graph, embedding, context)
+    }
+    settleNodes(state.graph, new Set(state.graph.nodes.filter(v => !oldNodes.has(v))), layoutStyle)
+}
+
+function selectNode(state: DataState, node: GraphNode<UiNodeData>) {
+    state.selectedNodes.clear()
+    state.selectedNodes.add(node)
+}
+
+const nodeClickDistance = 30
+
+function selectClosest(state: DataState, mouseX: number, mouseY: number, limit?: number): "Click" | "Ignore" {
+    let node = findClosestNode(mouseX, mouseY, state.graph.nodes)
+    if (node !== null) {
+        selectNode(state, node)
+        if (isDistanceLess(vec(mouseX, mouseY), node, nodeClickDistance)) {
+            return "Click"
+        } else {
+            return "Ignore"
+        }
+    }
+    return "Ignore"
+}
+
+function selectClicked(state: DataState, mouseX: number, mouseY: number): "Click" | "Ignore" {
+    return selectClosest(state, mouseX, mouseY, nodeClickDistance)
+}
+
 function toolWithUndo(tool: MouseInteraction<DataState>): MouseInteraction<MainState> {
     return mapTool(g => g.data, g => wrapToolWithHistory(g.undoHistory, tool))
 }
 
 function graphTool(tool: (state: DataState) => GraphInteraction<UiNodeData>): MouseInteraction<MainState> {
     return toolWithUndo(nestedGraphTool(s => s.graph, tool))
+}
+
+function graphToolWithClickSelect(tool: (state: DataState) => GraphInteraction<UiNodeData>): MouseInteraction<MainState> {
+    return toolWithUndo(stealToolClick(selectClicked, nestedGraphTool(s => s.graph, tool), true))
+}
+
+function graphToolAlwaysSelect(tool: (state: DataState) => GraphInteraction<UiNodeData>): MouseInteraction<MainState> {
+    return toolWithUndo(withToolClick(selectClosest, nestedGraphTool(s => s.graph, tool)))
 }
 
 function putNewNode(state: DataState, x: number, y: number): GraphNode<UiNodeData> {
@@ -64,9 +133,9 @@ function putNewWindow(bounds: Rect, state: DataState) {
 
 
 const tools = {
-    "build": graphTool((s) => new BuildGraphInteraction((g, x, y) => putNewNode(s, x, y), createEdge)),
-    "drag": graphTool(() => new DragNodeInteraction()),
-    "move": graphTool(() => new MoveComponentInteraction()),
+    "build": graphToolWithClickSelect((s) => new BuildGraphInteraction((g, x, y) => putNewNode(s, x, y), createEdge)),
+    "drag": graphToolAlwaysSelect(() => new DragNodeInteraction()),
+    "move": graphToolWithClickSelect(() => new MoveComponentInteraction()),
     //"duplicate": graphTool(() => new DuplicateInteraction(new SimpleGraphPainter(5, "black"), )),
     //"delete": _,
     "rulebox": toolWithUndo(makeSpanWindowTool(putNewWindow)),
@@ -110,36 +179,61 @@ export function cloneDataState(state: DataState): DataState {
     return structuredClone(state)
 }
 
-function ruleFromBox(state: DataState, box: RuleBoxState): Rule {
-    return extractVarRuleFromBox(state.graph, box.bounds, defaultNodeData)
+function getOutsideGraphFilter(state: DataState): Graph<UiNodeData> {
+    return filteredGraphView(state.graph, (node) => {
+        for (let box of state.ruleBoxes) {
+            if (Rect.containsPos(box.bounds, node)) {
+                return false
+            }
+        }
+        return true
+    })
 }
 
-export function selectRule(state: DataState, ruleBox: RuleBoxState) {
-    state.activeRule = ruleBox
+function findNodesMatchingRule<S,T,C>(graph: Graph<T>, rule: PatternRule<S,T,C>): Set<GraphNode<T>> {
+    if (countConnectedComponents(rule.pattern) > 1) {
+        console.warn("disconnected component found, not yet optimized! ignoring!")
+        return new Set()
+    };
+    let matches = findRuleMatches(graph, rule)
+    let nodes = new Set<GraphNode<T>>()
+    for (let match of matches) {
+        for (let node of match.embedding.values()) {
+            nodes.add(node)
+        }
+    }
+    return nodes
 }
 
 export class MainPainter implements StatePainter<MainState> {
     constructor(private nodeRadius: number) { }
 
     draw(ctx: CanvasRenderingContext2D, state: MainState, frame: AnimationFrame): void {
-        this.drawGraph(ctx, state.data.graph, state.data.selectedNodes)
+        let highlightedNodes = new Set<GraphNode<UiNodeData>>()
+        if (state.data.activeRule) {
+            let rule = ruleFromBox(state.data, state.data.activeRule)
+            console.log("rule pattern size:", rule.pattern.nodes.length)
+            highlightedNodes = findNodesMatchingRule(getOutsideGraphFilter(state.data), rule)
+            console.log("highlighted nodes", highlightedNodes.size)
+        }
+        this.drawGraph(ctx, state.data.graph, highlightedNodes, state.data.selectedNodes)
         this.drawRuleBoxes(ctx, state.data)
     }
 
     drawRuleBoxes(ctx: CanvasRenderingContext2D, state: DataState): void {
         for (let box of state.ruleBoxes) {
-            let inactiveColor = `color-mix(in srgb, ${box.borderColor} 50%, rgba(50, 50, 50, 0.5))`
+            let inactiveColor = `color-mix(in srgb, ${box.borderColor} 10%, rgba(50, 50, 50, 0.5))`
             let color = state.activeRule === box ? box.borderColor : inactiveColor
             drawResizableWindowWithTitle(ctx, box.bounds, "Rule", color)
         }
     }
 
-    drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<UiNodeData>, selected: Set<GraphNode<UiNodeData>>): void {
+    drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<UiNodeData>, highlighted: Set<GraphNode<UiNodeData>>, selected: Set<GraphNode<UiNodeData>>): void {
         for (let edge of graph.edges) {
             this.drawEdge(ctx, edge)
         }
         for (let node of graph.nodes) {
-            this.drawNode(ctx, node, false, selected.has(node))
+            this.drawNode(ctx, node, highlighted.has(node), selected.has(node))
         }
     }
 
@@ -194,4 +288,15 @@ export class MainPainter implements StatePainter<MainState> {
         }
     }
 
+}
+
+export const layoutStyle: LayoutPhysicsConfig = {
+    nodeRadius: 14,
+    pushDistance: 30,
+    minEdgeLength: 30,
+    pushForce: 30.0,
+    edgeForce: 100.0,
+    centeringForce: 0.0,
+    dampening: 5.0,
+    sleepVelocity: 0.5,
 }

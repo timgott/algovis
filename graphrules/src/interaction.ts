@@ -90,6 +90,58 @@ export function wrapToolWithHistory<T>(undoHistory: UndoHistory<T>, tool: MouseI
     }
 }
 
+export function stealToolClick<S>(click: (state: S, x: number, y: number) => "Click" | "Ignore", tool: MouseInteraction<S>, onlyOnMove: boolean = false): MouseInteraction<S> {
+    const threshold = 5 // is a click if mouse has moved less than this
+    return (state: S, mouseX: number, mouseY: number): MouseClickOrDragResponse<S> => {
+        let response = tool(state, mouseX, mouseY)
+        if (response === "Click") { // don't steal click if tool already clicked
+            return response
+        } else if (response === "Ignore") {
+            return click(state, mouseX, mouseY)
+        } else {
+            const drag = response
+            let start = vec(mouseX, mouseY)
+            let isClick = true
+            if (!onlyOnMove) {
+                let response = click(state, mouseX, mouseY)
+                if (response === "Ignore") {
+                    isClick = false
+                }
+            }
+            return {
+                ...drag,
+                dragStep(state, mouseX, mouseY, deltaTime) {
+                    isClick = isClick && isDistanceLess(start, vec(mouseX, mouseY), threshold)
+                    drag.dragStep?.(state, mouseX, mouseY, deltaTime)
+                },
+                mouseUp(state: S, mouseX: number, mouseY: number): void {
+                    if (isClick) {
+                        if (onlyOnMove) {
+                            let clickResult = click(state, mouseX, mouseY)
+                            if (clickResult === "Ignore") {
+                                drag.mouseUp?.(state, mouseX, mouseY)
+                            }
+                        }
+                    } else {
+                        drag.mouseUp?.(state, mouseX, mouseY)
+                    }
+                }
+            }
+        }
+    }
+}
+
+export function withToolClick<S>(click: (state: S, x: number, y: number) => "Click" | "Ignore", tool: MouseInteraction<S>): MouseInteraction<S> {
+    return (state: S, mouseX: number, mouseY: number): MouseClickOrDragResponse<S> => {
+        let clickResponse = click(state, mouseX, mouseY)
+        let response = tool(state, mouseX, mouseY)
+        if (response === "Ignore") {
+            return clickResponse
+        }
+        return response
+    }
+}
+
 export class ToolController<S> implements InteractiveSystem {
     private interactions: Map<PointerId, MouseDragInteraction<S>> = new Map()
 

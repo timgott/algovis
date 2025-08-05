@@ -1,21 +1,34 @@
 import { copySubgraphTo, createEdge, createEmptyGraph, deleteNode, Graph, GraphNode, mapSubgraphTo, NodeDataTransfer } from "../../localgraphs/src/graph"
-import { findSubgraphMatches } from "../../subgraph/src/subgraph"
+import { ContextMatcher, DataMatcher, findSubgraphMatchesWithContext, MatchWithContext } from "../../subgraph/src/subgraph"
 
 export type PatternRule<S,T,C> = {
     pattern: Graph<S>,
+    matcher: ContextMatcher<S,T,C>,
     apply: (graph: Graph<T>, embedding: Map<GraphNode<unknown>, GraphNode<T>>, context: C) => unknown
 }
 
-export function applyUnlabeledRule<T,S>(graph: Graph<T>, rule: PatternRule<S,T,null>): void {
-    let matches = findSubgraphMatches(graph, rule.pattern, (a,b) => true)
-    for (let match of matches) {
-        rule.apply(graph, match, null)
+export function findRuleMatches<T,S,C>(graph: Graph<T>, rule: PatternRule<S,T,C>): MatchWithContext<T, C>[] {
+    return findSubgraphMatchesWithContext(graph, rule.pattern, rule.matcher)
+}
+
+// useful if the rule does not make new patterns appear (no recursion)
+export function applyRuleEverywhere<T,S,C>(graph: Graph<T>, rule: PatternRule<S,T,C>): void {
+    let matches = findRuleMatches(graph, rule)
+    for (let {context, embedding} of matches) {
+        rule.apply(graph, embedding, context)
     }
+}
+
+const unlabeledMatcher: ContextMatcher<unknown, unknown, null> = {
+    check: (a, b) => true,
+    updated: () => null,
+    empty: () => null,
 }
 
 export function makeTestExplodeRule<T>(graph: Graph<null>): PatternRule<null, T, null> {
     return {
         pattern: graph,
+        matcher: unlabeledMatcher,
         apply: (graph, embedding) => {
             embedding.forEach((hostNode, patternNode) => {
                 deleteNode(graph, hostNode)
@@ -29,25 +42,50 @@ export type NodeDataCloner<S,SU,C> = {
     copyUnifiedTargetData: (context: C) => NodeDataTransfer<S,SU>
 }
 
-export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator: (x: GraphNode<S>) => boolean, cloner: NodeDataCloner<S,T,C>): PatternRule<S, T, C> {
+export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator: (x: GraphNode<S>) => boolean, matcher: ContextMatcher<S,T,C>, cloner: NodeDataCloner<S,T,C>): PatternRule<S, T, C> {
     let invariantNodes = ruleGraph.nodes.filter(n => !isOperator(n))
     let pattern = createEmptyGraph<S>()
     let targetToPatternMap = copySubgraphTo(invariantNodes, pattern, cloner.copyPatternData)
     // find the nodes that have to be added and the edges that have to be created
     let insertedNodes = ruleGraph.nodes.filter(n => isOperator(n))
-    let betweenEdges = insertedNodes.flatMap(a => {
-        return [...a.neighbors].filter(b => !isOperator(b)).map(b => [a, b])
-    })
+    // use the edges such that we can transfer the edge length
+    let betweenEdges = ruleGraph.edges.filter(edge => (isOperator(edge.a) != isOperator(edge.b)))
+    // swap edges such that edge.a is an inserted node and edge.b is an invariant node
+    for (let edge of betweenEdges) {
+        if (isOperator(edge.b)) {
+            let a = edge.a
+            edge.a = edge.b
+            edge.b = a
+        }
+    }
     return {
-        pattern: pattern,
+        pattern,
+        matcher,
         apply(graph, embedding, context) {
             let insertedToHostMap = mapSubgraphTo(insertedNodes, graph, cloner.copyUnifiedTargetData(context))
             // create edges between inserted nodes and invariant nodes
-            for (let [a, b] of betweenEdges) {
-                let hostA = insertedToHostMap.get(a)!
-                let hostB = embedding.get(targetToPatternMap.get(b)!)!
-                createEdge(graph, hostA, hostB)
+            for (let edge of betweenEdges) {
+                let hostA = insertedToHostMap.get(edge.a)!
+                let hostB = embedding.get(targetToPatternMap.get(edge.b)!)!
+                createEdge(graph, hostA, hostB, edge.length)
             }
         }
     }
+}
+
+export function makeSimpleRuleFromGraph<T>(ruleGraph: Graph<T>, isOperator: (x: GraphNode<T>) => boolean, isMatch: DataMatcher<T, T>) {
+    let matcher: ContextMatcher<T,T,null> = {
+        check: (pattern, host, context) => isMatch(pattern, host),
+        empty: () => null,
+        updated: () => null,
+    }
+    let cloner: NodeDataCloner<T, T, null> = {
+        copyPatternData: function (data: T, nodeMap: Map<GraphNode<T>, GraphNode<T>>): T {
+            return structuredClone(data)
+        },
+        copyUnifiedTargetData: function (context: null): NodeDataTransfer<T, T> {
+            return (data) => structuredClone(data)
+        }
+    }
+    return makeRuleFromOperatorGraph(ruleGraph, isOperator, matcher, cloner)
 }

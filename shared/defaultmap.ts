@@ -2,14 +2,14 @@
 export class DefaultMap<K, V> {
     private readonly values: Map<K,V> = new Map();
 
-    constructor(protected makeDefault: () => V) { }
+    constructor(protected makeDefault: (key: K) => V) { }
 
     get(name: K): V {
         let value = this.values.get(name);
         if (value !== undefined) {
             return value;
         } else {
-            let newValue = this.makeDefault();
+            let newValue = this.makeDefault(name);
             this.values.set(name, newValue);
             return newValue;
         }

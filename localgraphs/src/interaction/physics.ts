@@ -1,4 +1,5 @@
-import { assert } from "../../../shared/utils";
+import { assert, min } from "../../../shared/utils";
+import { isDistanceLess } from "../../../shared/vector";
 import { Graph, GraphNode } from "../graph";
 
 export interface LayoutPhysics<T> {
@@ -52,6 +53,21 @@ export function applyVelocityStep(
     }
 }
 
+const minDistance = 1;
+
+function separateNodes<T>(activeNodes: Iterable<GraphNode<T>>, allNodes: Iterable<GraphNode<T>>) {
+    for (let a of activeNodes) {
+        for (let b of allNodes) {
+            while (a !== b && isDistanceLess(a, b, minDistance)) {
+                a.x += (Math.random() * 2 - 1) * minDistance * 10
+                a.y += (Math.random() * 2 - 1) * minDistance * 10
+                a.vx += (Math.random() * 2 - 1) * minDistance / 0.010 // go away within 10ms
+                a.vy += (Math.random() * 2 - 1) * minDistance / 0.010
+            }
+        }
+    }
+}
+
 function applyLayoutForces<T>(
     graph: Graph<T>,
     layout: LayoutConfig,
@@ -66,6 +82,9 @@ function applyLayoutForces<T>(
             node.vy = 0;
         }
     }
+
+    // make sure no 2 nodes are on the same spot
+    separateNodes(activeNodes, graph.nodes)
 
     // pull together edges
     for (let edge of graph.edges) {
@@ -118,6 +137,83 @@ function applyLayoutForces<T>(
         let dy = centerY - node.y;
         node.vx += dx * dt * layout.centeringForce;
         node.vy += dy * dt * layout.centeringForce;
+    }
+}
+
+// Only affects activeNodes based on forces between active and inactive nodes.
+// Can be useful to move new nodes into place without disrupting the layout.
+// Don't call this twice to make it two sided though, that is inefficient
+export function applyLayoutForcesOneSided<T>(
+    graph: Graph<T>,
+    layout: LayoutConfig,
+    activeNodes: Set<GraphNode<T>>,
+    dt: number,
+) {
+    // make sure no 2 nodes are on the same spot
+    separateNodes(activeNodes, graph.nodes)
+
+    // pull together edges
+    for (let edge of graph.edges) {
+        if (edge.a !== edge.b) { // skip self-loops
+            let node: GraphNode<T> | null = null
+            let sign: number = 0
+            if (activeNodes.has(edge.a)) {
+                node = edge.a
+                sign = 1
+            } else if (activeNodes.has(edge.b)) {
+                node = edge.b
+                sign = -1
+            }
+            if (node !== null) {
+                // don't check for active nodes because of edge cases like uncollapsing nodes
+                let dx = edge.b.x - edge.a.x;
+                let dy = edge.b.y - edge.a.y;
+                let dist = Math.sqrt(dx * dx + dy * dy);
+                console.assert(dist > 0, "Points on same spot");
+                let unitX = dx / dist;
+                let unitY = dy / dist;
+                let delta = 0;
+                let length = Math.max(edge.length, layout.minEdgeLength);
+                if (dist > length) {
+                    delta = length - dist;
+                } else if (dist < layout.minEdgeLength) {
+                    delta = layout.minEdgeLength - dist;
+                }
+                let force = delta * layout.edgeForce * dt;
+                node.vx -= force * unitX * sign * 2;
+                node.vy -= force * unitY * sign * 2;
+            }
+        }
+    }
+    // push apart nodes
+    const targetDistSqr = layout.pushDistance * layout.pushDistance;
+    const pushForce = layout.pushForce * layout.pushDistance;
+    let otherNodes = graph.nodes.filter(v => !activeNodes.has(v))
+    for (let a of activeNodes) {
+        for (let b of otherNodes) {
+            if (a !== b && !a.neighbors.has(b)) {
+                let dx = b.x - a.x;
+                let dy = b.y - a.y;
+                let distSqr = dx * dx + dy * dy;
+                if (distSqr < targetDistSqr) {
+                    let force = (dt * pushForce) / distSqr;
+                    a.vx -= force * dx * 2;
+                    a.vy -= force * dy * 2;
+                }
+            }
+        }
+    }
+}
+
+export function settleNodes(graph: Graph<unknown>, nodes: Set<GraphNode<unknown>>, layoutStyle: LayoutConfig) {
+    const dt = 1.0 / 20.0 // 0.05
+    for (let i = 0; i < 2000; i++) {
+        applyLayoutForcesOneSided(graph, layoutStyle, nodes, dt)
+        applyVelocityStep(graph.nodes, layoutStyle.dampening, dt)
+    }
+    for (let node of nodes) {
+        node.vx = 0;
+        node.vy = 0;
     }
 }
 
