@@ -2,7 +2,7 @@ import { extractSubgraph, Graph, GraphNode } from "../../localgraphs/src/graph"
 import { Rect } from "../../shared/rectangle"
 import { ContextMatcher } from "../../subgraph/src/subgraph"
 import { makeVariableMatcher, mapMatcher } from "../../subgraph/src/variables"
-import { makeRuleFromOperatorGraph, NodeDataCloner, PatternRule } from "./reduction"
+import { makeRuleFromOperatorGraph, NodeDataCloner, PatternRule } from "./rule"
 
 export const FORALL_SYMBOL="\u2200" // ∀
 export const OPERATOR_NEW = "new"

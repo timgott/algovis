@@ -10,7 +10,7 @@ import { Rect } from "../../shared/rectangle"
 import { randomChoice } from "../../shared/utils"
 import { isDistanceLess, vec } from "../../shared/vector"
 import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick } from "./interaction"
-import { findRuleMatches, PatternRule } from "./reduction"
+import { findRuleMatches, PatternRule } from "./rule"
 import { extractVarRuleFromBox, VarRule } from "./semantics"
 
 export type UiNodeData = {
