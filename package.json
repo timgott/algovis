@@ -1,10 +1,12 @@
 {
   "devDependencies": {
+    "@types/jsurl": "^0.1.2",
     "parcel": "^2.15.2",
     "ts-jest": "^29.1.2",
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "jsurl": "^0.1.5",
     "p5": "^1.9.0"
   },
   "scripts": {

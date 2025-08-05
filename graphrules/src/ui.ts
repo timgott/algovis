@@ -1,22 +1,22 @@
 import { createEdge, createEmptyGraph, createNode, filteredGraphView, Graph, GraphEdge, GraphNode } from "../../localgraphs/src/graph"
 import { countConnectedComponents } from "../../localgraphs/src/graphalgos"
 import { AnimationFrame } from "../../localgraphs/src/interaction/controller"
-import { DragNodeInteraction, findClosestNode, GraphInteraction, SimpleGraphPainter } from "../../localgraphs/src/interaction/graphsim"
-import { applyLayoutForcesOneSided, LayoutConfig as LayoutPhysicsConfig, settleNodes } from "../../localgraphs/src/interaction/physics"
-import { BuildGraphInteraction, DuplicateInteraction, MoveComponentInteraction } from "../../localgraphs/src/interaction/tools"
+import { DragNodeInteraction, findClosestNode, GraphInteraction } from "../../localgraphs/src/interaction/graphsim"
+import { LayoutConfig as LayoutPhysicsConfig, settleNodes } from "../../localgraphs/src/interaction/physics"
+import { BuildGraphInteraction, MoveComponentInteraction } from "../../localgraphs/src/interaction/tools"
 import { UndoHistory } from "../../localgraphs/src/interaction/undo"
 import { drawResizableWindowWithTitle, satisfyMinBounds, WindowBounds } from "../../localgraphs/src/interaction/windows"
 import { Rect } from "../../shared/rectangle"
 import { isDistanceLess, vec } from "../../shared/vector"
 import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick } from "./interaction"
-import { applyRuleEverywhere, findRuleMatches } from "./reduction"
+import { findRuleMatches, PatternRule } from "./reduction"
 import { extractVarRuleFromBox, VarRule } from "./semantics"
 
-type UiNodeData = {
+export type UiNodeData = {
     label: string,
 }
 
-type RuleBoxState = WindowBounds
+export type RuleBoxState = WindowBounds
 
 type Rule = VarRule<UiNodeData>
 
@@ -73,7 +73,7 @@ export function runActiveRuleTest(state: DataState) {
         ...layoutStyle,
         pushDistance: 100,
         pushForce: 60,
-        dampening: 5.0,
+        dampening: 2.0,
         sleepVelocity: 0.0
     }
 
@@ -221,9 +221,7 @@ export class MainPainter implements StatePainter<MainState> {
         let highlightedNodes = new Set<GraphNode<UiNodeData>>()
         if (state.data.activeRule) {
             let rule = ruleFromBox(state.data, state.data.activeRule)
-            console.log("rule pattern size:", rule.pattern.nodes.length)
             highlightedNodes = findNodesMatchingRule(getOutsideGraphFilter(state.data), rule)
-            console.log("highlighted nodes", highlightedNodes.size)
         }
         this.drawGraph(ctx, state.data.graph, highlightedNodes, state.data.selectedNodes)
         this.drawRuleBoxes(ctx, state.data)

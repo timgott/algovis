@@ -5,12 +5,41 @@ import { initFullscreenCanvas } from "../../shared/canvas";
 import { assertExists, ensured, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController } from "./interaction";
 import { FORALL_SYMBOL, OPERATOR_DEL, OPERATOR_NEW, OPERATOR_SET } from "./semantics";
+import { flattenState, unflattenState } from "./storage";
 import { cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, pushToHistory, runActiveRuleTest, setSelectedLabel, ToolName, windowMovingTool } from "./ui";
+import JSURL from "jsurl"
+
+function tryLoadState(): DataState | null {
+    let hash = window.location.hash
+    if (hash === "") {
+        return null
+    }
+    try {
+        let str = hash.slice(1)
+        return unflattenState(JSURL.parse(str))
+    } catch (error) {
+        console.error("Could not load data;", error)
+        return null
+    }
+}
+
+function saveState(): DataState {
+    let flat = flattenState(globalState.data)
+    let str = JSURL.stringify(flat)
+    document.location.hash = str
+    return unflattenState(JSURL.parse(str)) // try parse
+}
 
 let globalState: MainState = {
-    data: createClearedState(),
+    data: tryLoadState() ?? createClearedState(),
     undoHistory: new UndoHistory<DataState>(1000, cloneDataState),
     selectedTool: "build",
+}
+
+function runGlobalUndoableAction(action: (g: MainState) => void) {
+    pushToHistory(globalState)
+    action(globalState)
+    controller.requestFrame()
 }
 
 // tool selection
@@ -33,9 +62,9 @@ toolButton("rulebox");
 // node labeling with special buttons
 
 function enterLabel(label: string) {
-    pushToHistory(globalState);
-    setSelectedLabel(globalState, label);
-    controller.requestFrame();
+    runGlobalUndoableAction(g => {
+        setSelectedLabel(g, label);
+    })
 }
 
 function operatorButton(id: string, operator: string) {
@@ -61,9 +90,23 @@ document.addEventListener("keypress", (e) => {
 // test button
 
 requireHtmlElement("btn_test").addEventListener("click", () => {
-    pushToHistory(globalState);
-    runActiveRuleTest(globalState.data);
-    controller.requestFrame();
+    runGlobalUndoableAction(g => {
+        runActiveRuleTest(g.data);
+    })
+})
+
+// persistence
+
+requireHtmlElement("btn_save").addEventListener("click", () => {
+    globalState.data = saveState() // load immediately to detect errors
+})
+
+// reset
+
+requireHtmlElement("btn_reset").addEventListener("click", () => {
+    runGlobalUndoableAction(g => {
+        g.data = createClearedState()
+    })
 })
 
 // history

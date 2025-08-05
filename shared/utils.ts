@@ -285,3 +285,11 @@ export function requireHtmlElement(id: string): HTMLElement {
     assertExists(element, `Element ${id} is missing in html.`)
     return element
 }
+
+export function swap<A,B>([a,b]: [A,B]): [B,A] {
+    return [b,a]
+}
+
+export function mapToIndex<T>(arr: T[]): Map<T, number> {
+    return new Map(arr.entries().map(swap))
+}
