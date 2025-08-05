@@ -58,6 +58,7 @@ toolButton("build");
 toolButton("drag");
 toolButton("move");
 toolButton("rulebox");
+toolButton("delete");
 
 // node labeling with special buttons
 

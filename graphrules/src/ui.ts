@@ -1,12 +1,13 @@
-import { createEdge, createEmptyGraph, createNode, filteredGraphView, Graph, GraphEdge, GraphNode } from "../../localgraphs/src/graph"
+import { createEdge, createEmptyGraph, createNode, deleteNode, filteredGraphView, Graph, GraphEdge, GraphNode } from "../../localgraphs/src/graph"
 import { countConnectedComponents } from "../../localgraphs/src/graphalgos"
 import { AnimationFrame } from "../../localgraphs/src/interaction/controller"
 import { DragNodeInteraction, findClosestNode, GraphInteraction } from "../../localgraphs/src/interaction/graphsim"
 import { LayoutConfig as LayoutPhysicsConfig, settleNodes } from "../../localgraphs/src/interaction/physics"
-import { BuildGraphInteraction, MoveComponentInteraction } from "../../localgraphs/src/interaction/tools"
+import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction } from "../../localgraphs/src/interaction/tools"
 import { UndoHistory } from "../../localgraphs/src/interaction/undo"
 import { drawResizableWindowWithTitle, satisfyMinBounds, WindowBounds } from "../../localgraphs/src/interaction/windows"
 import { Rect } from "../../shared/rectangle"
+import { randomChoice } from "../../shared/utils"
 import { isDistanceLess, vec } from "../../shared/vector"
 import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick } from "./interaction"
 import { findRuleMatches, PatternRule } from "./reduction"
@@ -65,9 +66,7 @@ export function runActiveRuleTest(state: DataState) {
     // FIXME: applyRuleEverywhere also modifies the rule itself
     //applyRuleEverywhere(state.graph, rule)
     let matches = findRuleMatches(getOutsideGraphFilter(state), rule)
-    for (let {context, embedding} of matches) {
-        rule.apply(state.graph, embedding, context)
-    }
+    rule.apply(state.graph, randomChoice(matches))
 
     const settlePhysicsConfig: LayoutPhysicsConfig = {
         ...layoutStyle,
@@ -146,7 +145,7 @@ const tools = {
     "drag": graphToolAlwaysSelect(() => new DragNodeInteraction()),
     "move": graphToolWithClickSelect(() => new MoveComponentInteraction()),
     //"duplicate": graphTool(() => new DuplicateInteraction(new SimpleGraphPainter(5, "black"), )),
-    //"delete": _,
+    "delete": graphTool(() => new ClickNodeInteraction((node, graph) => deleteNode(graph, node))),
     "rulebox": toolWithUndo(makeSpanWindowTool(putNewWindow)),
 }
 

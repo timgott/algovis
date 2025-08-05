@@ -7,7 +7,7 @@ import { ContextMatcher, DataMatcher, findSubgraphMatchesWithContext, MatchWithC
 export type PatternRule<S,T,C> = {
     pattern: Graph<S>,
     matcher: ContextMatcher<S,T,C>,
-    apply: (graph: Graph<T>, embedding: Map<GraphNode<unknown>, GraphNode<T>>, context: C) => unknown
+    apply: (graph: Graph<T>, match: MatchWithContext<T,C>) => unknown
 }
 
 export function findRuleMatches<T,S,C>(graph: Graph<T>, rule: PatternRule<S,T,C>): MatchWithContext<T, C>[] {
@@ -17,8 +17,8 @@ export function findRuleMatches<T,S,C>(graph: Graph<T>, rule: PatternRule<S,T,C>
 // useful if the rule does not make new patterns appear (no recursion)
 export function applyRuleEverywhere<T,S,C>(graph: Graph<T>, rule: PatternRule<S,T,C>): void {
     let matches = findRuleMatches(graph, rule)
-    for (let {context, embedding} of matches) {
-        rule.apply(graph, embedding, context)
+    for (let match of matches) {
+        rule.apply(graph, match)
     }
 }
 
@@ -32,7 +32,7 @@ export function makeTestExplodeRule<T>(graph: Graph<null>): PatternRule<null, T,
     return {
         pattern: graph,
         matcher: unlabeledMatcher,
-        apply: (graph, embedding) => {
+        apply: (graph, {embedding}) => {
             embedding.forEach((hostNode, patternNode) => {
                 deleteNode(graph, hostNode)
             })
@@ -100,7 +100,7 @@ export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator
     return {
         pattern,
         matcher,
-        apply(graph, embedding, context) {
+        apply(graph, {embedding, context}) {
             let insertedToHostMap = mapSubgraphTo(insertedNodes, graph, cloner.copyUnifiedTargetData(context))
             // create edges between inserted nodes and invariant nodes
             for (let edge of betweenEdges) {
