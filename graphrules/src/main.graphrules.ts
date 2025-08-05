@@ -6,11 +6,11 @@ import { assertExists, ensured, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController } from "./interaction";
 import { FORALL_SYMBOL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET } from "./semantics";
 import { flattenState, unflattenState } from "./storage";
-import { applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, pushToHistory, runActiveRuleTest, setSelectedLabel, ToolName, windowMovingTool } from "./ui";
+import { applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runActiveRuleTest, setSelectedLabel, ToolName, windowMovingTool } from "./ui";
 import JSURL from "jsurl"
 
 function tryLoadState(): DataState | null {
-    let hash = window.location.hash
+    let hash = window.location.search
     if (hash === "") {
         return null
     }
@@ -26,7 +26,7 @@ function tryLoadState(): DataState | null {
 function saveState(): DataState {
     let flat = flattenState(globalState.data)
     let str = JSURL.stringify(flat)
-    document.location.hash = str
+    document.location.search = str
     return unflattenState(JSURL.parse(str)) // try parse
 }
 
@@ -145,7 +145,7 @@ let physics = new GraphLayoutPhysics(layoutStyle)
 let canvas = ensured(document.getElementById("canvas")) as HTMLCanvasElement;
 let controller = new InteractionController(canvas, new UiStack([
     new ToolController(() => globalState, metaEditingTool),
-    new ToolController(() => globalState, windowMovingTool),
+    new ToolController(() => globalState, metaWindowTool),
     new OnlyGraphPhysicsSimulator(() => globalState.data.graph, physics),
     new PaintingSystem(() => globalState, new MainPainter(layoutStyle.nodeRadius))
 ]))

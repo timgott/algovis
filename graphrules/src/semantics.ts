@@ -14,7 +14,7 @@ export const OPERATOR_DEL = "del"
 export const OPERATOR_CONNECT = "con"
 export const OPERATOR_DISCONNECT = "dis"
 
-export const WILDCARD_SYMBOL = "" // empty string matches everything
+export const WILDCARD_SYMBOL = "_" // empty string matches everything
 
 const operatorSymbols = new Set([
     OPERATOR_NEW,

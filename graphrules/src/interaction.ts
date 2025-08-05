@@ -11,7 +11,9 @@ import { distance, isDistanceLess, vec, vecsub, Vector } from "../../shared/vect
 // generalization to localgraphs interaction model
 // TODO: merge both and put into shared
 
-type MouseClickOrDragResponse<T> = "Click" | "Ignore" | MouseDragInteraction<T>
+export type MouseClickResponse = "Click" | "Ignore"
+
+export type MouseClickOrDragResponse<T> = MouseClickResponse | MouseDragInteraction<T>
 
 export type MouseInteraction<T> = (state: T, mouseX: number, mouseY: number) => MouseClickOrDragResponse<T>
 

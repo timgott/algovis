@@ -5,11 +5,11 @@ import { DragNodeInteraction, findClosestNode, GraphInteraction } from "../../lo
 import { LayoutConfig as LayoutPhysicsConfig, settleNodes } from "../../localgraphs/src/interaction/physics"
 import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction } from "../../localgraphs/src/interaction/tools"
 import { UndoHistory } from "../../localgraphs/src/interaction/undo"
-import { drawResizableWindowWithTitle, satisfyMinBounds, WindowBounds } from "../../localgraphs/src/interaction/windows"
+import { calcWindowTitleArea, drawResizableWindowWithTitle, satisfyMinBounds, WindowBounds } from "../../localgraphs/src/interaction/windows"
 import { Rect } from "../../shared/rectangle"
 import { randomChoice } from "../../shared/utils"
 import { isDistanceLess, vec } from "../../shared/vector"
-import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick } from "./interaction"
+import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse } from "./interaction"
 import { findRuleMatches, PatternRule } from "./rule"
 import { extractVarRuleFromBox, makeDefaultReductionRules, VarRule } from "./semantics"
 
@@ -188,6 +188,14 @@ export const metaEditingTool: MouseInteraction<MainState> = (state, mouseX, mous
     return tool(state, mouseX, mouseY)
 }
 
+export const metaWindowTool: MouseInteraction<MainState> = (state, mouseX, mouseY) => {
+    if (state.selectedTool === "delete") {
+        return deleteWindowTool(state, mouseX, mouseY)
+    } else {
+        return windowMovingTool(state, mouseX, mouseY)
+    }
+}
+
 export const windowMovingTool: MouseInteraction<MainState> =
     toolWithUndo(mapTool(
         s => s.ruleBoxes,
@@ -205,6 +213,19 @@ export const windowMovingTool: MouseInteraction<MainState> =
             }
         })
     ))
+
+const deleteWindowTool: MouseInteraction<MainState> =
+    toolWithUndo((state: DataState, x: number, y: number): MouseClickResponse => {
+        for (let [i,box] of state.ruleBoxes.entries()) {
+            let titleArea = calcWindowTitleArea(box.bounds)
+            if (Rect.contains(titleArea, x, y)) {
+                state.ruleBoxes.splice(i, 1)
+                return "Click"
+            }
+        }
+        return "Ignore"
+    })
+
 
 export function createClearedState() : DataState {
     return {
