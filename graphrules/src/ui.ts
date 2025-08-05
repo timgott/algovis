@@ -57,20 +57,10 @@ export function selectRule(state: DataState, ruleBox: RuleBoxState) {
     state.activeRule = ruleBox
 }
 
-export function runActiveRuleTest(state: DataState) {
-    if (state.activeRule === null) {
-        return
-    }
+export function wrapSettleNewNodes(state: DataState, action: (state: DataState) => unknown) {
     let oldNodes = new Set(state.graph.nodes)
-    let rule = ruleFromBox(state, state.activeRule)
-    // FIXME: applyRuleEverywhere also modifies the rule itself
-    //applyRuleEverywhere(state.graph, rule)
-    let matches = findRuleMatches(getOutsideGraphFilter(state), rule)
-    if (matches.length == 0) {
-        console.log("No matches")
-        return
-    }
-    rule.apply(state.graph, randomChoice(matches))
+
+    action(state)
 
     const settlePhysicsConfig: LayoutPhysicsConfig = {
         ...layoutStyle,
@@ -79,19 +69,33 @@ export function runActiveRuleTest(state: DataState) {
         dampening: 2.0,
         sleepVelocity: 0.0
     }
-
     settleNodes(state.graph, new Set(state.graph.nodes.filter(v => !oldNodes.has(v))), settlePhysicsConfig, 1. / 30., 2000)
 }
 
-export function applyRandomReduction(state: DataState) {
+export function runActiveRuleTest(state: DataState) {
+    if (state.activeRule === null) {
+        return
+    }
+    let rule = ruleFromBox(state, state.activeRule)
+    // applyRuleEverywhere also modifies the rule itself, don't use here
+    let matches = findRuleMatches(getOutsideGraphFilter(state), rule)
+    if (matches.length == 0) {
+        console.log("No matches")
+        return
+    }
+    rule.apply(state.graph, randomChoice(matches))
+}
+
+export function applyRandomReduction(state: DataState): boolean {
     let rules = makeDefaultReductionRules()
     for (let rule of rules) {
         let matches = findRuleMatches(getOutsideGraphFilter(state), rule)
         if (matches.length > 0) {
             rule.apply(state.graph, randomChoice(matches))
-            return
+            return true
         }
     }
+    return false
 }
 
 export function applyExhaustiveReduction(state: DataState) {

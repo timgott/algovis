@@ -6,7 +6,7 @@ import { assertExists, ensured, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController } from "./interaction";
 import { FORALL_SYMBOL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET } from "./semantics";
 import { flattenState, unflattenState } from "./storage";
-import { applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runActiveRuleTest, setSelectedLabel, ToolName, windowMovingTool } from "./ui";
+import { applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runActiveRuleTest, setSelectedLabel, ToolName, windowMovingTool, wrapSettleNewNodes } from "./ui";
 import JSURL from "jsurl"
 
 function tryLoadState(): DataState | null {
@@ -106,8 +106,21 @@ requireHtmlElement("btn_reduce").addEventListener("click", () => {
 
 requireHtmlElement("btn_apply").addEventListener("click", () => {
     runGlobalUndoableAction(g => {
-        runActiveRuleTest(g.data);
-        applyExhaustiveReduction(g.data)
+        wrapSettleNewNodes(g.data, () => {
+            runActiveRuleTest(g.data);
+            applyExhaustiveReduction(g.data)
+        })
+    })
+})
+
+requireHtmlElement("btn_apply100").addEventListener("click", () => {
+    runGlobalUndoableAction(g => {
+        wrapSettleNewNodes(g.data, () => {
+            for (let i = 0; i < 100; i++) {
+                runActiveRuleTest(g.data);
+                applyExhaustiveReduction(g.data)
+            }
+        })
     })
 })
 
