@@ -26,4 +26,8 @@ export class DefaultMap<K, V> {
         }
         return clone;
     }
+
+    toMap(): Map<K, V> {
+        return new Map(this.values)
+    }
 }

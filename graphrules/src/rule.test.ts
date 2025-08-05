@@ -1,8 +1,10 @@
 import { describe, expect, test, jest } from '@jest/globals';
-import { applyRuleEverywhere, makeRuleFromOperatorGraph, makeSimpleRuleFromGraph, NodeDataCloner } from './rule';
-import { createGraphFromEdges } from '../../localgraphs/src/interaction/examplegraph';
-import { ContextMatcher } from '../../subgraph/src/subgraph';
-import { GraphNode, NodeDataTransfer } from '../../localgraphs/src/graph';
+import { applyRuleEverywhere, findRuleMatches, makeRuleFromOperatorGraph, makeSimpleRuleFromGraph, makeStructuredNodeCloner, NodeDataCloner, PatternRule } from './rule';
+import { createGraphFromEdges, createPathGraph } from '../../localgraphs/src/interaction/examplegraph';
+import { ContextDataMatcher, makeSubgraphMatcherWithNegative, simpleDataMatcher } from '../../subgraph/src/subgraph';
+import { copyGraph, createEdge, GraphNode, NodeDataTransfer } from '../../localgraphs/src/graph';
+import { createLabeledPathGraph } from './semantics';
+import { findInjectiveMatchesGeneric } from '../../subgraph/src/matching';
 
 describe("test makeRuleFromOperatorGraph", () => {
     test("simple rule pattern", () => {
@@ -12,8 +14,6 @@ describe("test makeRuleFromOperatorGraph", () => {
         ])
         let rule = makeSimpleRuleFromGraph(testGraph, (x) => x.data == 1, (a,b) => a == b)
         expect(rule.pattern.nodes.map(v => v.data).sort()).toEqual([2,3])
-        expect(rule.matcher.check(2,3, null)).toBe(false)
-        expect(rule.matcher.check(2,2, null)).toBe(true)
     })
     test("simple rule application", () => {
         let ruleGraph = createGraphFromEdges([
@@ -48,5 +48,24 @@ describe("test makeRuleFromOperatorGraph", () => {
         expect(mainGraph.edges.map(edge => [edge.a.data, edge.b.data].sort()).sort()).toEqual(
             [[1,2],[1,3],[2,3],[3,4],[4,5]]
         )
+    })
+    test("negative edges subgraph", () => {
+        let [pattern, [a, b, c]] = createPathGraph(["a", "b", "c"])
+        let matcher = makeSubgraphMatcherWithNegative(simpleDataMatcher((a,b) => a==b), [[a,c]])
+
+        let graph = copyGraph(pattern)
+        expect(findInjectiveMatchesGeneric(graph.nodes, pattern.nodes, matcher)).toHaveLength(1)
+        createEdge(graph, a, c)
+        expect(findInjectiveMatchesGeneric(graph.nodes, pattern.nodes, matcher)).toHaveLength(0)
+    })
+    test("negative edges rule", () => {
+        let [pattern, [a, b, c]] = createPathGraph(["a", "b", "c"])
+        let matcher = makeSubgraphMatcherWithNegative(simpleDataMatcher((a,b) => a==b), [[a,c]])
+        let rule = makeRuleFromOperatorGraph(pattern, () => false, matcher, makeStructuredNodeCloner())
+
+        let graph = copyGraph(pattern)
+        expect(findRuleMatches(graph, rule)).toHaveLength(1)
+        createEdge(graph, a, c)
+        expect(findRuleMatches(graph, rule)).toHaveLength(0)
     })
 })

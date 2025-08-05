@@ -51,16 +51,6 @@ export function createRegularTree(depth: number, degree: number): Graph<null> {
     return graph
 }
 
-export function createPathGraph(length: number): Graph<null> {
-    let graph = createEmptyGraph<null>()
-    createNode(graph, null)
-    for (let i = 1; i < length; i++) {
-        createNode(graph, null)
-        createEdge(graph, graph.nodes[i-1], graph.nodes[i])
-    }
-    return graph
-}
-
 export function createGraphFromEdges<V>(edges: [V,V][]): Graph<V> {
     let graph = createEmptyGraph<V>()
     let vertices = new DefaultMap<V, GraphNode<V>>((key: V) => createNode(graph, key))
@@ -68,4 +58,17 @@ export function createGraphFromEdges<V>(edges: [V,V][]): Graph<V> {
         createEdge(graph, vertices.get(a), vertices.get(b))
     }
     return graph
+}
+
+export function createPathGraph<T>(datas: T[]): [Graph<T>, GraphNode<T>[]] {
+    let graph = createEmptyGraph<T>()
+    let last: GraphNode<T> | null = null
+    for (let v of datas) {
+        let node = createNode(graph, v)
+        if (last !== null) {
+            createEdge(graph, node, last)
+        }
+        last = node
+    }
+    return [graph, graph.nodes]
 }

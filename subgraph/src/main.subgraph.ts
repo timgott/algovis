@@ -10,7 +10,7 @@ import { GraphLayoutPhysics, LayoutConfig } from "../../localgraphs/src/interact
 import { drawWindowTitle, satisfyMinBounds, WindowBounds, WindowController,  } from "../../localgraphs/src/interaction/windows.js";
 import { Rect } from "../../shared/rectangle.js";
 import { vec, vecscale } from "../../shared/vector.js";
-import { ContextMatcher, findSubgraphMatches, findSubgraphMatchesWithContext } from "./subgraph.js";
+import { ContextDataMatcher, findSubgraphMatches, findSubgraphMatchesWithContext } from "./subgraph.js";
 import { makeVariableMatcher, mapMatcher } from "./variables.js";
 
 let undoButton = document.getElementById("undo") as HTMLButtonElement

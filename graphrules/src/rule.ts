@@ -1,17 +1,18 @@
-import { copySubgraphTo, createEdge, createEmptyGraph, deleteNode, Graph, GraphNode, mapSubgraphTo, NodeDataTransfer } from "../../localgraphs/src/graph"
+import { copySubgraphTo, createEdge, createEmptyGraph, deleteNode, filteredGraphView, Graph, GraphNode, mapSubgraphTo, NodeDataTransfer } from "../../localgraphs/src/graph"
 import { bfs, SearchState } from "../../localgraphs/src/graphalgos"
 import { assert } from "../../shared/utils"
 import { distance, Positioned, vec, Vector } from "../../shared/vector"
-import { ContextMatcher, DataMatcher, findSubgraphMatchesWithContext, MatchWithContext } from "../../subgraph/src/subgraph"
+import { findInjectiveMatchesGeneric, GenericMatcher } from "../../subgraph/src/matching"
+import { ContextDataMatcher, DataMatcher, findSubgraphMatchesWithContext, makeSubgraphMatcher, MatchWithContext, simpleDataMatcher, SubgraphMatcher } from "../../subgraph/src/subgraph"
 
 export type PatternRule<S,T,C> = {
     pattern: Graph<S>,
-    matcher: ContextMatcher<S,T,C>,
+    matcher: GenericMatcher<GraphNode<S>,GraphNode<T>,C>,
     apply: (graph: Graph<T>, match: MatchWithContext<T,C>) => unknown
 }
 
 export function findRuleMatches<T,S,C>(graph: Graph<T>, rule: PatternRule<S,T,C>): MatchWithContext<T, C>[] {
-    return findSubgraphMatchesWithContext(graph, rule.pattern, rule.matcher)
+    return findInjectiveMatchesGeneric(graph.nodes, rule.pattern.nodes, rule.matcher)
 }
 
 // useful if the rule does not make new patterns appear (no recursion)
@@ -22,11 +23,11 @@ export function applyRuleEverywhere<T,S,C>(graph: Graph<T>, rule: PatternRule<S,
     }
 }
 
-const unlabeledMatcher: ContextMatcher<unknown, unknown, null> = {
+const unlabeledMatcher = makeSubgraphMatcher<unknown, unknown, null>({
     check: (a, b) => true,
     updated: () => null,
     empty: () => null,
-}
+})
 
 export function makeTestExplodeRule<T>(graph: Graph<null>): PatternRule<null, T, null> {
     return {
@@ -41,8 +42,7 @@ export function makeTestExplodeRule<T>(graph: Graph<null>): PatternRule<null, T,
 }
 
 export type NodeDataCloner<S,SU,C> = {
-    copyPatternData: NodeDataTransfer<S,S>,
-    copyUnifiedTargetData: (context: C) => NodeDataTransfer<S,SU>
+    transferUnifiedTargetData: (context: C) => NodeDataTransfer<S,SU>
 }
 
 function centerOfPoints(points: Iterable<Positioned>) {
@@ -81,10 +81,8 @@ function placeNewNodesBetweenOld(newNodes: Iterable<GraphNode<unknown>>, oldNode
 }
 
 // operator = node to be inserted
-export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator: (x: GraphNode<S>) => boolean, matcher: ContextMatcher<S,T,C>, cloner: NodeDataCloner<S,T,C>): PatternRule<S, T, C> {
-    let invariantNodes = ruleGraph.nodes.filter(n => !isOperator(n))
-    let pattern = createEmptyGraph<S>()
-    let targetToPatternMap = copySubgraphTo(invariantNodes, pattern, cloner.copyPatternData)
+export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator: (x: GraphNode<S>) => boolean, matcher: SubgraphMatcher<S,T,C>, cloner: NodeDataCloner<S,T,C>): PatternRule<S, T, C> {
+    let pattern = filteredGraphView(ruleGraph, n => !isOperator(n))
     // find the nodes that have to be added and the edges that have to be created
     let insertedNodes = ruleGraph.nodes.filter(n => isOperator(n))
     // use the edges such that we can transfer the edge length
@@ -101,11 +99,11 @@ export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator
         pattern,
         matcher,
         apply(graph, {embedding, context}) {
-            let insertedToHostMap = mapSubgraphTo(insertedNodes, graph, cloner.copyUnifiedTargetData(context))
+            let insertedToHostMap = mapSubgraphTo(insertedNodes, graph, cloner.transferUnifiedTargetData(context))
             // create edges between inserted nodes and invariant nodes
             for (let edge of betweenEdges) {
                 let hostA = insertedToHostMap.get(edge.a)!
-                let hostB = embedding.get(targetToPatternMap.get(edge.b)!)!
+                let hostB = embedding.get(edge.b)!
                 let length = distance(edge.a, edge.b) // more intuitive than edge.length
                 createEdge(graph, hostA, hostB, length)
             }
@@ -115,19 +113,15 @@ export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator
     }
 }
 
-export function makeSimpleRuleFromGraph<T>(ruleGraph: Graph<T>, isOperator: (x: GraphNode<T>) => boolean, isMatch: DataMatcher<T, T>) {
-    let matcher: ContextMatcher<T,T,null> = {
-        check: (pattern, host, context) => isMatch(pattern, host),
-        empty: () => null,
-        updated: () => null,
-    }
-    let cloner: NodeDataCloner<T, T, null> = {
-        copyPatternData: function (data: T, nodeMap: Map<GraphNode<T>, GraphNode<T>>): T {
-            return structuredClone(data)
-        },
-        copyUnifiedTargetData: function (context: null): NodeDataTransfer<T, T> {
+export function makeStructuredNodeCloner<T>(): NodeDataCloner<T, T, null> {
+    return {
+        transferUnifiedTargetData: function (context: null): NodeDataTransfer<T, T> {
             return (data) => structuredClone(data)
         }
     }
-    return makeRuleFromOperatorGraph(ruleGraph, isOperator, matcher, cloner)
+}
+
+export function makeSimpleRuleFromGraph<T>(ruleGraph: Graph<T>, isOperator: (x: GraphNode<T>) => boolean, isMatch: DataMatcher<T, T>) {
+    let matcher = makeSubgraphMatcher(simpleDataMatcher(isMatch))
+    return makeRuleFromOperatorGraph(ruleGraph, isOperator, matcher, makeStructuredNodeCloner())
 }

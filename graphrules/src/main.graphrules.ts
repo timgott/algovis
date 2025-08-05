@@ -4,9 +4,9 @@ import { UndoHistory } from "../../localgraphs/src/interaction/undo";
 import { initFullscreenCanvas } from "../../shared/canvas";
 import { assertExists, ensured, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController } from "./interaction";
-import { FORALL_SYMBOL, OPERATOR_DEL, OPERATOR_NEW, OPERATOR_SET } from "./semantics";
+import { FORALL_SYMBOL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET } from "./semantics";
 import { flattenState, unflattenState } from "./storage";
-import { cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, pushToHistory, runActiveRuleTest, setSelectedLabel, ToolName, windowMovingTool } from "./ui";
+import { applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, pushToHistory, runActiveRuleTest, setSelectedLabel, ToolName, windowMovingTool } from "./ui";
 import JSURL from "jsurl"
 
 function tryLoadState(): DataState | null {
@@ -80,6 +80,8 @@ operatorButton("btn_op_for", FORALL_SYMBOL);
 operatorButton("btn_op_new", OPERATOR_NEW);
 operatorButton("btn_op_set", OPERATOR_SET);
 operatorButton("btn_op_del", OPERATOR_DEL);
+operatorButton("btn_op_connect", OPERATOR_CONNECT);
+operatorButton("btn_op_disconnect", OPERATOR_DISCONNECT);
 
 // node labeling by keyboard
 
@@ -93,6 +95,19 @@ document.addEventListener("keypress", (e) => {
 requireHtmlElement("btn_test").addEventListener("click", () => {
     runGlobalUndoableAction(g => {
         runActiveRuleTest(g.data);
+    })
+})
+
+requireHtmlElement("btn_reduce").addEventListener("click", () => {
+    runGlobalUndoableAction(g => {
+        applyRandomReduction(g.data);
+    })
+})
+
+requireHtmlElement("btn_apply").addEventListener("click", () => {
+    runGlobalUndoableAction(g => {
+        runActiveRuleTest(g.data);
+        applyExhaustiveReduction(g.data)
     })
 })
 

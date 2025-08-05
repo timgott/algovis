@@ -1,7 +1,7 @@
 import { describe, expect, test, jest } from '@jest/globals';
 import { applyRuleEverywhere, makeRuleFromOperatorGraph, makeSimpleRuleFromGraph, NodeDataCloner } from './rule';
 import { createGraphFromEdges } from '../../localgraphs/src/interaction/examplegraph';
-import { ContextMatcher } from '../../subgraph/src/subgraph';
+import { ContextDataMatcher } from '../../subgraph/src/subgraph';
 import { GraphNode, NodeDataTransfer } from '../../localgraphs/src/graph';
 import { extractVarRuleFromNodes, OPERATOR_NEW } from './semantics';
 

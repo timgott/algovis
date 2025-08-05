@@ -11,7 +11,7 @@ import { randomChoice } from "../../shared/utils"
 import { isDistanceLess, vec } from "../../shared/vector"
 import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick } from "./interaction"
 import { findRuleMatches, PatternRule } from "./rule"
-import { extractVarRuleFromBox, VarRule } from "./semantics"
+import { extractVarRuleFromBox, makeDefaultReductionRules, VarRule } from "./semantics"
 
 export type UiNodeData = {
     label: string,
@@ -66,6 +66,10 @@ export function runActiveRuleTest(state: DataState) {
     // FIXME: applyRuleEverywhere also modifies the rule itself
     //applyRuleEverywhere(state.graph, rule)
     let matches = findRuleMatches(getOutsideGraphFilter(state), rule)
+    if (matches.length == 0) {
+        console.log("No matches")
+        return
+    }
     rule.apply(state.graph, randomChoice(matches))
 
     const settlePhysicsConfig: LayoutPhysicsConfig = {
@@ -78,6 +82,34 @@ export function runActiveRuleTest(state: DataState) {
 
     settleNodes(state.graph, new Set(state.graph.nodes.filter(v => !oldNodes.has(v))), settlePhysicsConfig, 1. / 30., 2000)
 }
+
+export function applyRandomReduction(state: DataState) {
+    let rules = makeDefaultReductionRules()
+    for (let rule of rules) {
+        let matches = findRuleMatches(getOutsideGraphFilter(state), rule)
+        if (matches.length > 0) {
+            rule.apply(state.graph, randomChoice(matches))
+            return
+        }
+    }
+}
+
+export function applyExhaustiveReduction(state: DataState) {
+    let rules = makeDefaultReductionRules()
+    let changed: boolean
+    do {
+        changed = false
+        for (let rule of rules) {
+            let matches = findRuleMatches(getOutsideGraphFilter(state), rule)
+            if (matches.length > 0) {
+                rule.apply(state.graph, randomChoice(matches))
+                changed = true
+                break
+            }
+        }
+    } while (changed)
+}
+
 
 function selectNode(state: DataState, node: GraphNode<UiNodeData>) {
     state.selectedNodes.clear()
