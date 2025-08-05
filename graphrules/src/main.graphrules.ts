@@ -87,7 +87,7 @@ let canvas = ensured(document.getElementById("canvas")) as HTMLCanvasElement;
 let controller = new InteractionController(canvas, new UiStack([
     new ToolController(() => globalState, metaEditingTool),
     new ToolController(() => globalState, windowMovingTool),
-    //new OnlyGraphPhysicsSimulator(() => globalState.data.graph, physics),
+    new OnlyGraphPhysicsSimulator(() => globalState.data.graph, physics),
     new PaintingSystem(() => globalState, new MainPainter(layoutStyle.nodeRadius))
 ]))
 initFullscreenCanvas(canvas)

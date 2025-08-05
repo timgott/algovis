@@ -68,7 +68,16 @@ export function runActiveRuleTest(state: DataState) {
     for (let {context, embedding} of matches) {
         rule.apply(state.graph, embedding, context)
     }
-    settleNodes(state.graph, new Set(state.graph.nodes.filter(v => !oldNodes.has(v))), layoutStyle)
+
+    const settlePhysicsConfig: LayoutPhysicsConfig = {
+        ...layoutStyle,
+        pushDistance: 100,
+        pushForce: 60,
+        dampening: 5.0,
+        sleepVelocity: 0.0
+    }
+
+    settleNodes(state.graph, new Set(state.graph.nodes.filter(v => !oldNodes.has(v))), settlePhysicsConfig, 1. / 30., 2000)
 }
 
 function selectNode(state: DataState, node: GraphNode<UiNodeData>) {

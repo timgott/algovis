@@ -1,6 +1,6 @@
 import { assert, min } from "../../../shared/utils";
 import { isDistanceLess } from "../../../shared/vector";
-import { Graph, GraphNode } from "../graph";
+import { filteredGraphView, Graph, GraphNode } from "../graph";
 
 export interface LayoutPhysics<T> {
     // Returns number of active nodes, 0 sends simulation to sleep
@@ -205,10 +205,11 @@ export function applyLayoutForcesOneSided<T>(
     }
 }
 
-export function settleNodes(graph: Graph<unknown>, nodes: Set<GraphNode<unknown>>, layoutStyle: LayoutConfig) {
-    const dt = 1.0 / 20.0 // 0.05
-    for (let i = 0; i < 2000; i++) {
+export function settleNodes(graph: Graph<unknown>, nodes: Set<GraphNode<unknown>>, layoutStyle: LayoutConfig, dt: number, iterations: number) {
+    let subgraph = filteredGraphView(graph, (v) => nodes.has(v))
+    for (let i = 0; i < iterations; i++) {
         applyLayoutForcesOneSided(graph, layoutStyle, nodes, dt)
+        applyLayoutForces(subgraph, layoutStyle, nodes, 0, 0, dt)
         applyVelocityStep(graph.nodes, layoutStyle.dampening, dt)
     }
     for (let node of nodes) {

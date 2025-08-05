@@ -1,4 +1,7 @@
 import { copySubgraphTo, createEdge, createEmptyGraph, deleteNode, Graph, GraphNode, mapSubgraphTo, NodeDataTransfer } from "../../localgraphs/src/graph"
+import { bfs, SearchState } from "../../localgraphs/src/graphalgos"
+import { assert } from "../../shared/utils"
+import { distance, Positioned, vec, Vector } from "../../shared/vector"
 import { ContextMatcher, DataMatcher, findSubgraphMatchesWithContext, MatchWithContext } from "../../subgraph/src/subgraph"
 
 export type PatternRule<S,T,C> = {
@@ -42,6 +45,42 @@ export type NodeDataCloner<S,SU,C> = {
     copyUnifiedTargetData: (context: C) => NodeDataTransfer<S,SU>
 }
 
+function centerOfPoints(points: Iterable<Positioned>) {
+    let sum = Vector.Zero;
+    let count = 0;
+    for (let point of points) {
+        sum = Vector.add(sum, point)
+        count += 1;
+    }
+    return Vector.scale(1.0 / count, sum);
+}
+
+function placeInCenterOf(node: GraphNode<unknown>, set: Iterable<Positioned>) {
+    let center = centerOfPoints(set);
+    node.x = center.x
+    node.y = center.y
+}
+
+function placeNewNodesBetweenOld(newNodes: Iterable<GraphNode<unknown>>, oldNodes: Iterable<GraphNode<unknown>>) {
+    let remaining = new Set(newNodes)
+    let fixed = new Set(oldNodes)
+    assert(fixed.size > 0, "at least one existing node required to place other nodes around")
+    bfs([...oldNodes], (node, dist) => {
+        if (remaining.has(node)) {
+            // must have at least one placed neighbor because it is reached by bfs
+            placeInCenterOf(node, node.neighbors.intersection(fixed))
+            fixed.add(node)
+            remaining.delete(node)
+            return SearchState.Continue
+        }
+        return SearchState.Skip
+    })
+    for (let node of remaining) {
+        placeInCenterOf(node, fixed)
+    }
+}
+
+// operator = node to be inserted
 export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator: (x: GraphNode<S>) => boolean, matcher: ContextMatcher<S,T,C>, cloner: NodeDataCloner<S,T,C>): PatternRule<S, T, C> {
     let invariantNodes = ruleGraph.nodes.filter(n => !isOperator(n))
     let pattern = createEmptyGraph<S>()
@@ -67,8 +106,11 @@ export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator
             for (let edge of betweenEdges) {
                 let hostA = insertedToHostMap.get(edge.a)!
                 let hostB = embedding.get(targetToPatternMap.get(edge.b)!)!
-                createEdge(graph, hostA, hostB, edge.length)
+                let length = distance(edge.a, edge.b) // more intuitive than edge.length
+                createEdge(graph, hostA, hostB, length)
             }
+            // place inserted nodes at average position of their neighbors
+            placeNewNodesBetweenOld(insertedToHostMap.values(), embedding.values())
         }
     }
 }
