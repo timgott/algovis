@@ -6,8 +6,9 @@ import { LayoutConfig as LayoutPhysicsConfig, settleNodes } from "../../localgra
 import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction } from "../../localgraphs/src/interaction/tools"
 import { UndoHistory } from "../../localgraphs/src/interaction/undo"
 import { calcWindowTitleArea, drawResizableWindowWithTitle, satisfyMinBounds, WindowBounds } from "../../localgraphs/src/interaction/windows"
+import { DefaultMap } from "../../shared/defaultmap"
 import { Rect } from "../../shared/rectangle"
-import { randomChoice } from "../../shared/utils"
+import { randomChoice, randomUniform } from "../../shared/utils"
 import { isDistanceLess, vec } from "../../shared/vector"
 import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse } from "./interaction"
 import { findRuleMatches, PatternRule } from "./rule"
@@ -64,7 +65,7 @@ export function wrapSettleNewNodes(state: DataState, action: (state: DataState) 
 
     const settlePhysicsConfig: LayoutPhysicsConfig = {
         ...layoutStyle,
-        pushDistance: 100,
+        //pushDistance: 100,
         pushForce: 60,
         dampening: 2.0,
         sleepVelocity: 0.0
@@ -270,8 +271,17 @@ function findNodesMatchingRule<S,T,C>(graph: Graph<T>, rule: PatternRule<S,T,C>)
     return nodes
 }
 
+function randomNodeColor() {
+    //return `oklch(${Math.random() * 0.5 + 0.5} ${Math.random() * 0.25} ${Math.random() * 360})`
+    return `oklab(${randomUniform(0.5, 1.0)} ${randomUniform(-1, 1)*0.3} ${randomUniform(-1, 1)*0.3})`
+}
+
 export class MainPainter implements StatePainter<MainState> {
-    constructor(private nodeRadius: number) { }
+    labelColors = new DefaultMap<string, string>(() => randomNodeColor())
+
+    constructor(private nodeRadius: number) {
+        this.labelColors.set("", "white")
+    }
 
     draw(ctx: CanvasRenderingContext2D, state: MainState, frame: AnimationFrame): void {
         let highlightedNodes = new Set<GraphNode<UiNodeData>>()
@@ -320,7 +330,8 @@ export class MainPainter implements StatePainter<MainState> {
 
     drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<UiNodeData>, highlight: boolean, selected: boolean) {
         // circle
-        ctx.fillStyle = highlight ? "red" : "white"
+        let color = this.labelColors.get(node.data.label)
+        ctx.fillStyle = highlight ? "red" : color
         ctx.strokeStyle = highlight ? "darkred" : "black"
         ctx.lineWidth = 3
         ctx.circle(node.x, node.y, this.nodeRadius)

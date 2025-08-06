@@ -113,7 +113,7 @@ requireHtmlElement("btn_apply").addEventListener("click", () => {
     })
 })
 
-requireHtmlElement("btn_apply100").addEventListener("click", () => {
+requireHtmlElement("btn_apply_repeat").addEventListener("click", () => {
     runGlobalUndoableAction(g => {
         wrapSettleNewNodes(g.data, () => {
             for (let i = 0; i < 100; i++) {

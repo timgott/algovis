@@ -17,6 +17,10 @@ export function randInt(limit: number): number {
     return Math.floor(Math.random() * limit)
 }
 
+export function randomUniform(lower: number, upper: number): number {
+    return Math.random() * (upper - lower) + lower
+}
+
 // in place shuffle
 export function shuffle<T>(arr: T[]): T[] {
     for (let i = arr.length - 1; i >= 0; i--) {
