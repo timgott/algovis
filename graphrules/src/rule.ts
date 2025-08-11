@@ -67,7 +67,7 @@ function placeNewNodesBetweenOld(newNodes: Iterable<GraphNode<unknown>>, oldNode
     let remaining = new Set(newNodes)
     let fixed = new Set(oldNodes)
     assert(fixed.size > 0, "at least one existing node required to place other nodes around")
-    bfs([...oldNodes], (node, dist) => {
+    bfs([...fixed], (node, dist) => {
         if (remaining.has(node)) {
             // must have at least one placed neighbor because it is reached by bfs
             placeInCenterOf(node, node.neighbors.intersection(fixed))
@@ -75,7 +75,10 @@ function placeNewNodesBetweenOld(newNodes: Iterable<GraphNode<unknown>>, oldNode
             remaining.delete(node)
             return SearchState.Continue
         }
-        return SearchState.Skip
+        if (!fixed.has(node)) {
+            return SearchState.Skip
+        }
+        return SearchState.Continue
     })
     for (let node of remaining) {
         placeInCenterOf(node, fixed)
