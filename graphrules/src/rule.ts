@@ -1,6 +1,6 @@
-import { copySubgraphTo, createEdge, createEmptyGraph, deleteNode, filteredGraphView, Graph, GraphNode, mapSubgraphTo, NodeDataTransfer } from "../../localgraphs/src/graph"
+import { copySubgraphTo, createEdge, createEmptyGraph, deleteNode, filteredGraphView, Graph, GraphEdge, GraphNode, mapSubgraphTo, NodeDataTransfer } from "../../localgraphs/src/graph"
 import { bfs, SearchState } from "../../localgraphs/src/graphalgos"
-import { assert } from "../../shared/utils"
+import { assert, max } from "../../shared/utils"
 import { distance, Positioned, vec, Vector } from "../../shared/vector"
 import { findInjectiveMatchesGeneric, GenericMatcher } from "../../subgraph/src/matching"
 import { ContextDataMatcher, DataMatcher, findSubgraphMatchesWithContext, makeSubgraphMatcher, MatchWithContext, simpleDataMatcher, SubgraphMatcher } from "../../subgraph/src/subgraph"
@@ -45,6 +45,8 @@ export type NodeDataCloner<S,SU,C> = {
     transferUnifiedTargetData: (context: C) => NodeDataTransfer<S,SU>
 }
 
+// placement helpers
+
 function centerOfPoints(points: Iterable<Positioned>) {
     let sum = Vector.Zero;
     let count = 0;
@@ -80,6 +82,14 @@ function placeNewNodesBetweenOld(newNodes: Iterable<GraphNode<unknown>>, oldNode
     }
 }
 
+// makes edge length at least the current distance
+function stretchEdgesToRelax(edges: GraphEdge<unknown>[]) {
+    for (let edge of edges) {
+        let dist = distance(edge.a, edge.b)
+        edge.length = Math.max(edge.length, dist)
+    }
+}
+
 // operator = node to be inserted
 export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator: (x: GraphNode<S>) => boolean, matcher: SubgraphMatcher<S,T,C>, cloner: NodeDataCloner<S,T,C>): PatternRule<S, T, C> {
     let pattern = filteredGraphView(ruleGraph, n => !isOperator(n))
@@ -101,14 +111,16 @@ export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator
         apply(graph, {embedding, context}) {
             let insertedToHostMap = mapSubgraphTo(insertedNodes, graph, cloner.transferUnifiedTargetData(context))
             // create edges between inserted nodes and invariant nodes
+            let newEdges = []
             for (let edge of betweenEdges) {
                 let hostA = insertedToHostMap.get(edge.a)!
                 let hostB = embedding.get(edge.b)!
                 let length = distance(edge.a, edge.b) // more intuitive than edge.length
-                createEdge(graph, hostA, hostB, length)
+                newEdges.push(createEdge(graph, hostA, hostB, length))
             }
             // place inserted nodes at average position of their neighbors
             placeNewNodesBetweenOld(insertedToHostMap.values(), embedding.values())
+            stretchEdgesToRelax(newEdges)
         }
     }
 }

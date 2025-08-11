@@ -2,7 +2,7 @@ import { createEdge, createEmptyGraph, createNode, deleteNode, filteredGraphView
 import { countConnectedComponents } from "../../localgraphs/src/graphalgos"
 import { AnimationFrame } from "../../localgraphs/src/interaction/controller"
 import { DragNodeInteraction, findClosestNode, GraphInteraction } from "../../localgraphs/src/interaction/graphsim"
-import { LayoutConfig as LayoutPhysicsConfig, settleNodes } from "../../localgraphs/src/interaction/physics"
+import { LayoutConfig as LayoutPhysicsConfig, separateNodes, settleNodes } from "../../localgraphs/src/interaction/physics"
 import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction } from "../../localgraphs/src/interaction/tools"
 import { UndoHistory } from "../../localgraphs/src/interaction/undo"
 import { calcWindowTitleArea, drawResizableWindowWithTitle, satisfyMinBounds, WindowBounds } from "../../localgraphs/src/interaction/windows"
@@ -63,14 +63,16 @@ export function wrapSettleNewNodes(state: DataState, action: (state: DataState) 
 
     action(state)
 
-    const settlePhysicsConfig: LayoutPhysicsConfig = {
+    const settlePhysicsConfig = (t: number): LayoutPhysicsConfig => ({
         ...layoutStyle,
-        //pushDistance: 100,
-        pushForce: 60,
-        dampening: 2.0,
-        sleepVelocity: 0.0
-    }
-    settleNodes(state.graph, new Set(state.graph.nodes.filter(v => !oldNodes.has(v))), settlePhysicsConfig, 1. / 30., 2000)
+        pushDistance: 1000 * t + layoutStyle.pushDistance,
+        dampening: t*10 + layoutStyle.dampening
+    })
+
+    let newNodes = state.graph.nodes.filter(v => !oldNodes.has(v))
+    separateNodes(newNodes, oldNodes)
+    let nodesToMove = new Set(newNodes.filter(v => v.neighbors.intersection(oldNodes).size < 2))
+    settleNodes(state.graph, nodesToMove, settlePhysicsConfig, 1. / 60., 1000)
 }
 
 export function runActiveRuleTest(state: DataState) {
@@ -284,12 +286,12 @@ export class MainPainter implements StatePainter<MainState> {
     }
 
     draw(ctx: CanvasRenderingContext2D, state: MainState, frame: AnimationFrame): void {
-        let highlightedNodes = new Set<GraphNode<UiNodeData>>()
-        if (state.data.activeRule) {
-            let rule = ruleFromBox(state.data, state.data.activeRule)
-            highlightedNodes = findNodesMatchingRule(getOutsideGraphFilter(state.data), rule)
-        }
-        this.drawGraph(ctx, state.data.graph, highlightedNodes, state.data.selectedNodes)
+        //let highlightedNodes = new Set<GraphNode<UiNodeData>>()
+        //if (state.data.activeRule) {
+        //    let rule = ruleFromBox(state.data, state.data.activeRule)
+        //    highlightedNodes = findNodesMatchingRule(getOutsideGraphFilter(state.data), rule)
+        //}
+        this.drawGraph(ctx, state.data.graph, new Set(), state.data.selectedNodes)
         this.drawRuleBoxes(ctx, state.data)
     }
 
@@ -331,7 +333,7 @@ export class MainPainter implements StatePainter<MainState> {
     drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<UiNodeData>, highlight: boolean, selected: boolean) {
         // circle
         let color = this.labelColors.get(node.data.label)
-        ctx.fillStyle = highlight ? "red" : color
+        ctx.fillStyle = color
         ctx.strokeStyle = highlight ? "darkred" : "black"
         ctx.lineWidth = 3
         ctx.circle(node.x, node.y, this.nodeRadius)
@@ -367,10 +369,10 @@ export class MainPainter implements StatePainter<MainState> {
 export const layoutStyle: LayoutPhysicsConfig = {
     nodeRadius: 14,
     pushDistance: 30,
-    minEdgeLength: 30,
-    pushForce: 30.0,
+    minEdgeLength: 50,
+    pushForce: 100.0,
     edgeForce: 100.0,
     centeringForce: 0.0,
-    dampening: 5.0,
+    dampening: 10.0,
     sleepVelocity: 0.5,
 }

@@ -1,5 +1,5 @@
-import { assert, min } from "../../../shared/utils";
-import { isDistanceLess } from "../../../shared/vector";
+import { assert, min, randomUniform } from "../../../shared/utils";
+import { isDistanceLess, Vector } from "../../../shared/vector";
 import { filteredGraphView, Graph, GraphNode } from "../graph";
 
 export interface LayoutPhysics<T> {
@@ -29,7 +29,7 @@ export function findActiveNodes(
 ): Set<GraphNode<unknown>> {
     let activeNodes = new Set<GraphNode<unknown>>();
     for (let node of graph.nodes) {
-        if (Math.abs(node.vx) + Math.abs(node.vy) >= sleepVelocity) {
+        if (node.vx * node.vy + node.vy * node.vy >= sleepVelocity * sleepVelocity) {
             activeNodes.add(node);
         }
     }
@@ -53,17 +53,32 @@ export function applyVelocityStep(
     }
 }
 
-const minDistance = 1;
+const minDistance = 0.01;
 
-function separateNodes<T>(activeNodes: Iterable<GraphNode<T>>, allNodes: Iterable<GraphNode<T>>) {
+function separatePair(active: GraphNode<unknown>, passive: GraphNode<unknown>) {
+    if (active !== passive) {
+        while (isDistanceLess(active, passive, minDistance)) {
+            let v = Vector.fromAngle(randomUniform(0, 2 * Math.PI), minDistance)
+            active.x += v.x
+            active.y += v.y
+            active.vx += v.x / 0.01
+            active.vy += v.y / 0.01
+        }
+    }
+}
+
+export function separateNodes<T>(activeNodes: Iterable<GraphNode<T>>, allNodes: Iterable<GraphNode<T>>): void {
     for (let a of activeNodes) {
         for (let b of allNodes) {
-            while (a !== b && isDistanceLess(a, b, minDistance)) {
-                a.x += (Math.random() * 2 - 1) * minDistance * 10
-                a.y += (Math.random() * 2 - 1) * minDistance * 10
-                a.vx += (Math.random() * 2 - 1) * minDistance / 0.010 // go away within 10ms
-                a.vy += (Math.random() * 2 - 1) * minDistance / 0.010
-            }
+            separatePair(a, b)
+        }
+    }
+}
+
+function separateNeighbors<T>(activeNodes: Iterable<GraphNode<T>>, allNodes: Iterable<GraphNode<T>>): void {
+    for (let a of activeNodes) {
+        for (let b of a.neighbors) {
+            separatePair(a, b)
         }
     }
 }
@@ -94,20 +109,22 @@ function applyLayoutForces<T>(
             let dy = edge.b.y - edge.a.y;
             let dist = Math.sqrt(dx * dx + dy * dy);
             console.assert(dist > 0, "Points on same spot");
-            let unitX = dx / dist;
-            let unitY = dy / dist;
-            let delta = 0;
-            let length = Math.max(edge.length, layout.minEdgeLength);
-            if (dist > length) {
-                delta = length - dist;
-            } else if (dist < layout.minEdgeLength) {
-                delta = layout.minEdgeLength - dist;
+            if (dist > 0) {
+                let unitX = dx / dist;
+                let unitY = dy / dist;
+                let delta = 0;
+                let length = Math.max(edge.length, layout.minEdgeLength);
+                if (dist > length) {
+                    delta = length - dist;
+                } else if (dist < layout.minEdgeLength) {
+                    delta = layout.minEdgeLength - dist;
+                }
+                let force = delta * layout.edgeForce * dt;
+                edge.a.vx -= force * unitX;
+                edge.a.vy -= force * unitY;
+                edge.b.vx += force * unitX;
+                edge.b.vy += force * unitY;
             }
-            let force = delta * layout.edgeForce * dt;
-            edge.a.vx -= force * unitX;
-            edge.a.vy -= force * unitY;
-            edge.b.vx += force * unitX;
-            edge.b.vy += force * unitY;
         }
     }
     // push apart nodes
@@ -205,12 +222,13 @@ export function applyLayoutForcesOneSided<T>(
     }
 }
 
-export function settleNodes(graph: Graph<unknown>, nodes: Set<GraphNode<unknown>>, layoutStyle: LayoutConfig, dt: number, iterations: number) {
+export function settleNodes(graph: Graph<unknown>, nodes: Set<GraphNode<unknown>>, layoutStyle: (t: number) => LayoutConfig, dt: number, iterations: number) {
     let subgraph = filteredGraphView(graph, (v) => nodes.has(v))
     for (let i = 0; i < iterations; i++) {
-        applyLayoutForcesOneSided(graph, layoutStyle, nodes, dt)
-        applyLayoutForces(subgraph, layoutStyle, nodes, 0, 0, dt)
-        applyVelocityStep(graph.nodes, layoutStyle.dampening, dt)
+        let layout = layoutStyle(1 - i / iterations)
+        applyLayoutForcesOneSided(graph, layout, nodes, dt)
+        applyLayoutForces(subgraph, layout, nodes, 0, 0, dt)
+        applyVelocityStep(graph.nodes, layout.dampening, dt)
     }
     for (let node of nodes) {
         node.vx = 0;
@@ -219,6 +237,7 @@ export function settleNodes(graph: Graph<unknown>, nodes: Set<GraphNode<unknown>
 }
 
 export class GraphLayoutPhysics<T> implements LayoutPhysics<T> {
+    private lastNodes = new Set<GraphNode<unknown>>()
     constructor(
         private layoutStyle: LayoutConfig,
         private customForces: ((dt: number, graph: Graph<T>, w: number, h: number) => unknown)[] = []
@@ -230,6 +249,12 @@ export class GraphLayoutPhysics<T> implements LayoutPhysics<T> {
         dt: number,
     ) {
         let activeNodes = findActiveNodes(graph, this.layoutStyle.sleepVelocity)
+        for (let node of graph.nodes) {
+            if (!this.lastNodes.has(node)) {
+                activeNodes.add(node)
+            }
+        }
+        this.lastNodes = new Set(graph.nodes);
 
         for (let custom of this.customForces) {
             custom(dt, graph, width, height);

@@ -105,10 +105,16 @@ export function makeVarRuleFromOperatorGraph<T extends NodeData>(ruleGraph: Grap
 
 function makeLabelNodeCloner<T extends NodeData>(defaultData: T): VarNodeCloner<T> {
     return {
-        transferUnifiedTargetData: (context: VarMap) => (data: T) => ({
-            ...defaultData,
-            label: context.get(data.label) || data.label,
-        })
+        transferUnifiedTargetData: (context: VarMap) => (data: T) => {
+            let label = context.get(data.label)
+            if (label === undefined) { // label MAY be "", beware of JS
+                label = data.label
+            }
+            return {
+                ...defaultData,
+                label: label,
+            }
+        }
     }
 }
 

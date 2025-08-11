@@ -94,7 +94,9 @@ document.addEventListener("keypress", (e) => {
 
 requireHtmlElement("btn_test").addEventListener("click", () => {
     runGlobalUndoableAction(g => {
-        runActiveRuleTest(g.data);
+        wrapSettleNewNodes(g.data, () => {
+            runActiveRuleTest(g.data);
+        })
     })
 })
 

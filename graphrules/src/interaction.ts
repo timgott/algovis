@@ -205,12 +205,13 @@ export class OnlyGraphPhysicsSimulator<T> implements InteractiveSystem {
     constructor(
       private getGraph: () => Graph<T>,
       private layout: LayoutPhysics<T>,
+      private maxDt = 1. / 30.
     ) {
     }
 
     update({dt, width, height}: AnimationFrame): SleepState {
         let activeCount = 0
-        activeCount = this.layout.step(this.getGraph(), width, height, dt)
+        activeCount = this.layout.step(this.getGraph(), width, height, Math.max(dt, this.maxDt))
         if (activeCount > 0 || dt == 0) {
             return "Running"
         } else {
