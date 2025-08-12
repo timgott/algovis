@@ -208,9 +208,10 @@ export const windowMovingTool: MouseInteraction<MainState> =
     toolWithUndo(mapTool(
         s => s.ruleBoxes,
         s => makeWindowMovingTool({
-            moveWindow(window, dx, dy) {
-                for (let node of s.graph.nodes) {
-                    if (Rect.contains(window.bounds, node.x, node.y)) {
+            moveWindow(window) {
+                let insideNodes = s.graph.nodes.filter((node) => Rect.contains(window.bounds, node.x, node.y))
+                return (dx, dy) => {
+                    for (let node of insideNodes) {
                         node.x += dx
                         node.y += dy
                     }

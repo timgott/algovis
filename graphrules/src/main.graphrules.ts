@@ -183,7 +183,7 @@ redoButton.addEventListener("click", () => {
     restoreFromHistory(globalState.undoHistory.redo());
 });
 
-let physics = new GraphLayoutPhysics(layoutStyle, [applyArrowAlignmentForces])
+let physics = new GraphLayoutPhysics(layoutStyle, [applyDirectionAlignmentForces, applyArrowAlignmentForces])
 let canvas = ensured(document.getElementById("canvas")) as HTMLCanvasElement;
 let controller = new InteractionController(canvas, new UiStack([
     new ToolController(() => globalState, metaEditingTool),

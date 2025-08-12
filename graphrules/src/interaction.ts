@@ -268,7 +268,7 @@ function makeDeltaDrag(mx: number, my: number, f: (dx: number, dy: number, dt: n
 }
 
 export type WindowEventHandler<T extends WindowBounds> = {
-    moveWindow?: (window: T, dx: number, dy: number) => unknown
+    moveWindow?: (window: T) => (dx: number, dy: number) => unknown
     clickWindow?: (window: T) => unknown
 }
 
@@ -286,10 +286,11 @@ export function makeWindowMovingTool<T extends WindowBounds>(events: WindowEvent
             }
             if (hit !== null) {
                 events.clickWindow?.(window)
+                let onWindowMove = events.moveWindow?.(window)
                 return makeDeltaDrag(mouseX, mouseY, (dx, dy) => {
                     if (hit === "move") {
+                        onWindowMove?.(dx, dy)
                         window.bounds = Rect.addOffset(window.bounds, dx, dy)
-                        events.moveWindow?.(window, dx, dy)
                     } else {
                         window.bounds.right += dx
                         window.bounds.bottom += dy
