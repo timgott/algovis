@@ -4,7 +4,7 @@ import { cartesianProduct } from "../../rulegame/src/metagame"
 import { DefaultMap } from "../../shared/defaultmap"
 import { Rect } from "../../shared/rectangle"
 import { ContextDataMatcher, makeSubgraphMatcher, makeSubgraphMatcherWithNegative, EdgeList, SubgraphMatcher } from "../../subgraph/src/subgraph"
-import { makeWildcardVariableMatcher, makeVariableMatcher, mapMatcher } from "../../subgraph/src/variables"
+import { makeWildcardVariableMatcher, makeVariableMatcher, mapMatcher, makeWildcardVariableMatcherWithNegDomain } from "../../subgraph/src/variables"
 import { makeRuleFromOperatorGraph, NodeDataCloner, PatternRule } from "./rule"
 
 export const FORALL_SYMBOL="\u2200" // ∀
@@ -84,6 +84,11 @@ function makeVarMatcherWithNegativeEdges(variables: Set<string>, negativeEdges: 
     return makeSubgraphMatcherWithNegative(makeDataVarMatcher(variables), negativeEdges)
 }
 
+function makeVarMatcherWithNegativeEdgesNegDomain(variables: Set<string>, negativeEdges: [GraphNode<NodeData>, GraphNode<NodeData>][], negativeDomain: Set<string>): SubgraphMatcher<NodeData, NodeData, VarMap> {
+    let dataMatcher = mapMatcher((x: NodeData) => x.label, makeWildcardVariableMatcherWithNegDomain(variables, WILDCARD_SYMBOL, negativeDomain))
+    return makeSubgraphMatcherWithNegative(dataMatcher, negativeEdges)
+}
+
 export function makeVarRuleFromOperatorGraph<T extends NodeData>(ruleGraph: Graph<T>, variables: Set<string>, defaultData: T): PatternRule<T, T, VarMap> {
     const operators = ruleGraph.nodes.filter(v => operatorSymbols.has(v.data.label))
     // TODO: Only new and set insert their argument. Below does not generalize, but good enough for testing. Alternative: special reduction to create pattern (only deletes allowed though)
@@ -91,13 +96,14 @@ export function makeVarRuleFromOperatorGraph<T extends NodeData>(ruleGraph: Grap
     const allOpsAndArgs = new Set([...operators, ...operands])
 
     // variables may not equal any constant used in the pattern
-    //let varExclude = new Set(ruleGraph.nodes.map(v => v.data.label).filter(x => !variables.has(x) && x !== WILDCARD_SYMBOL))
-    // bad idea. makes some things much harder.
+    // bad idea. makes some things much harder. (which ones? keep enabled until I remember)
+    let varExclude = new Set(ruleGraph.nodes.map(v => v.data.label).filter(x => !variables.has(x) && x !== WILDCARD_SYMBOL))
+    console.log("exclude:", [...varExclude])
 
     let negativeEdges: [GraphNode<T>, GraphNode<T>][] =
         adjacentArgumentPairs(operators.filter(v => v.data.label === OPERATOR_CONNECT))
 
-    let matcher: SubgraphMatcher<T,T,VarMap> = makeVarMatcherWithNegativeEdges(variables, negativeEdges)
+    let matcher: SubgraphMatcher<T,T,VarMap> = makeVarMatcherWithNegativeEdgesNegDomain(variables, negativeEdges, varExclude)
     let cloner = makeLabelNodeCloner<T>(defaultData)
 
     return makeRuleFromOperatorGraph(ruleGraph, (v) => allOpsAndArgs.has(v), matcher, cloner)

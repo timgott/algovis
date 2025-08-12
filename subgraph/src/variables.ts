@@ -58,3 +58,33 @@ export function makeWildcardVariableMatcher<T>(variables: Set<T>, wildcard: stri
         }
     }
 }
+
+export function makeWildcardVariableMatcherWithNegDomain<T>(variables: Set<T>, wildcard: string | null, excludedDomain: Set<T>): ContextDataMatcher<T, T, Map<T, T>> {
+    return {
+        check(patternLabel: T, hostLabel: T, context: Map<T, T>): boolean {
+            if (patternLabel == wildcard) {
+                return true
+            }
+            let pl: T
+            if (variables.has(patternLabel)) {
+                if (excludedDomain.has(hostLabel)) {
+                    return false
+                }
+                pl = context.get(patternLabel) ?? hostLabel
+            } else {
+                pl = patternLabel
+            }
+            return pl === hostLabel
+        },
+        updated(patternLabel: T, hostLabel: T, context: Map<T, T>): Map<T, T> {
+            if (patternLabel === hostLabel || patternLabel == wildcard || context.has(patternLabel)) {
+                return context
+            } else {
+                return new Map(context).set(patternLabel, hostLabel)
+            }
+        },
+        empty(): Map<T, T> {
+            return new Map();
+        }
+    }
+}
