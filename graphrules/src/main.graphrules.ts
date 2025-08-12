@@ -6,7 +6,7 @@ import { assertExists, ensured, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController } from "./interaction";
 import { FORALL_SYMBOL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET } from "./semantics";
 import { flattenState, unflattenState } from "./storage";
-import { applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runActiveRuleTest, setSelectedLabel, ToolName, windowMovingTool, wrapSettleNewNodes } from "./ui";
+import { applyArrowAlignmentForces, applyDirectionAlignmentForces, applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runActiveRuleTest, setSelectedLabel, SYMBOL_ARROW_DOWN, SYMBOL_ARROW_LEFT, SYMBOL_ARROW_RIGHT, SYMBOL_ARROW_UP, ToolName, windowMovingTool, wrapSettleNewNodes } from "./ui";
 import JSURL from "jsurl"
 
 function tryLoadState(): DataState | null {
@@ -59,6 +59,7 @@ toolButton("drag");
 toolButton("move");
 toolButton("rulebox");
 toolButton("delete");
+toolButton("shift");
 
 // node labeling with special buttons
 
@@ -85,9 +86,33 @@ operatorButton("btn_op_disconnect", OPERATOR_DISCONNECT);
 
 // node labeling by keyboard
 
-document.addEventListener("keypress", (e) => {
-    // set label of selected nodes
-    enterLabel(e.key.trim())
+const specialKeys = {
+    ArrowLeft: SYMBOL_ARROW_LEFT,
+    ArrowRight: SYMBOL_ARROW_RIGHT,
+    ArrowUp: SYMBOL_ARROW_UP,
+    ArrowDown: SYMBOL_ARROW_DOWN,
+    " ": "",
+    Backspace: "",
+    Delete: "",
+}
+document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey) {
+        if (e.key == "z") {
+            undoButton.click()
+        } else if (e.key == "y" || e.key == "Z") {
+            redoButton.click()
+        }
+    } else {
+        // set label of selected nodes
+        let key = e.key
+        if (key in specialKeys) {
+            enterLabel(specialKeys[key as (keyof typeof specialKeys)])
+        } else if (key.length === 1) {
+            enterLabel(key)
+        } else {
+            console.log("Key down:", key)
+        }
+    }
 })
 
 // test button
@@ -118,7 +143,7 @@ requireHtmlElement("btn_apply").addEventListener("click", () => {
 requireHtmlElement("btn_apply_repeat").addEventListener("click", () => {
     runGlobalUndoableAction(g => {
         wrapSettleNewNodes(g.data, () => {
-            for (let i = 0; i < 100; i++) {
+            for (let i = 0; i < 10; i++) {
                 runActiveRuleTest(g.data);
                 applyExhaustiveReduction(g.data)
             }
@@ -149,14 +174,16 @@ function restoreFromHistory(newState: DataState | null) {
         console.log("End of history");
     }
 }
-let undoButton = requireHtmlElement("btn_undo").addEventListener("click", () => {
+let undoButton = requireHtmlElement("btn_undo")
+undoButton.addEventListener("click", () => {
     restoreFromHistory(globalState.undoHistory.undo(globalState.data));
 });
-let redoButton = requireHtmlElement("btn_redo").addEventListener("click", () => {
+let redoButton = requireHtmlElement("btn_redo")
+redoButton.addEventListener("click", () => {
     restoreFromHistory(globalState.undoHistory.redo());
 });
 
-let physics = new GraphLayoutPhysics(layoutStyle)
+let physics = new GraphLayoutPhysics(layoutStyle, [applyArrowAlignmentForces])
 let canvas = ensured(document.getElementById("canvas")) as HTMLCanvasElement;
 let controller = new InteractionController(canvas, new UiStack([
     new ToolController(() => globalState, metaEditingTool),

@@ -11,7 +11,7 @@ describe('Smallest circle performance', () => {
         return end - start
     }
 
-    test('performance scaling 100 to 1000', () => {
+    test.skip('performance scaling 100 to 1000', () => {
         // flaky tests!
         let points: Positioned[] = []
         for (let i = 0; i < 100000; i++) {

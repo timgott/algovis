@@ -33,6 +33,10 @@ export function vecdir(a: Positioned, b: Positioned): Positioned {
     return normalize(vecsub(b, a));
 }
 
+export function vecdot(a: Positioned, b: Positioned): number {
+    return a.x * b.x + a.y * b.y
+}
+
 export const Vector = {
     new: vec,
     add: vecadd,
@@ -52,7 +56,9 @@ export const Vector = {
             x: around.x + dx * cos - dy * sin,
             y: around.y + dx * sin + dy * cos,
         };
-    }
+    },
+    dot: vecdot,
+    normalize: normalize
 }
 
 export function distance(a: Positioned, b: Positioned): number {

@@ -1,6 +1,7 @@
 import { copySubgraphTo, createEdge, createEmptyGraph, deleteNode, filteredGraphView, Graph, GraphEdge, GraphNode, mapSubgraphTo, NodeDataTransfer } from "../../localgraphs/src/graph"
 import { bfs, SearchState } from "../../localgraphs/src/graphalgos"
-import { assert, max } from "../../shared/utils"
+import { stretchEdgesToRelax } from "../../localgraphs/src/interaction/physics"
+import { assert, max, randomUniform } from "../../shared/utils"
 import { distance, Positioned, vec, Vector } from "../../shared/vector"
 import { findInjectiveMatchesGeneric, GenericMatcher } from "../../subgraph/src/matching"
 import { ContextDataMatcher, DataMatcher, findSubgraphMatchesWithContext, makeSubgraphMatcher, MatchWithContext, simpleDataMatcher, SubgraphMatcher } from "../../subgraph/src/subgraph"
@@ -59,8 +60,9 @@ function centerOfPoints(points: Iterable<Positioned>) {
 
 function placeInCenterOf(node: GraphNode<unknown>, set: Iterable<Positioned>) {
     let center = centerOfPoints(set);
-    node.x = center.x
-    node.y = center.y
+    const shake = 1;
+    node.x = center.x + randomUniform(-1,1) * shake;
+    node.y = center.y + randomUniform(-1,1) * shake;
 }
 
 function placeNewNodesBetweenOld(newNodes: Iterable<GraphNode<unknown>>, oldNodes: Iterable<GraphNode<unknown>>) {
@@ -82,14 +84,6 @@ function placeNewNodesBetweenOld(newNodes: Iterable<GraphNode<unknown>>, oldNode
     })
     for (let node of remaining) {
         placeInCenterOf(node, fixed)
-    }
-}
-
-// makes edge length at least the current distance
-function stretchEdgesToRelax(edges: GraphEdge<unknown>[]) {
-    for (let edge of edges) {
-        let dist = distance(edge.a, edge.b)
-        edge.length = Math.max(edge.length, dist)
     }
 }
 

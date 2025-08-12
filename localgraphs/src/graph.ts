@@ -184,3 +184,7 @@ export function mapGraphLazy<S,T>(graph: Graph<S>, mapping: (value: S) => T): [G
     }
     return [errorGraph, getNode]
 }
+
+export function adjacentEdges<T>(graph: Graph<T>, node: GraphNode<T>) {
+    return graph.edges.filter(edge => edge.a === node || edge.b === node)
+}

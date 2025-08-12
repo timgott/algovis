@@ -1,6 +1,6 @@
 import { assert, min, randomUniform } from "../../../shared/utils";
-import { isDistanceLess, Vector } from "../../../shared/vector";
-import { filteredGraphView, Graph, GraphNode } from "../graph";
+import { distance, isDistanceLess, Vector } from "../../../shared/vector";
+import { filteredGraphView, Graph, GraphEdge, GraphNode } from "../graph";
 
 export interface LayoutPhysics<T> {
     // Returns number of active nodes, 0 sends simulation to sleep
@@ -222,17 +222,36 @@ export function applyLayoutForcesOneSided<T>(
     }
 }
 
-export function settleNodes(graph: Graph<unknown>, nodes: Set<GraphNode<unknown>>, layoutStyle: (t: number) => LayoutConfig, dt: number, iterations: number) {
+export function settleNodes<T>(graph: Graph<T>, nodes: Set<GraphNode<unknown>>, layoutStyle: (t: number) => LayoutConfig, dt: number, iterations: number,
+    customForces: ((dt: number, graph: Graph<T>) => unknown)[]) {
     let subgraph = filteredGraphView(graph, (v) => nodes.has(v))
     for (let i = 0; i < iterations; i++) {
         let layout = layoutStyle(1 - i / iterations)
         applyLayoutForcesOneSided(graph, layout, nodes, dt)
         applyLayoutForces(subgraph, layout, nodes, 0, 0, dt)
+        for (let force of customForces) {
+            force(dt, subgraph)
+        }
         applyVelocityStep(graph.nodes, layout.dampening, dt)
     }
     for (let node of nodes) {
         node.vx = 0;
         node.vy = 0;
+    }
+}
+
+
+// makes edge length at least the current distance
+export function stretchEdgesToRelax(edges: GraphEdge<unknown>[]) {
+    for (let edge of edges) {
+        let dist = distance(edge.a, edge.b)
+        edge.length = Math.max(edge.length, dist)
+    }
+}
+
+export function stretchEdgesToFit(edges: GraphEdge<unknown>[]) {
+    for (let edge of edges) {
+        edge.length = distance(edge.a, edge.b)
     }
 }
 

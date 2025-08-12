@@ -1,9 +1,10 @@
 import { Rect } from "../../../shared/rectangle"
 import { ensured } from "../../../shared/utils"
 import { Positioned, Vector, distance, vec } from "../../../shared/vector"
-import { copyGraphTo, extractSubgraph, filteredGraphView, Graph, GraphEdge, GraphNode, NodeDataTransfer } from "../graph"
+import { adjacentEdges, copyGraphTo, extractSubgraph, filteredGraphView, Graph, GraphEdge, GraphNode, NodeDataTransfer } from "../graph"
 import { collectNeighborhood } from "../graphalgos"
 import { GraphInteraction, GraphPainter, dragNodes, findClosestEdge, findClosestNode, moveSlightly, offsetNodes } from "./graphsim"
+import { stretchEdgesToFit, stretchEdgesToRelax } from "./physics"
 
 export class BuildGraphInteraction<T> implements GraphInteraction<T> {
     moveThreshold: number = 20
@@ -254,5 +255,34 @@ export class SpanWindowTool<T> implements GraphInteraction<T> {
         }
         let bounds = Rect.fromPoints([this.state.startPos, vec(mouseX, mouseY)])
         this.createWindow(bounds)
+    }
+}
+
+export class ShiftNodeInteraction<T> implements GraphInteraction<T> {
+    state: {
+        draggedNode: GraphNode<T>
+        edges: GraphEdge<unknown>[] 
+    } | null = null
+
+    mouseDown(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number) {
+        let draggedNode = findClosestNode(mouseX, mouseY, visible)
+        if (draggedNode !== null) {
+            this.state =  {
+                draggedNode,
+                edges: adjacentEdges(graph, draggedNode)
+            }
+        }
+    }
+
+    dragStep(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number, deltaTime: number) {
+        if (this.state) {
+            this.state.draggedNode.x = mouseX
+            this.state.draggedNode.y = mouseY
+            stretchEdgesToFit(this.state.edges)
+        }
+    }
+
+    mouseUp() {
+        this.state = null
     }
 }
