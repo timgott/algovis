@@ -53,6 +53,10 @@ export const Rect = {
         return Vector.new((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2)
     },
 
+    topLeft(rect: Rect): Vector {
+        return Vector.new(rect.left, rect.right)
+    },
+
     extend(rect: Rect, other: Rect): Rect {
         let left = Math.min(rect.left, other.left)
         let top = Math.min(rect.top, other.top)

@@ -6,8 +6,10 @@ import { assertExists, ensured, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController } from "./interaction";
 import { FORALL_SYMBOL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET } from "./semantics";
 import { flattenState, unflattenState } from "./storage";
-import { applyArrowAlignmentForces, applyDirectionAlignmentForces, applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runActiveRuleTest, setSelectedLabel, SYMBOL_ARROW_DOWN, SYMBOL_ARROW_LEFT, SYMBOL_ARROW_RIGHT, SYMBOL_ARROW_UP, ToolName, windowMovingTool, wrapSettleNewNodes } from "./ui";
+import { applyArrowAlignmentForces, applyDirectionAlignmentForces, applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runActiveRuleTest, setSelectedLabel as setLabelOnSelected, setSelectedTool as selectTool, SYMBOL_ARROW_DOWN, SYMBOL_ARROW_LEFT, SYMBOL_ARROW_RIGHT, SYMBOL_ARROW_UP, ToolName, windowMovingTool, wrapSettleNewNodes } from "./ui";
 import JSURL from "jsurl"
+import { PanZoomController } from "./zooming";
+import { Vector } from "../../shared/vector";
 
 function tryLoadState(): DataState | null {
     let hash = window.location.search
@@ -34,6 +36,10 @@ let globalState: MainState = {
     data: tryLoadState() ?? createClearedState(),
     undoHistory: new UndoHistory<DataState>(1000, cloneDataState),
     selectedTool: "build",
+    zoom: {
+        offset: Vector.Zero,
+        scale: 1
+    }
 }
 
 function runGlobalUndoableAction(action: (g: MainState) => void) {
@@ -48,12 +54,13 @@ function toolButton(toolName: ToolName) {
     let id = `tool_${toolName}`;
     let button = requireHtmlElement(id);
     button.addEventListener("click", () => {
-        globalState.selectedTool = toolName as any;
+        selectTool(globalState, toolName);
         controller.requestFrame();
     });
     return button;
 }
 
+toolButton("none");
 toolButton("build");
 toolButton("drag");
 toolButton("move");
@@ -65,7 +72,7 @@ toolButton("shift");
 
 function enterLabel(label: string) {
     runGlobalUndoableAction(g => {
-        setSelectedLabel(g, label);
+        setLabelOnSelected(g, label);
     })
 }
 
@@ -185,11 +192,16 @@ redoButton.addEventListener("click", () => {
 
 let physics = new GraphLayoutPhysics(layoutStyle, [applyDirectionAlignmentForces, applyArrowAlignmentForces])
 let canvas = ensured(document.getElementById("canvas")) as HTMLCanvasElement;
-let controller = new InteractionController(canvas, new UiStack([
-    new ToolController(() => globalState, metaEditingTool),
-    new ToolController(() => globalState, metaWindowTool),
-    new OnlyGraphPhysicsSimulator(() => globalState.data.graph, physics),
-    new PaintingSystem(() => globalState, new MainPainter(layoutStyle.nodeRadius))
-]))
+let controller = new InteractionController(canvas,
+    new PanZoomController(
+        () => globalState.zoom,
+        new UiStack([
+            new ToolController(() => globalState, metaEditingTool),
+            new ToolController(() => globalState, metaWindowTool),
+            new OnlyGraphPhysicsSimulator(() => globalState.data.graph, physics),
+            new PaintingSystem(() => globalState, new MainPainter(layoutStyle.nodeRadius))
+        ]),
+    ),
+)
 initFullscreenCanvas(canvas)
 controller.requestFrame()

@@ -1,3 +1,4 @@
+import { Rect } from "../../../shared/rectangle";
 import { assert, min, randomUniform } from "../../../shared/utils";
 import { distance, isDistanceLess, Vector } from "../../../shared/vector";
 import { filteredGraphView, Graph, GraphEdge, GraphNode } from "../graph";
@@ -6,8 +7,7 @@ export interface LayoutPhysics<T> {
     // Returns number of active nodes, 0 sends simulation to sleep
     step(
         graph: Graph<T>,
-        width: number,
-        heigh: number,
+        bounds: Rect,
         dt: number,
     ): number;
 }
@@ -87,8 +87,6 @@ function applyLayoutForces<T>(
     graph: Graph<T>,
     layout: LayoutConfig,
     activeNodes: Set<GraphNode<T>>,
-    width: number,
-    height: number,
     dt: number,
 ) {
     for (let node of graph.nodes) {
@@ -146,14 +144,20 @@ function applyLayoutForces<T>(
             }
         }
     }
-    // push nodes to center
-    let centerX = width / 2;
-    let centerY = height / 2;
+}
+
+function applyCenteringForce(
+    graph: Graph<unknown>,
+    force: number,
+    activeNodes: Set<GraphNode<unknown>>,
+    center: Vector,
+    dt: number,
+) {    // push nodes to center
     for (let node of graph.nodes) {
-        let dx = centerX - node.x;
-        let dy = centerY - node.y;
-        node.vx += dx * dt * layout.centeringForce;
-        node.vy += dy * dt * layout.centeringForce;
+        let dx = center.x - node.x;
+        let dy = center.y - node.y;
+        node.vx += dx * dt * force;
+        node.vy += dy * dt * force;
     }
 }
 
@@ -228,7 +232,7 @@ export function settleNodes<T>(graph: Graph<T>, nodes: Set<GraphNode<unknown>>, 
     for (let i = 0; i < iterations; i++) {
         let layout = layoutStyle(1 - i / iterations)
         applyLayoutForcesOneSided(graph, layout, nodes, dt)
-        applyLayoutForces(subgraph, layout, nodes, 0, 0, dt)
+        applyLayoutForces(subgraph, layout, nodes, dt)
         for (let force of customForces) {
             force(dt, subgraph)
         }
@@ -259,12 +263,11 @@ export class GraphLayoutPhysics<T> implements LayoutPhysics<T> {
     private lastNodes = new Set<GraphNode<unknown>>()
     constructor(
         private layoutStyle: LayoutConfig,
-        private customForces: ((dt: number, graph: Graph<T>, w: number, h: number) => unknown)[] = []
+        private customForces: ((dt: number, graph: Graph<T>) => unknown)[] = []
     ) {}
     step(
         graph: Graph<T>,
-        width: number,
-        height: number,
+        bounds: Rect,
         dt: number,
     ) {
         let activeNodes = findActiveNodes(graph, this.layoutStyle.sleepVelocity)
@@ -276,11 +279,14 @@ export class GraphLayoutPhysics<T> implements LayoutPhysics<T> {
         this.lastNodes = new Set(graph.nodes);
 
         for (let custom of this.customForces) {
-            custom(dt, graph, width, height);
+            custom(dt, graph);
         }
 
         applyVelocityStep(graph.nodes, this.layoutStyle.dampening, dt)
-        applyLayoutForces(graph, this.layoutStyle, activeNodes, width, height, dt)
+        applyLayoutForces(graph, this.layoutStyle, activeNodes, dt)
+        if (this.layoutStyle.centeringForce > 0) {
+            applyCenteringForce(graph, this.layoutStyle.centeringForce, activeNodes, Rect.center(bounds), dt)
+        }
         // count at the end again, in case nodes started moving this step
         let activeNodesCount = activeNodes.size;
         activeNodesCount += findActiveNodes(graph, this.layoutStyle.sleepVelocity).size;

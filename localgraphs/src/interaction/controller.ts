@@ -1,4 +1,5 @@
 import { getCursorPosition } from "../../../shared/canvas"
+import { Rect } from "../../../shared/rectangle"
 
 export type SleepState = "Running" | "Sleeping"
 
@@ -12,8 +13,7 @@ export type PointerId = number
 export type AnimationFrame = {
     readonly dt: number
     readonly totalTime: number
-    readonly width: number
-    readonly height: number
+    readonly bounds: Rect
     readonly dragState: Map<PointerId, DragState>
 }
 
@@ -22,8 +22,8 @@ export type MouseDownResponse = "Click" | "Drag" | "Ignore"
 export interface InteractiveSystem {
     update(frame: AnimationFrame): SleepState;
     draw(frame: AnimationFrame, ctx: CanvasRenderingContext2D): void;
-    mouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse;
-    dragEnd(x: number, y: number, pointerId: PointerId): void;
+    mouseDown(x: number, y: number, pointerId: PointerId, bounds: Rect): MouseDownResponse; // bounds arg unused?
+    dragEnd(x: number, y: number, pointerId: PointerId, bounds: Rect): void;
 }
 
 export function aggregateSleeping(states: SleepState[]): SleepState {
@@ -67,11 +67,11 @@ export class UiStack implements InteractiveSystem {
         }
     }
 
-    mouseDown(x: number, y: number, pointerId: PointerId): MouseDownResponse {
+    mouseDown(x: number, y: number, pointerId: PointerId, bounds: Rect): MouseDownResponse {
         // reverse order to give priority to what is drawn on top
         for (const system of this.systems.toReversed()) {
             if (system.mouseDown !== undefined) {
-                const result = system.mouseDown(x, y, pointerId)
+                const result = system.mouseDown(x, y, pointerId, bounds)
                 if (result !== "Ignore") {
                     if (result === "Drag") {
                         this.pointerCaptures.set(pointerId, system)
@@ -83,10 +83,10 @@ export class UiStack implements InteractiveSystem {
         return "Ignore"
     }
 
-    dragEnd(x: number, y: number, pointerId: PointerId): void {
+    dragEnd(x: number, y: number, pointerId: PointerId, bounds: Rect): void {
         const s = this.pointerCaptures.pop(pointerId)
         if (s !== undefined && s.dragEnd !== undefined) {
-            s.dragEnd(x, y, pointerId)
+            s.dragEnd(x, y, pointerId, bounds)
         }
     }
 }
@@ -121,6 +121,10 @@ export class InteractionController {
         })
     }
 
+    getBounds(): Rect {
+        return Rect.fromSize(0, 0, this.canvas.clientWidth, this.canvas.clientHeight)
+    }
+
     frameCallback(timeStamp: number) {
         if (this.previousTimeStamp === null) {
             this.previousTimeStamp = timeStamp
@@ -136,8 +140,7 @@ export class InteractionController {
         let frame: AnimationFrame = {
             dt,
             totalTime: timeStamp,
-            width,
-            height,
+            bounds: this.getBounds(),
             dragState: this.dragState,
         }
         const sleepState = this.system.update(frame)
@@ -172,7 +175,7 @@ export class InteractionController {
 
     onMouseDown(x: number, y: number, pointerId: PointerId) {
         // start dragging node
-        const result = this.system.mouseDown(x, y, pointerId)
+        const result = this.system.mouseDown(x, y, pointerId, this.getBounds())
         if (result !== "Ignore") {
             //console.log(result)
             if (result === "Drag") {
@@ -194,7 +197,7 @@ export class InteractionController {
     onMouseUp(x: number, y: number, pointerId: PointerId) {
         // stop dragging node
         if (this.dragState.has(pointerId)) {
-            this.system.dragEnd(x, y, pointerId)
+            this.system.dragEnd(x, y, pointerId, this.getBounds())
             this.requestFrame()
             this.dragState.delete(pointerId) // release mouse capture
         }

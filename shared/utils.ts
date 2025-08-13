@@ -264,6 +264,10 @@ export function mapFromFunction<K,V>(keys: Iterable<K>, f: (key: K) => V) {
     return result
 }
 
+export function mapValues<K,V,W>(m: Map<K,V>, f: (v: V) => W): Map<K,W> {
+    return mapFromFunction(m.keys(), k => f(m.get(k)!))
+}
+
 export function sum(array: number[]) {
     let result = 0;
     for (let x of array) {

@@ -10,9 +10,10 @@ import { DefaultMap } from "../../shared/defaultmap"
 import { Rect } from "../../shared/rectangle"
 import { randomChoice, randomUniform } from "../../shared/utils"
 import { isDistanceLess, vec, vecscale, vecset, Vector } from "../../shared/vector"
-import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse } from "./interaction"
+import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse, noopTool } from "./interaction"
 import { findRuleMatches, PatternRule } from "./rule"
 import { extractVarRuleFromBox, makeDefaultReductionRules, VarRule } from "./semantics"
+import { ZoomState } from "./zooming"
 
 export type UiNodeData = {
     label: string,
@@ -34,6 +35,7 @@ export type MainState = {
     data: DataState,
     undoHistory: UndoHistory<DataState>,
     selectedTool: ToolName,
+    zoom: ZoomState,
 }
 
 const defaultNodeData: UiNodeData = {
@@ -180,6 +182,7 @@ function putNewWindow(bounds: Rect, state: DataState) {
 
 
 const tools = {
+    "none": noopTool,
     "build": graphToolWithClickSelect((s) => new BuildGraphInteraction((g, x, y) => putNewNode(s, x, y), createEdge)),
     "drag": graphToolAlwaysSelect(() => new DragNodeInteraction()),
     "shift": graphToolAlwaysSelect(() => new ShiftNodeInteraction()),
@@ -194,6 +197,11 @@ export type ToolName = keyof typeof tools
 export const metaEditingTool: MouseInteraction<MainState> = (state, mouseX, mouseY) => {
     let tool = tools[state.selectedTool]
     return tool(state, mouseX, mouseY)
+}
+
+export function setSelectedTool(state: MainState, tool: ToolName) {
+    state.selectedTool = tool
+    state.data.selectedNodes = new Set()
 }
 
 export const metaWindowTool: MouseInteraction<MainState> = (state, mouseX, mouseY) => {

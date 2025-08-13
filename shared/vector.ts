@@ -58,7 +58,13 @@ export const Vector = {
         };
     },
     dot: vecdot,
-    normalize: normalize
+    normalize: normalize,
+    mix(a: Vector, b: Vector, t: number) {
+        return {
+            x: a.x * (1-t) + b.x * t,
+            y: a.y * (1-t) + b.y * t,
+        }
+    }
 }
 
 export function distance(a: Positioned, b: Positioned): number {

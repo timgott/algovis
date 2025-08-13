@@ -164,7 +164,7 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
         }
     }
 
-    update({dt, width, height, dragState}: AnimationFrame): SleepState {
+    update({dt, bounds, dragState}: AnimationFrame): SleepState {
         let visibleGraph = this.getVisibleGraph()
         let activeCount = 0
         for (let step = 0; step < this.substeps; step++) {
@@ -178,7 +178,7 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
           }
 
           // physics
-          activeCount = this.layout.step(visibleGraph, width, height, subdt)
+          activeCount = this.layout.step(visibleGraph, bounds, subdt)
         }
         if (activeCount > 0 || dt == 0) {
             return "Running"

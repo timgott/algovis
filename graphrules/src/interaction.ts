@@ -43,6 +43,10 @@ class MapDragInteraction<S, T> implements MouseDragInteraction<S> {
     }
 }
 
+export const noopTool: MouseInteraction<unknown> = function() {
+    return "Ignore"
+}
+
 export function mapTool<S, T>(f: (state: S) => T, interaction: (state: S) => MouseInteraction<T>): MouseInteraction<S> {
     return (state: S, mouseX: number, mouseY: number): MouseClickOrDragResponse<S> => {
         let response = interaction(state)(f(state), mouseX, mouseY)
@@ -158,7 +162,7 @@ export class ToolController<S> implements InteractiveSystem {
         this.tool = tool
     }
 
-    update({dt, width, height, dragState}: AnimationFrame): SleepState {
+    update({dt, dragState}: AnimationFrame): SleepState {
         for (let [id, pointerState] of dragState) {
             const drag = this.interactions.get(id)
             if (drag !== undefined && drag.dragStep) {
@@ -209,9 +213,9 @@ export class OnlyGraphPhysicsSimulator<T> implements InteractiveSystem {
     ) {
     }
 
-    update({dt, width, height}: AnimationFrame): SleepState {
+    update({dt, bounds}: AnimationFrame): SleepState {
         let activeCount = 0
-        activeCount = this.layout.step(this.getGraph(), width, height, Math.max(dt, this.maxDt))
+        activeCount = this.layout.step(this.getGraph(), bounds, Math.max(dt, this.maxDt))
         if (activeCount > 0 || dt == 0) {
             return "Running"
         } else {
