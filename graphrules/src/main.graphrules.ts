@@ -32,15 +32,20 @@ function saveState(): DataState {
     return unflattenState(JSURL.parse(str)) // try parse
 }
 
-let globalState: MainState = {
-    data: tryLoadState() ?? createClearedState(),
-    undoHistory: new UndoHistory<DataState>(1000, cloneDataState),
-    selectedTool: "build",
-    zoom: {
-        offset: Vector.Zero,
-        scale: 1
+function initGlobalState(): MainState {
+    let loadedState = tryLoadState()
+    return {
+        data: loadedState ?? createClearedState(),
+        undoHistory: new UndoHistory<DataState>(1000, cloneDataState),
+        selectedTool: loadedState === null ? "build" : "none",
+        zoom: {
+            offset: Vector.Zero,
+            scale: 1
+        }
     }
 }
+
+let globalState: MainState = initGlobalState()
 
 function runGlobalUndoableAction(action: (g: MainState) => void) {
     pushToHistory(globalState)
