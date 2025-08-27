@@ -7,12 +7,15 @@ import { ContextDataMatcher, makeSubgraphMatcher, makeSubgraphMatcherWithNegativ
 import { makeWildcardVariableMatcher, makeVariableMatcher, mapMatcher, makeWildcardVariableMatcherWithNegDomain } from "../../subgraph/src/variables"
 import { makeRuleFromOperatorGraph, NodeDataCloner, PatternRule } from "./rule"
 
-export const FORALL_SYMBOL="\u2200" // ∀
+export const SYMBOL_FORALL="\u2200" // ∀
 export const OPERATOR_NEW = "new"
 export const OPERATOR_SET = "set"
 export const OPERATOR_DEL = "del"
 export const OPERATOR_CONNECT = "con"
 export const OPERATOR_DISCONNECT = "dis"
+export const SYMBOL_PROGRAM_COUNTER = "\u261b" // ☛
+export const SYMBOL_BEGIN = "in"
+export const SYMBOL_END = "out"
 
 export const WILDCARD_SYMBOL = "_" // empty string matches everything
 
@@ -22,6 +25,13 @@ const operatorSymbols = new Set([
     OPERATOR_SET,
     OPERATOR_CONNECT,
     OPERATOR_DISCONNECT
+])
+
+const markerSymbols = new Set([
+    SYMBOL_BEGIN,
+    SYMBOL_END,
+    SYMBOL_FORALL,
+    SYMBOL_PROGRAM_COUNTER
 ])
 
 type NodeData = {
@@ -58,9 +68,12 @@ export function extractVarRuleFromBox<T extends NodeData>(graph: Graph<T>, box: 
 
 export function extractVarRuleFromNodes<T extends NodeData>(nodes: GraphNode<T>[], defaultData: T): PatternRule<T, T, VarMap> {
     // extract the nodes that are attached to forall quantifier nodes
-    let quantifierNodes = nodes.filter(v => v.data.label === FORALL_SYMBOL)
+    // TODO: move outside rule box? more general and would allow better macros
+    let quantifierNodes = nodes.filter(v => v.data.label === SYMBOL_FORALL)
     let quantifiedNodes = adjacentSet(quantifierNodes)
-    let normalNodes = nodes.filter(v => v.data.label !== FORALL_SYMBOL && !quantifiedNodes.has(v))
+    let normalNodes = nodes.filter(v =>
+        !markerSymbols.has(v.data.label) && !quantifiedNodes.has(v)
+    )
     // find subgraph of nodes inside rule box
     let [containedSubgraph, _map] = extractSubgraph(normalNodes)
     let variables = quantifiedNodes.map(v => v.data.label)
@@ -91,7 +104,9 @@ function makeVarMatcherWithNegativeEdgesNegDomain(variables: Set<string>, negati
 
 export function makeVarRuleFromOperatorGraph<T extends NodeData>(ruleGraph: Graph<T>, variables: Set<string>, defaultData: T): PatternRule<T, T, VarMap> {
     const operators = ruleGraph.nodes.filter(v => operatorSymbols.has(v.data.label))
-    // TODO: Only new and set insert their argument. Below does not generalize, but good enough for testing. Alternative: special reduction to create pattern (only deletes allowed though)
+    // TODO: Only new and set insert their argument. Below does not generalize, but good enough for testing.
+    // Alternative: special reduction to create pattern (only deletes allowed though)
+    // Alternative 2: op node + compiler transformations
     const operands = adjacentSet(operators.filter(v => v.data.label === OPERATOR_SET || v.data.label === OPERATOR_NEW))
     const allOpsAndArgs = new Set([...operators, ...operands])
 
@@ -213,4 +228,20 @@ export function makeDefaultReductionRules(): VarRule<NodeData>[] {
         makeReductionRuleConnect(),
         makeReductionRuleDisconnect(),
     ]
+}
+
+export function advanceProgramCounter(graph: Graph<NodeData>, ruleBoxes: Rect[]): void {
+    let pcNodes = graph.nodes.filter(n => n.data.label === SYMBOL_PROGRAM_COUNTER)
+    for (let pc of pcNodes) {
+        for (let end of [...pc.neighbors].filter(n => n.data.label === SYMBOL_END)) {
+            // prioritize repeating (begin inside)
+            let ruleBox = ruleBoxes.find(r => Rect.containsPos(r, end))
+            if (ruleBox !== undefined) {
+                let allStarts = [...end.neighbors].filter(n => n.data.label === SYMBOL_BEGIN)
+                let insideStarts = allStarts.filter(n => Rect.containsPos(ruleBox, n))
+                let starts = insideStarts.length > 0 ? insideStarts : allStarts
+                // TODO
+            }
+        }
+    }
 }

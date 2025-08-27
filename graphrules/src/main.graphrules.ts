@@ -4,7 +4,7 @@ import { UndoHistory } from "../../localgraphs/src/interaction/undo";
 import { initFullscreenCanvas } from "../../shared/canvas";
 import { assertExists, ensured, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController } from "./interaction";
-import { FORALL_SYMBOL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET } from "./semantics";
+import { SYMBOL_FORALL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET } from "./semantics";
 import { flattenState, unflattenState } from "./storage";
 import { applyArrowAlignmentForces, applyDirectionAlignmentForces, applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runActiveRuleTest, setSelectedLabel as setLabelOnSelected, setSelectedTool as selectTool, SYMBOL_ARROW_DOWN, SYMBOL_ARROW_LEFT, SYMBOL_ARROW_RIGHT, SYMBOL_ARROW_UP, ToolName, windowMovingTool, wrapSettleNewNodes } from "./ui";
 import JSURL from "jsurl"
@@ -89,7 +89,7 @@ function operatorButton(id: string, operator: string) {
     return button;
 }
 
-operatorButton("btn_op_for", FORALL_SYMBOL);
+operatorButton("btn_op_for", SYMBOL_FORALL);
 operatorButton("btn_op_new", OPERATOR_NEW);
 operatorButton("btn_op_set", OPERATOR_SET);
 operatorButton("btn_op_del", OPERATOR_DEL);
