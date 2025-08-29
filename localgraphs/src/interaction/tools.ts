@@ -99,8 +99,6 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
                 endNode = this.buildNode(graph, endX, endY)
             }
             // create new edge
-            //pushToHistory(graph)
-            //putNewEdge(graph, this.startNode, endNode)
             this.buildEdge(graph, this.startNode, endNode)
         }
         else {
@@ -109,9 +107,86 @@ export class BuildGraphInteraction<T> implements GraphInteraction<T> {
                 this.nodeClickAction(this.startNode, graph)
             } else {
                 // create new node
-                //pushToHistory(graph)
-                //putNewNode(graph, endX, endY)
                 this.buildNode(graph, endX, endY)
+            }
+        }
+
+    }
+}
+
+export class DeleteInteraction<T> implements GraphInteraction<T> {
+    moveThreshold: number = 20
+    connectDistFactor: number = 0.7 // weight factor for connecting existing nodes instead of adding a new node
+    selfLoopDistance: number = 30 // max distance to node when building self-loop or clicking node
+
+    startNode: GraphNode<T> | null = null
+    startX: number = 0
+    startY: number = 0
+    hasMoved: boolean = false
+
+    constructor(private deleteNode: (graph: Graph<T>, node: GraphNode<T>) => unknown, private deleteEdge: (graph: Graph<T>, a: GraphNode<T>, b: GraphNode<T>) => unknown) {
+    }
+
+    findNode(x: number, y: number, visible: Iterable<GraphNode<T>>): GraphNode<T> | null {
+        return findClosestNode(x, y, visible)
+    }
+
+    mouseDown(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number): void {
+        this.startX = mouseX
+        this.startY = mouseY
+        this.startNode = this.findNode(mouseX, mouseY, visible)
+        this.hasMoved = false
+    }
+    checkHasMoved(mouseX: number, mouseY: number): boolean {
+        let distance = Math.hypot(mouseX - this.startX, mouseY - this.startY)
+        return distance >= this.moveThreshold
+    }
+    shouldDeleteEdge(mouseX: number, mouseY: number, closestNode: GraphNode<T>): boolean {
+        if (!this.startNode?.neighbors.has(closestNode)) {
+            // no edge to delete
+            return false
+        }
+        const mouse = { x: mouseX, y: mouseY }
+        const start = { x: this.startX, y: this.startY}
+        // delete edge if closest node is closer than start
+        return distance(mouse, closestNode) < distance(start, mouse)*this.connectDistFactor
+    }
+    dragStep(graph: Graph<T>, visible: Iterable<GraphNode<T>>, mouseX: number, mouseY: number): void {
+        if (!this.hasMoved && this.checkHasMoved(mouseX, mouseY)) {
+            this.hasMoved = true
+        }
+    }
+    dragDraw(graph: Graph<T>, visible: GraphNode<T>[], mouseX: number, mouseY: number, drawCtx: CanvasRenderingContext2D, deltaTime: number): void {
+        if (this.startNode !== null && this.hasMoved) {
+            drawCtx.save()
+            drawCtx.strokeStyle = "darkred"
+            drawCtx.lineWidth = 1
+            drawCtx.beginPath()
+            let endNode = this.findNode(mouseX, mouseY, visible)
+            if (endNode !== null && this.shouldDeleteEdge(mouseX, mouseY, endNode)) {
+                drawCtx.setLineDash([6, 5])
+                drawCtx.moveTo(endNode.x, endNode.y)
+                drawCtx.quadraticCurveTo(mouseX, mouseY, this.startNode.x, this.startNode.y)
+                drawCtx.stroke()
+            } else {
+                drawCtx.moveTo(mouseX, mouseY)
+                drawCtx.lineTo(this.startNode.x, this.startNode.y)
+                drawCtx.stroke()
+            }
+            drawCtx.restore()
+        }
+    }
+    mouseUp(graph: Graph<T>, visible: Iterable<GraphNode<T>>, endX: number, endY: number): void {
+        let endNode = this.findNode(endX, endY, visible)
+        if (endNode !== null) {
+            if (this.startNode !== null && this.hasMoved) {
+                if (this.shouldDeleteEdge(endX, endY, endNode)) {
+                    this.deleteEdge(graph, this.startNode, endNode)
+                }
+            }
+            else {
+                // delete node
+                this.deleteNode(graph, endNode)
             }
         }
 

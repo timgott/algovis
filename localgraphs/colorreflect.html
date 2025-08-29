@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unrooted Tree</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <canvas id="graph_canvas"></canvas>
+    <div id="control_bar" class="control_bar">
+        <label for="locality">Locality</label>
+        <input type="number" id="locality" min="0" max="10" value="2"/>
+
+        <input type="checkbox" id="show_rings" unchecked>
+        <label for="show_rings">Rings</label>
+
+        <input type="checkbox" id="show_powerdists" unchecked>
+        <label for="show_powerdists">Distance coding</label>
+
+        <button id="tool_build">Build</button>
+        <button id="tool_drag">Drag</button>
+        <button id="tool_move">Move</button>
+        <button id="tool_pin">Pin</button>
+        <button id="tool_label">Annotate</button>
+        <button id="tool_mark">Mark</button>
+        <button id="tool_symmetrize">Reflect Node</button>
+        <button id="tool_symmetrize2">Reflect Edge</button>
+        <button id="tool_duplicate">Duplicate</button>
+        <button id="tool_delete">Delete</button>
+        <button id="tool_deletecomponent">Delete Connected</button>
+        <button id="reset">Reset</button>
+        <button id="undo">Undo</button>
+        <button id="redo">Redo</button>
+    </div>
+
+    <script type="module" src="src/main.colorreflect.ts"></script>
+</body>
+</html>
