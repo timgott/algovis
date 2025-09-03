@@ -2,7 +2,7 @@ import { createEdge, createEmptyGraph, createNode, deleteNode, filteredGraphView
 import { countConnectedComponents } from "../../localgraphs/src/graphalgos"
 import { AnimationFrame } from "../../localgraphs/src/interaction/controller"
 import { DragNodeInteraction, findClosestNode, GraphInteraction } from "../../localgraphs/src/interaction/graphsim"
-import { LayoutConfig as LayoutPhysicsConfig, separateNodes, settleNodes } from "../../localgraphs/src/interaction/physics"
+import { LayoutConfig as LayoutPhysicsConfig, separateNodes, settleNodes, stretchEdgesToFit, stretchEdgesToRelax } from "../../localgraphs/src/interaction/physics"
 import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction, ShiftNodeInteraction } from "../../localgraphs/src/interaction/tools"
 import { UndoHistory } from "../../localgraphs/src/interaction/undo"
 import { calcWindowTitleArea, drawResizableWindowWithTitle, satisfyMinBounds, WindowBounds } from "../../localgraphs/src/interaction/windows"
@@ -219,12 +219,14 @@ export const windowMovingTool: MouseInteraction<MainState> =
         s => s.ruleBoxes,
         s => makeWindowMovingTool({
             moveWindow(window) {
-                let insideNodes = s.graph.nodes.filter((node) => Rect.contains(window.bounds, node.x, node.y))
+                let insideNodes = new Set(s.graph.nodes.filter((node) => Rect.contains(window.bounds, node.x, node.y)))
+                let connectedEdges = s.graph.edges.filter(edge => insideNodes.has(edge.a) != insideNodes.has(edge.b))
                 return (dx, dy) => {
                     for (let node of insideNodes) {
                         node.x += dx
                         node.y += dy
                     }
+                    stretchEdgesToRelax(connectedEdges)
                 }
             },
             clickWindow(window) {
