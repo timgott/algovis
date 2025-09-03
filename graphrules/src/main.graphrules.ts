@@ -119,15 +119,12 @@ operatorButton("btn_op_in", SYMBOL_IN);
 operatorButton("btn_op_step", SYMBOL_OUT_STEP);
 operatorButton("btn_op_ex", SYMBOL_OUT_EXHAUSTED);
 operatorButton("btn_op_pc", SYMBOL_PROGRAM_COUNTER);
+operatorButton("btn_op_left", SYMBOL_ARROW_LEFT);
+operatorButton("btn_op_right", SYMBOL_ARROW_RIGHT);
+operatorButton("btn_op_up", SYMBOL_ARROW_UP);
+operatorButton("btn_op_down", SYMBOL_ARROW_DOWN);
 
 // node labeling by keyboard
-
-const specialKeys = {
-    ArrowLeft: SYMBOL_ARROW_LEFT,
-    ArrowRight: SYMBOL_ARROW_RIGHT,
-    ArrowUp: SYMBOL_ARROW_UP,
-    ArrowDown: SYMBOL_ARROW_DOWN,
-}
 
 document.addEventListener("keydown", (e) => {
     if (e.ctrlKey) {
