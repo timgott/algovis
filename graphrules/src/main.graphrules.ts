@@ -87,6 +87,12 @@ labelTextbox.addEventListener("input", (ev) => {
     enterLabel(labelTextbox.value.trim())
 })
 
+labelTextbox.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+        labelTextbox.blur()
+    }
+})
+
 
 function setLabelTextboxFromSelected(state: MainState) {
     let set = state.data.selectedNodes
@@ -180,9 +186,20 @@ requireHtmlElement("btn_step").addEventListener("click", () => {
     })
 })
 
-requireHtmlElement("btn_go").addEventListener("click", () => {
+const goButton = requireHtmlElement("btn_go")
+
+//function updateGoButtonText(state: MainState) {
+//    if (state.running) {
+//        goButton.textContent = "Stop"
+//    } else {
+//        goButton.textContent = "Go"
+//    }
+//}
+//updateGoButtonText(globalState)
+
+goButton.addEventListener("click", () => {
     runGlobalUndoableAction(g => {
-        g.running = true
+        g.running = !g.running
         controller.requestFrame()
     })
 })
