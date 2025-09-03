@@ -23,7 +23,7 @@ export const SYMBOL_ERROR = "ERR"
 
 export const WILDCARD_SYMBOL = "_" // empty string matches everything
 
-const operatorSymbols = new Set([
+export const operatorSymbols = new Set([
     OPERATOR_NEW,
     OPERATOR_DEL,
     OPERATOR_SET,
@@ -31,12 +31,18 @@ const operatorSymbols = new Set([
     OPERATOR_DISCONNECT
 ])
 
-const outSymbols = new Set([
+export const controlOutSymbols = new Set([
     SYMBOL_OUT_STEP,
     SYMBOL_OUT_EXHAUSTED
 ])
 
-const markerSymbols = new Set([
+export const controlFlowSymbols = new Set([
+    SYMBOL_IN,
+    SYMBOL_OUT_STEP,
+    SYMBOL_OUT_EXHAUSTED,
+])
+
+export const markerSymbols = new Set([
     SYMBOL_IN,
     SYMBOL_OUT_STEP,
     SYMBOL_OUT_EXHAUSTED,
@@ -116,12 +122,25 @@ function makeVarMatcherWithNegativeEdgesNegDomain(variables: Set<string>, negati
     return makeSubgraphMatcherWithNegative(dataMatcher, negativeEdges)
 }
 
-export function makeVarRuleFromOperatorGraph<T extends NodeData>(ruleGraph: Graph<T>, variables: Set<string>, defaultData: T): PatternRule<T, T, VarMap> {
-    const operators = ruleGraph.nodes.filter(v => operatorSymbols.has(v.data.label))
+export function findOperators<T extends NodeData>(graph: Graph<T>): GraphNode<T>[] {
+    return graph.nodes.filter(v => operatorSymbols.has(v.data.label))
+}
+
+export function findOperands<T extends NodeData>(operators: GraphNode<T>[]): Set<GraphNode<T>> {
     // TODO: Only new and set insert their argument. Below does not generalize, but good enough for testing.
     // Alternative: special reduction to create pattern (only deletes allowed though)
     // Alternative 2: op node + compiler transformations
-    const operands = adjacentSet(operators.filter(v => v.data.label === OPERATOR_SET || v.data.label === OPERATOR_NEW))
+    return adjacentSet(operators.filter(v => v.data.label === OPERATOR_SET || v.data.label === OPERATOR_NEW))
+}
+
+export function findOperatorsAndOperandsSet<T extends NodeData>(graph: Graph<T>): Set<GraphNode<T>> {
+    let operators = findOperators(graph)
+    return new Set([...operators, ...findOperands(operators)])
+}
+
+export function makeVarRuleFromOperatorGraph<T extends NodeData>(ruleGraph: Graph<T>, variables: Set<string>, defaultData: T): PatternRule<T, T, VarMap> {
+    const operators = findOperators(ruleGraph)
+    const operands = findOperands(operators)
     const allOpsAndArgs = new Set([...operators, ...operands])
 
     // variables may not equal any constant used in the pattern
@@ -244,12 +263,12 @@ export function makeDefaultReductionRules(): VarRule<NodeData>[] {
     ]
 }
 
-function isControlInSymbol(s: string): boolean {
+export function isControlInSymbol(s: string): boolean {
     return s === SYMBOL_IN
 }
 
-function isControlOutSymbol(s: string): boolean {
-    return outSymbols.has(s)
+export function isControlOutSymbol(s: string): boolean {
+    return controlOutSymbols.has(s)
 }
 
 function moveEdgeEndpoint<T>(graph: Graph<T>, start: GraphNode<T>, from: GraphNode<T>, to: GraphNode<T>) {
@@ -295,12 +314,20 @@ function putError(graph: Graph<NodeData>, connectedNodes: Iterable<GraphNode<Nod
     placeInCenterOf(errorNode, connectedNodes)
     placeInCenterOf(messageNode, connectedNodes)
     for (let node of connectedNodes) {
-        createEdge(graph, node, errorNode)
+        let edge = createEdge(graph, node, errorNode)
+        edge.length *= 2
     }
-    createEdge(graph, errorNode, messageNode, 30)
+    createEdge(graph, errorNode, messageNode, 100)
+}
+
+export function hasError(graph: Graph<NodeData>): boolean {
+    return graph.nodes.find(n => n.data.label === SYMBOL_ERROR) !== undefined
 }
 
 export function runRulesWithPc(graph: Graph<NodeData>, ruleBoxes: Rect[]): boolean {
+    if (hasError(graph)) {
+        return false
+    }
     // If the pc is connected to an in-node, then run the rule once at a random match if possible
     // If no match => move pc to ex-node
     // If match => move pc to step-node

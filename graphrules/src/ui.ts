@@ -1,18 +1,19 @@
-import { createEdge, createEmptyGraph, createNode, deleteNode, filteredGraphView, Graph, GraphEdge, GraphNode } from "../../localgraphs/src/graph"
+import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, filteredGraphView, Graph, GraphEdge, GraphNode } from "../../localgraphs/src/graph"
 import { countConnectedComponents } from "../../localgraphs/src/graphalgos"
-import { AnimationFrame } from "../../localgraphs/src/interaction/controller"
+import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "../../localgraphs/src/interaction/controller"
 import { DragNodeInteraction, findClosestNode, GraphInteraction } from "../../localgraphs/src/interaction/graphsim"
 import { LayoutConfig as LayoutPhysicsConfig, separateNodes, settleNodes, stretchEdgesToFit, stretchEdgesToRelax } from "../../localgraphs/src/interaction/physics"
-import { BuildGraphInteraction, ClickNodeInteraction, MoveComponentInteraction, ShiftNodeInteraction } from "../../localgraphs/src/interaction/tools"
+import { BuildGraphInteraction, ClickNodeInteraction, DeleteInteraction, MoveComponentInteraction, ShiftNodeInteraction } from "../../localgraphs/src/interaction/tools"
 import { UndoHistory } from "../../localgraphs/src/interaction/undo"
 import { calcWindowTitleArea, drawResizableWindowWithTitle, satisfyMinBounds, WindowBounds } from "../../localgraphs/src/interaction/windows"
+import { drawArrowTip } from "../../shared/canvas"
 import { DefaultMap } from "../../shared/defaultmap"
 import { Rect } from "../../shared/rectangle"
 import { randomChoice, randomUniform } from "../../shared/utils"
-import { isDistanceLess, vec, vecscale, vecset, Vector } from "../../shared/vector"
+import { isDistanceLess, vec, vecdir, vecscale, vecset, Vector } from "../../shared/vector"
 import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse, noopTool } from "./interaction"
 import { findRuleMatches, PatternRule } from "./rule"
-import { advanceControlFlow, extractVarRuleFromBox, makeDefaultReductionRules, ruleFromBox, runRulesWithPc, VarRule } from "./semantics"
+import { advanceControlFlow, controlFlowSymbols, extractVarRuleFromBox, findOperatorsAndOperandsSet, isControlInSymbol, isControlOutSymbol, makeDefaultReductionRules, markerSymbols, ruleFromBox, runRulesWithPc, SYMBOL_IN, VarRule, WILDCARD_SYMBOL } from "./semantics"
 import { ZoomState } from "./zooming"
 
 export type UiNodeData = {
@@ -36,6 +37,7 @@ export type MainState = {
     undoHistory: UndoHistory<DataState>,
     selectedTool: ToolName,
     zoom: ZoomState,
+    running: boolean
 }
 
 const defaultNodeData: UiNodeData = {
@@ -56,21 +58,23 @@ export function selectRule(state: DataState, ruleBox: RuleBoxState) {
     state.selectedRule = ruleBox
 }
 
-export function wrapSettleNewNodes(state: DataState, action: (state: DataState) => unknown) {
+// computes the difference in nodes before and after the action and settles the new nodes into place
+export function wrapSettleNewNodes<T>(state: DataState, action: (state: DataState) => T): T {
     let oldNodes = new Set(state.graph.nodes)
 
-    action(state)
+    let result = action(state)
 
+    let newNodes = state.graph.nodes.filter(v => !oldNodes.has(v))
+    separateNodes(newNodes, oldNodes)
+    let nodesToMove = new Set(newNodes) //new Set(newNodes.filter(v => v.neighbors.intersection(oldNodes).size < 2))
     const settlePhysicsConfig = (t: number): LayoutPhysicsConfig => ({
         ...layoutStyle,
         pushDistance: 1000 * t + layoutStyle.pushDistance,
         dampening: t*10 + layoutStyle.dampening
     })
-
-    let newNodes = state.graph.nodes.filter(v => !oldNodes.has(v))
-    separateNodes(newNodes, oldNodes)
-    let nodesToMove = new Set(newNodes) //new Set(newNodes.filter(v => v.neighbors.intersection(oldNodes).size < 2))
     settleNodes(state.graph, nodesToMove, settlePhysicsConfig, 1. / 60., 1000, [])
+
+    return result
 }
 
 export function runSelectedRule(state: DataState) {
@@ -87,10 +91,24 @@ export function runSelectedRule(state: DataState) {
     rule.apply(state.graph, randomChoice(matches))
 }
 
-export function runStepWithControlFlow(state: DataState) {
+// runs control flow and rule execution in separate steps
+export function runSmallStepWithControlFlow(state: DataState): boolean {
     let ruleRects = state.ruleBoxes.map(b => b.bounds)
-    advanceControlFlow(state.graph) || runRulesWithPc(state.graph, ruleRects)
+    let result = advanceControlFlow(state.graph)
+    if (!result) {
+        result = runRulesWithPc(state.graph, ruleRects)
+    }
     applyExhaustiveReduction(state)
+    return result
+}
+
+// runs control flow and rule execution in one step
+export function runStepWithControlFlow(state: DataState): boolean {
+    let ruleRects = state.ruleBoxes.map(b => b.bounds)
+    let result = advanceControlFlow(state.graph)
+    result = runRulesWithPc(state.graph, ruleRects) || result
+    applyExhaustiveReduction(state)
+    return result
 }
 
 export function applyRandomReduction(state: DataState): boolean {
@@ -190,7 +208,7 @@ const tools = {
     "shift": graphToolAlwaysSelect(() => new ShiftNodeInteraction()),
     "move": graphToolWithClickSelect(() => new MoveComponentInteraction()),
     //"duplicate": graphTool(() => new DuplicateInteraction(new SimpleGraphPainter(5, "black"), )),
-    "delete": graphTool(() => new ClickNodeInteraction((node, graph) => deleteNode(graph, node))),
+    "delete": graphTool(() => new DeleteInteraction(deleteNode, deleteEdge)),
     "rulebox": toolWithUndo(makeSpanWindowTool(putNewWindow)),
 }
 
@@ -297,6 +315,10 @@ export class MainPainter implements StatePainter<MainState> {
 
     constructor(private nodeRadius: number) {
         this.labelColors.set("", "white")
+        this.labelColors.set(WILDCARD_SYMBOL, "white")
+        for (let l of markerSymbols) {
+            this.labelColors.set(l, "#f0f0f0")
+        }
     }
 
     draw(ctx: CanvasRenderingContext2D, state: MainState, frame: AnimationFrame): void {
@@ -305,7 +327,7 @@ export class MainPainter implements StatePainter<MainState> {
         //    let rule = ruleFromBox(state.data, state.data.activeRule)
         //    highlightedNodes = findNodesMatchingRule(getOutsideGraphFilter(state.data), rule)
         //}
-        this.drawGraph(ctx, state.data.graph, new Set(), state.data.selectedNodes)
+        this.drawGraph(ctx, state.data.graph, state.data.selectedNodes)
         this.drawRuleBoxes(ctx, state.data)
     }
 
@@ -317,19 +339,40 @@ export class MainPainter implements StatePainter<MainState> {
         }
     }
 
-    drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<UiNodeData>, highlighted: Set<GraphNode<UiNodeData>>, selected: Set<GraphNode<UiNodeData>>): void {
+    drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<UiNodeData>, selected: Set<GraphNode<UiNodeData>>): void {
+        let operators = findOperatorsAndOperandsSet(graph)
         for (let edge of graph.edges) {
-            this.drawEdge(ctx, edge)
+            let hasOperator = operators.has(edge.a) || operators.has(edge.b)
+            if (isControlInSymbol(edge.a.data.label) && isControlOutSymbol(edge.b.data.label)) {
+                this.drawControlFlowDirected(ctx, edge.b, edge.a)
+            } else if (isControlInSymbol(edge.b.data.label) && isControlOutSymbol(edge.a.data.label)) {
+                this.drawControlFlowDirected(ctx, edge.a, edge.b)
+            } else {
+                this.drawEdge(ctx, edge, hasOperator)
+            }
         }
         for (let node of graph.nodes) {
-            this.drawNode(ctx, node, highlighted.has(node), selected.has(node))
+            let isMarker = controlFlowSymbols.has(node.data.label)
+            this.drawNode(ctx, node, selected.has(node), operators.has(node), isMarker)
         }
     }
 
-    drawEdge(ctx: CanvasRenderingContext2D, edge: GraphEdge<UiNodeData>) {
+    getOperatorBlack() {
+        return this.getOperatorFill("black") //`rgba(127, 127, 127, 1.0)`
+    }
+
+    getOperatorFill(color: string) {
+        return `color-mix(in srgb, ${color} 50%, white)`
+    }
+
+    drawEdge(ctx: CanvasRenderingContext2D, edge: GraphEdge<UiNodeData>, hasOperator: boolean) {
+        ctx.save()
         ctx.beginPath()
         ctx.lineWidth = 3
-        ctx.strokeStyle = "black"
+        ctx.strokeStyle = hasOperator ? this.getOperatorBlack() : "black"
+        if (hasOperator) {
+            ctx.setLineDash([5, 5])
+        }
         if (edge.a == edge.b) {
             // self loop
             ctx.lineWidth = 1
@@ -342,17 +385,40 @@ export class MainPainter implements StatePainter<MainState> {
             ctx.lineTo(edge.b.x, edge.b.y)
         }
         ctx.stroke()
+        ctx.restore()
     }
 
-    drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<UiNodeData>, highlight: boolean, selected: boolean) {
+    drawControlFlowDirected(ctx: CanvasRenderingContext2D, from: GraphNode<unknown>, to: GraphNode<unknown>) {
+        ctx.save()
+        ctx.beginPath()
+        ctx.lineWidth = 2
+        ctx.strokeStyle = "black"
+        ctx.moveTo(from.x, from.y)
+        const offset = Vector.scale(this.nodeRadius, vecdir(from, to))
+        const tip = Vector.sub(to, offset)
+        ctx.lineTo(tip.x, tip.y)
+        drawArrowTip(from.x, from.y, tip.x, tip.y, 12, ctx)
+        ctx.stroke()
+        ctx.restore()
+    }
+
+    drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<UiNodeData>, selected: boolean, operator: boolean, controlFlow: boolean) {
+        // no special treatment for operator, because it must maintain contrast. Only edge is modified
+
         // circle
+        ctx.save()
+
         let color = this.labelColors.get(node.data.label)
+        let black = "black"
+        let lineWidth = 3
         ctx.fillStyle = color
-        ctx.strokeStyle = highlight ? "darkred" : "black"
-        ctx.lineWidth = 3
+        ctx.strokeStyle = black
+        ctx.lineWidth = lineWidth
         ctx.circle(node.x, node.y, this.nodeRadius)
         ctx.fill()
-        ctx.stroke()
+        if (!controlFlow) {
+            ctx.stroke()
+        }
 
         // selection outline
         if (selected) {
@@ -364,20 +430,24 @@ export class MainPainter implements StatePainter<MainState> {
             ctx.setLineDash([])
         }
 
-        // label
-        if (node.data.label !== "") {
-            ctx.strokeStyle = "black"
-            ctx.fillStyle = ctx.strokeStyle // text in same color as outline
-            ctx.textAlign = "center"
-            ctx.textBaseline = "middle"
-            const fontWeight = "normal"
-            const fontSize = "12pt"
-            ctx.font = `${fontWeight} ${fontSize} sans-serif`
-            let label = node.data.label ?? ""
-            ctx.fillText(label, node.x, node.y)
+        if (node.data.label) {
+            this.drawLabel(ctx, node, node.data.label, black)
         }
+
+        ctx.restore()
     }
 
+    drawLabel(ctx: CanvasRenderingContext2D, node: GraphNode<unknown>, text: string, color: string) {
+        // label
+        //ctx.strokeStyle = color
+        ctx.fillStyle = color // text in same color as outline
+        ctx.textAlign = "center"
+        ctx.textBaseline = "middle"
+        const fontWeight = "normal"
+        const fontSize = "12pt"
+        ctx.font = `${fontWeight} ${fontSize} sans-serif`
+        ctx.fillText(text, node.x, node.y)
+    }
 }
 
 export const layoutStyle: LayoutPhysicsConfig = {
@@ -451,5 +521,29 @@ export function applyArrowAlignmentForces(dt: number, graph: Graph<UiNodeData>) 
                 }
             }
         }
+    }
+}
+
+export class RuleRunner implements InteractiveSystem {
+    constructor(protected getState: () => MainState) {}
+    update(frame: AnimationFrame): SleepState {
+        let state = this.getState()
+        if (!state.running) {
+            return "Sleeping"
+        }
+        let didSomething = wrapSettleNewNodes(state.data, runStepWithControlFlow)
+        if (!didSomething) {
+            state.running = false
+            return "Sleeping"
+        } else {
+            return "Running"
+        }
+    }
+    draw(frame: AnimationFrame, ctx: CanvasRenderingContext2D): void {
+    }
+    mouseDown(x: number, y: number, pointerId: PointerId, bounds: Rect): MouseDownResponse {
+        return "Ignore"
+    }
+    dragEnd(x: number, y: number, pointerId: PointerId, bounds: Rect): void {
     }
 }

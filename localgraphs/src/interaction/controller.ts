@@ -106,7 +106,10 @@ export class InteractionController {
 
         canvas.addEventListener("pointerdown", (ev) => {
             const [x, y] = getCursorPosition(canvas, ev)
-            this.onMouseDown(x, y, ev.pointerId)
+            let swallow = this.onMouseDown(x, y, ev.pointerId)
+            if (swallow) {
+                ev.preventDefault()
+            }
         })
         canvas.addEventListener("pointermove", (ev) => {
             const [x, y] = getCursorPosition(canvas, ev)
@@ -173,7 +176,7 @@ export class InteractionController {
         }
     }
 
-    onMouseDown(x: number, y: number, pointerId: PointerId) {
+    onMouseDown(x: number, y: number, pointerId: PointerId): boolean {
         // start dragging node
         const result = this.system.mouseDown(x, y, pointerId, this.getBounds())
         if (result !== "Ignore") {
@@ -183,7 +186,9 @@ export class InteractionController {
                 this.canvas.setPointerCapture(pointerId) // capture drag events
             }
             this.requestFrame()
+            return true
         }
+        return false
     }
 
     onMouseMoved(x: number, y: number, pointerId: PointerId) {
