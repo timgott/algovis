@@ -204,9 +204,9 @@ function putNewWindow(bounds: Rect, state: DataState) {
 const tools = {
     "none": noopTool,
     "build": graphToolWithClickSelect((s) => new BuildGraphInteraction((g, x, y) => putNewNode(s, x, y), createEdge)),
-    "drag": graphToolAlwaysSelect(() => new DragNodeInteraction()),
-    "shift": graphToolAlwaysSelect(() => new ShiftNodeInteraction()),
-    "move": graphToolWithClickSelect(() => new MoveComponentInteraction()),
+    "drag": graphTool(() => new DragNodeInteraction()),
+    "shift": graphTool(() => new ShiftNodeInteraction()),
+    "move": graphTool(() => new MoveComponentInteraction()),
     //"duplicate": graphTool(() => new DuplicateInteraction(new SimpleGraphPainter(5, "black"), )),
     "delete": graphTool(() => new DeleteInteraction(deleteNode, deleteEdge)),
     "rulebox": toolWithUndo(makeSpanWindowTool(putNewWindow)),
