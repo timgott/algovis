@@ -5,7 +5,7 @@ import { LayoutPhysics } from "../../localgraphs/src/interaction/physics"
 import { UndoHistory } from "../../localgraphs/src/interaction/undo"
 import { calcWindowResizeArea, calcWindowTitleArea, WindowBounds } from "../../localgraphs/src/interaction/windows"
 import { Rect } from "../../shared/rectangle"
-import { ensured, unreachable } from "../../shared/utils"
+import { assert, ensured, unreachable } from "../../shared/utils"
 import { distance, isDistanceLess, vec, vecsub, Vector } from "../../shared/vector"
 
 // generalization to localgraphs interaction model
@@ -145,6 +145,32 @@ export function withToolClick<S>(click: (state: S, x: number, y: number) => "Cli
             return clickResponse
         }
         return response
+    }
+}
+
+export function wrapActionAfterRelease<S>(tool: MouseInteraction<S>, afterAction: (s: S) => unknown): MouseInteraction<S> {
+    return (state: S, mouseX: number, mouseY: number): MouseClickOrDragResponse<S> => {
+        let response = tool(state, mouseX, mouseY)
+        if (response === "Ignore") {
+            return response
+        } else if (response === "Click") {
+            afterAction(state)
+            return response
+        } else {
+            return {
+                dragDraw(state, mouseX, mouseY, drawCtx, deltaTime) {
+                    response.dragDraw?.(state, mouseX, mouseY, drawCtx, deltaTime) 
+                },
+                dragStep(state, mouseX, mouseY, deltaTime) {
+                    response.dragStep?.(state, mouseX, mouseY, deltaTime) 
+                },
+                mouseUp(state, mouseX, mouseY) {
+                    assert(response.mouseUp !== undefined, "action after release, but wrapped tool does nothing on release")
+                    response.mouseUp(state, mouseX, mouseY)
+                    afterAction(state)
+                },
+            }
+        }
     }
 }
 

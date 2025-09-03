@@ -42,7 +42,7 @@ const defaultNodeData: UiNodeData = {
     label: "",
 }
 
-export function setSelectedLabel(state: MainState, label: string) {
+export function setLabelOnSelected(state: MainState, label: string) {
     for (let node of state.data.selectedNodes) {
         node.data.label = label
     }
@@ -201,7 +201,7 @@ export const metaEditingTool: MouseInteraction<MainState> = (state, mouseX, mous
     return tool(state, mouseX, mouseY)
 }
 
-export function setSelectedTool(state: MainState, tool: ToolName) {
+export function selectTool(state: MainState, tool: ToolName) {
     state.selectedTool = tool
     state.data.selectedNodes = new Set()
 }

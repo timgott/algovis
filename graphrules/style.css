@@ -16,6 +16,10 @@ canvas {
 .control_bar button {
     margin: 0 4px;
 }
+.bottom_bar {
+    position: absolute;
+    bottom: 0;
+}
 /* Large input elements */
 button, input, select {
     padding: 8px;
