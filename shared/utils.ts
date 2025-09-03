@@ -33,6 +33,7 @@ export function shuffle<T>(arr: T[]): T[] {
 }
 
 export function randomChoice<T>(arr: readonly T[]): T {
+    assert(arr.length > 0, "cannot randomly sample from empty array")
     return arr[randInt(arr.length)]
 }
 

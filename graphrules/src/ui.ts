@@ -12,7 +12,7 @@ import { randomChoice, randomUniform } from "../../shared/utils"
 import { isDistanceLess, vec, vecscale, vecset, Vector } from "../../shared/vector"
 import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse, noopTool } from "./interaction"
 import { findRuleMatches, PatternRule } from "./rule"
-import { extractVarRuleFromBox, makeDefaultReductionRules, VarRule } from "./semantics"
+import { advanceControlFlow, extractVarRuleFromBox, makeDefaultReductionRules, ruleFromBox, runRulesWithPc, VarRule } from "./semantics"
 import { ZoomState } from "./zooming"
 
 export type UiNodeData = {
@@ -27,7 +27,7 @@ type Rule = VarRule<UiNodeData>
 export type DataState = {
     graph: Graph<UiNodeData>,
     ruleBoxes: RuleBoxState[],
-    activeRule: RuleBoxState | null,
+    selectedRule: RuleBoxState | null,
     selectedNodes: Set<GraphNode<UiNodeData>>,
 }
 
@@ -52,12 +52,8 @@ export function pushToHistory(state: MainState) {
     state.undoHistory.push(state.data)
 }
 
-function ruleFromBox(state: DataState, box: RuleBoxState): Rule {
-    return extractVarRuleFromBox(state.graph, box.bounds, defaultNodeData)
-}
-
 export function selectRule(state: DataState, ruleBox: RuleBoxState) {
-    state.activeRule = ruleBox
+    state.selectedRule = ruleBox
 }
 
 export function wrapSettleNewNodes(state: DataState, action: (state: DataState) => unknown) {
@@ -77,11 +73,11 @@ export function wrapSettleNewNodes(state: DataState, action: (state: DataState) 
     settleNodes(state.graph, nodesToMove, settlePhysicsConfig, 1. / 60., 1000, [])
 }
 
-export function runActiveRuleTest(state: DataState) {
-    if (state.activeRule === null) {
+export function runSelectedRule(state: DataState) {
+    if (state.selectedRule === null) {
         return
     }
-    let rule = ruleFromBox(state, state.activeRule)
+    let rule = ruleFromBox(state.graph, state.selectedRule.bounds)
     // applyRuleEverywhere also modifies the rule itself, don't use here
     let matches = findRuleMatches(getOutsideGraphFilter(state), rule)
     if (matches.length == 0) {
@@ -89,6 +85,12 @@ export function runActiveRuleTest(state: DataState) {
         return
     }
     rule.apply(state.graph, randomChoice(matches))
+}
+
+export function runStepWithControlFlow(state: DataState) {
+    let ruleRects = state.ruleBoxes.map(b => b.bounds)
+    advanceControlFlow(state.graph) || runRulesWithPc(state.graph, ruleRects)
+    applyExhaustiveReduction(state)
 }
 
 export function applyRandomReduction(state: DataState): boolean {
@@ -226,7 +228,7 @@ export const windowMovingTool: MouseInteraction<MainState> =
                 }
             },
             clickWindow(window) {
-                s.activeRule = window
+                s.selectedRule = window
             }
         })
     ))
@@ -248,7 +250,7 @@ export function createClearedState() : DataState {
     return {
         graph: createEmptyGraph<UiNodeData>(),
         ruleBoxes: [],
-        activeRule: null,
+        selectedRule: null,
         selectedNodes: new Set(),
     }
 }
@@ -308,7 +310,7 @@ export class MainPainter implements StatePainter<MainState> {
     drawRuleBoxes(ctx: CanvasRenderingContext2D, state: DataState): void {
         for (let box of state.ruleBoxes) {
             let inactiveColor = `color-mix(in srgb, ${box.borderColor} 10%, rgba(50, 50, 50, 0.5))`
-            let color = state.activeRule === box ? box.borderColor : inactiveColor
+            let color = state.selectedRule === box ? box.borderColor : inactiveColor
             drawResizableWindowWithTitle(ctx, box.bounds, "Rule", color)
         }
     }

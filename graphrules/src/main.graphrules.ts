@@ -4,9 +4,9 @@ import { UndoHistory } from "../../localgraphs/src/interaction/undo";
 import { initFullscreenCanvas } from "../../shared/canvas";
 import { assertExists, ensured, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController } from "./interaction";
-import { SYMBOL_FORALL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET } from "./semantics";
+import { SYMBOL_FORALL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, SYMBOL_IN, SYMBOL_OUT_STEP, SYMBOL_OUT_EXHAUSTED, SYMBOL_PROGRAM_COUNTER } from "./semantics";
 import { flattenState, unflattenState } from "./storage";
-import { applyArrowAlignmentForces, applyDirectionAlignmentForces, applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runActiveRuleTest, setSelectedLabel as setLabelOnSelected, setSelectedTool as selectTool, SYMBOL_ARROW_DOWN, SYMBOL_ARROW_LEFT, SYMBOL_ARROW_RIGHT, SYMBOL_ARROW_UP, ToolName, windowMovingTool, wrapSettleNewNodes } from "./ui";
+import { applyArrowAlignmentForces, applyDirectionAlignmentForces, applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runSelectedRule, setSelectedLabel as setLabelOnSelected, setSelectedTool as selectTool, SYMBOL_ARROW_DOWN, SYMBOL_ARROW_LEFT, SYMBOL_ARROW_RIGHT, SYMBOL_ARROW_UP, ToolName, windowMovingTool, wrapSettleNewNodes, runStepWithControlFlow } from "./ui";
 import JSURL from "jsurl"
 import { PanZoomController } from "./zooming";
 import { Vector } from "../../shared/vector";
@@ -95,6 +95,10 @@ operatorButton("btn_op_set", OPERATOR_SET);
 operatorButton("btn_op_del", OPERATOR_DEL);
 operatorButton("btn_op_connect", OPERATOR_CONNECT);
 operatorButton("btn_op_disconnect", OPERATOR_DISCONNECT);
+operatorButton("btn_op_in", SYMBOL_IN);
+operatorButton("btn_op_step", SYMBOL_OUT_STEP);
+operatorButton("btn_op_ex", SYMBOL_OUT_EXHAUSTED);
+operatorButton("btn_op_pc", SYMBOL_PROGRAM_COUNTER);
 
 // node labeling by keyboard
 
@@ -132,7 +136,7 @@ document.addEventListener("keydown", (e) => {
 requireHtmlElement("btn_test").addEventListener("click", () => {
     runGlobalUndoableAction(g => {
         wrapSettleNewNodes(g.data, () => {
-            runActiveRuleTest(g.data);
+            runSelectedRule(g.data);
         })
     })
 })
@@ -146,7 +150,7 @@ requireHtmlElement("btn_reduce").addEventListener("click", () => {
 requireHtmlElement("btn_apply").addEventListener("click", () => {
     runGlobalUndoableAction(g => {
         wrapSettleNewNodes(g.data, () => {
-            runActiveRuleTest(g.data);
+            runSelectedRule(g.data);
             applyExhaustiveReduction(g.data)
         })
     })
@@ -156,9 +160,17 @@ requireHtmlElement("btn_apply_repeat").addEventListener("click", () => {
     runGlobalUndoableAction(g => {
         wrapSettleNewNodes(g.data, () => {
             for (let i = 0; i < 10; i++) {
-                runActiveRuleTest(g.data);
+                runSelectedRule(g.data);
                 applyExhaustiveReduction(g.data)
             }
+        })
+    })
+})
+
+requireHtmlElement("btn_step").addEventListener("click", () => {
+    runGlobalUndoableAction(g => {
+        wrapSettleNewNodes(g.data, () => {
+            runStepWithControlFlow(g.data)
         })
     })
 })

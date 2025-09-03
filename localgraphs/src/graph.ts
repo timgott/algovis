@@ -1,3 +1,5 @@
+import { assert } from "../../shared/utils"
+
 export type GraphNode<T> = {
     data: T
     x: number
@@ -39,8 +41,8 @@ export function createNode<T>(graph: Graph<T>, data: T, x: number = 0, y: number
 }
 
 export function createEdge<T>(graph: Graph<T>, a: GraphNode<T>, b: GraphNode<T>, length?: number) {
-    console.assert(!a.neighbors.has(b))
-    console.assert(!b.neighbors.has(a))
+    assert(!a.neighbors.has(b), "edge already exists")
+    assert(!b.neighbors.has(a), "edge already exists")
     const edge = {
         a: a,
         b: b,

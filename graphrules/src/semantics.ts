@@ -1,11 +1,13 @@
-import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, extractSubgraph, Graph, GraphNode } from "../../localgraphs/src/graph"
+import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, extractSubgraph, filteredGraphView, Graph, GraphNode } from "../../localgraphs/src/graph"
 import { createGraphFromEdges } from "../../localgraphs/src/interaction/examplegraph"
 import { cartesianProduct } from "../../rulegame/src/metagame"
 import { DefaultMap } from "../../shared/defaultmap"
 import { Rect } from "../../shared/rectangle"
+import { assert, randomChoice } from "../../shared/utils"
 import { ContextDataMatcher, makeSubgraphMatcher, makeSubgraphMatcherWithNegative, EdgeList, SubgraphMatcher } from "../../subgraph/src/subgraph"
 import { makeWildcardVariableMatcher, makeVariableMatcher, mapMatcher, makeWildcardVariableMatcherWithNegDomain } from "../../subgraph/src/variables"
-import { makeRuleFromOperatorGraph, NodeDataCloner, PatternRule } from "./rule"
+import { placeInCenterOf } from "./placement"
+import { findRuleMatches, makeRuleFromOperatorGraph, NodeDataCloner, PatternRule } from "./rule"
 
 export const SYMBOL_FORALL="\u2200" // ∀
 export const OPERATOR_NEW = "new"
@@ -14,8 +16,10 @@ export const OPERATOR_DEL = "del"
 export const OPERATOR_CONNECT = "con"
 export const OPERATOR_DISCONNECT = "dis"
 export const SYMBOL_PROGRAM_COUNTER = "\u261b" // ☛
-export const SYMBOL_BEGIN = "in"
-export const SYMBOL_END = "out"
+export const SYMBOL_IN = "in"
+export const SYMBOL_OUT_STEP = "step" // ✔
+export const SYMBOL_OUT_EXHAUSTED = "ex" // ✗
+export const SYMBOL_ERROR = "ERR"
 
 export const WILDCARD_SYMBOL = "_" // empty string matches everything
 
@@ -27,15 +31,25 @@ const operatorSymbols = new Set([
     OPERATOR_DISCONNECT
 ])
 
+const outSymbols = new Set([
+    SYMBOL_OUT_STEP,
+    SYMBOL_OUT_EXHAUSTED
+])
+
 const markerSymbols = new Set([
-    SYMBOL_BEGIN,
-    SYMBOL_END,
+    SYMBOL_IN,
+    SYMBOL_OUT_STEP,
+    SYMBOL_OUT_EXHAUSTED,
     SYMBOL_FORALL,
     SYMBOL_PROGRAM_COUNTER
 ])
 
 type NodeData = {
     label: string
+}
+
+const defaultNodeData = {
+    label: "",
 }
 
 export type VarMap = Map<string, string>
@@ -230,18 +244,98 @@ export function makeDefaultReductionRules(): VarRule<NodeData>[] {
     ]
 }
 
-export function advanceProgramCounter(graph: Graph<NodeData>, ruleBoxes: Rect[]): void {
+function isControlInSymbol(s: string): boolean {
+    return s === SYMBOL_IN
+}
+
+function isControlOutSymbol(s: string): boolean {
+    return outSymbols.has(s)
+}
+
+function moveEdgeEndpoint<T>(graph: Graph<T>, start: GraphNode<T>, from: GraphNode<T>, to: GraphNode<T>) {
+    assert(start.neighbors.has(from), "not connected to 'from'")
+    assert(!start.neighbors.has(to), "already connected with new endpoint")
+    deleteEdge(graph, start, from)
+    createEdge(graph, start, to)
+}
+
+export function advanceControlFlow(graph: Graph<NodeData>): boolean {
+    // move all pc nodes from an out-node to an in-node.
+    let doneSomething = false
     let pcNodes = graph.nodes.filter(n => n.data.label === SYMBOL_PROGRAM_COUNTER)
     for (let pc of pcNodes) {
-        for (let end of [...pc.neighbors].filter(n => n.data.label === SYMBOL_END)) {
-            // prioritize repeating (begin inside)
-            let ruleBox = ruleBoxes.find(r => Rect.containsPos(r, end))
-            if (ruleBox !== undefined) {
-                let allStarts = [...end.neighbors].filter(n => n.data.label === SYMBOL_BEGIN)
-                let insideStarts = allStarts.filter(n => Rect.containsPos(ruleBox, n))
-                let starts = insideStarts.length > 0 ? insideStarts : allStarts
-                // TODO
+        for (let currentOut of [...pc.neighbors].filter(n => isControlOutSymbol(n.data.label))) {
+            for (let nextIn of [...currentOut.neighbors].filter(n => isControlInSymbol(n.data.label))) {
+                moveEdgeEndpoint(graph, pc, currentOut, nextIn)
+                doneSomething = true
             }
         }
     }
+    return doneSomething
+}
+
+export function ruleFromBox(graph: Graph<NodeData>, box: Rect): PatternRule<NodeData, NodeData, VarMap> {
+    return extractVarRuleFromBox(graph, box, defaultNodeData)
+}
+
+function getOutsideGraphFilter(graph: Graph<NodeData>, ruleBoxes: Rect[]): Graph<NodeData> {
+    return filteredGraphView(graph, (node) => {
+        for (let box of ruleBoxes) {
+            if (Rect.containsPos(box, node)) {
+                return false
+            }
+        }
+        return true
+    })
+}
+
+function putError(graph: Graph<NodeData>, connectedNodes: Iterable<GraphNode<NodeData>>, message: string) {
+    let errorNode = createNode(graph, { label: SYMBOL_ERROR })
+    let messageNode = createNode(graph, { label: message })
+    placeInCenterOf(errorNode, connectedNodes)
+    placeInCenterOf(messageNode, connectedNodes)
+    for (let node of connectedNodes) {
+        createEdge(graph, node, errorNode)
+    }
+    createEdge(graph, errorNode, messageNode, 30)
+}
+
+export function runRulesWithPc(graph: Graph<NodeData>, ruleBoxes: Rect[]): boolean {
+    // If the pc is connected to an in-node, then run the rule once at a random match if possible
+    // If no match => move pc to ex-node
+    // If match => move pc to step-node
+    // TODO: can be optimized by precomputing data structures
+    let doneSomething = false
+    let pcNodes = graph.nodes.filter(n => n.data.label === SYMBOL_PROGRAM_COUNTER)
+    for (let pc of pcNodes) {
+        for (let inNode of [...pc.neighbors].filter(n => isControlInSymbol(n.data.label))) {
+            for (let ruleBox of ruleBoxes.filter(box => Rect.containsPos(box, inNode))) {
+                doneSomething = true
+                let insideNodes = graph.nodes.filter(n => Rect.containsPos(ruleBox, n))
+                let exNodes = insideNodes.filter(n => n.data.label === SYMBOL_OUT_EXHAUSTED)
+                let stepNodes = insideNodes.filter(n => n.data.label === SYMBOL_OUT_STEP)
+
+                // applyRuleEverywhere also modifies inside rule boxes, don't use here
+                let rule = ruleFromBox(graph, ruleBox)
+                let matches = findRuleMatches(getOutsideGraphFilter(graph, ruleBoxes), rule)
+                if (matches.length == 0) {
+                    if (exNodes.length > 0) {
+                        if (exNodes.length > 1) { console.warn("More than 1 ex-node:", exNodes.length) }
+                        moveEdgeEndpoint(graph, pc, inNode, randomChoice(exNodes))
+                    } else {
+                        putError(graph, [inNode], `no match and no ${SYMBOL_OUT_EXHAUSTED}-node`)
+                    }
+                } else {
+                    rule.apply(graph, randomChoice(matches))
+                    if (stepNodes.length > 0) {
+                        if (stepNodes.length > 1) { console.warn("More than 1 step-node:", stepNodes.length) }
+                        moveEdgeEndpoint(graph, pc, inNode, randomChoice(stepNodes))
+                    } else {
+                        putError(graph, [inNode], `cannot continue, no ${SYMBOL_OUT_STEP}-node`)
+                    }
+                }
+            }
+        }
+    }
+    return doneSomething
 }
