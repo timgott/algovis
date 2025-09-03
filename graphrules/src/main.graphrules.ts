@@ -4,7 +4,7 @@ import { UndoHistory } from "../../localgraphs/src/interaction/undo";
 import { initFullscreenCanvas } from "../../shared/canvas";
 import { assertExists, ensured, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController, wrapActionAfterRelease } from "./interaction";
-import { SYMBOL_FORALL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, SYMBOL_IN, SYMBOL_OUT_STEP, SYMBOL_OUT_EXHAUSTED, SYMBOL_PROGRAM_COUNTER } from "./semantics";
+import { SYMBOL_FORALL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, SYMBOL_IN, SYMBOL_OUT_STEP, SYMBOL_OUT_EXHAUSTED, SYMBOL_PROGRAM_COUNTER, WILDCARD_SYMBOL } from "./semantics";
 import { flattenState, unflattenState } from "./storage";
 import { applyArrowAlignmentForces, applyDirectionAlignmentForces, applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runSelectedRule, selectTool, SYMBOL_ARROW_DOWN, SYMBOL_ARROW_LEFT, SYMBOL_ARROW_RIGHT, SYMBOL_ARROW_UP, ToolName, windowMovingTool, wrapSettleNewNodes, runSmallStepWithControlFlow, setLabelOnSelected, RuleRunner } from "./ui";
 import JSURL from "jsurl"
@@ -129,6 +129,8 @@ operatorButton("btn_op_left", SYMBOL_ARROW_LEFT);
 operatorButton("btn_op_right", SYMBOL_ARROW_RIGHT);
 operatorButton("btn_op_up", SYMBOL_ARROW_UP);
 operatorButton("btn_op_down", SYMBOL_ARROW_DOWN);
+operatorButton("btn_op_wildcard", WILDCARD_SYMBOL);
+
 
 // node labeling by keyboard
 
