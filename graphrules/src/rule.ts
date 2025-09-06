@@ -1,9 +1,9 @@
 import { copySubgraphTo, createEdge, createEmptyGraph, deleteNode, filteredGraphView, Graph, GraphEdge, GraphNode, mapSubgraphTo, NodeDataTransfer } from "../../localgraphs/src/graph"
-import { bfs, SearchState } from "../../localgraphs/src/graphalgos"
+import { bfs, dfsWalkArbitrary, SearchState } from "../../localgraphs/src/graphalgos"
 import { stretchEdgesToRelax } from "../../localgraphs/src/interaction/physics"
 import { assert, max, randomUniform } from "../../shared/utils"
 import { distance, Positioned, vec, Vector } from "../../shared/vector"
-import { findInjectiveMatchesGeneric, GenericMatcher } from "../../subgraph/src/matching"
+import { findInjectiveMatchesGeneric, GenericMatcher, verifyInjectiveMatchGeneric } from "../../subgraph/src/matching"
 import { ContextDataMatcher, DataMatcher, findSubgraphMatchesWithContext, makeSubgraphMatcher, MatchWithContext, simpleDataMatcher, SubgraphMatcher } from "../../subgraph/src/subgraph"
 import { placeNewNodesBetweenOld } from "./placement"
 
@@ -15,6 +15,10 @@ export type PatternRule<S,T,C> = {
 
 export function findRuleMatches<T,S,C>(graph: Graph<T>, rule: PatternRule<S,T,C>): MatchWithContext<T, C>[] {
     return findInjectiveMatchesGeneric(graph.nodes, rule.pattern.nodes, rule.matcher)
+}
+
+export function isRuleMatch<T,S,C>(match: MatchWithContext<T, C>, rule: PatternRule<S,T,C>): boolean {
+    return verifyInjectiveMatchGeneric(match, rule.matcher)
 }
 
 // useful if the rule does not make new patterns appear (no recursion)
@@ -49,7 +53,11 @@ export type NodeDataCloner<S,SU,C> = {
 
 // operator = node to be inserted
 export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator: (x: GraphNode<S>) => boolean, matcher: SubgraphMatcher<S,T,C>, cloner: NodeDataCloner<S,T,C>): PatternRule<S, T, C> {
+    // pattern is graph without operators
+    // TODO: rework this such that node neighbor set is also changed. Currently
+    // the matchers rely on the node identity too much so we cannot copy them easily.
     let pattern = filteredGraphView(ruleGraph, n => !isOperator(n))
+    //let graphCopy = structuredClone(ruleGraph)
     // find the nodes that have to be added and the edges that have to be created
     let insertedNodes = ruleGraph.nodes.filter(n => isOperator(n))
     // use the edges such that we can transfer the edge length
@@ -62,6 +70,10 @@ export function makeRuleFromOperatorGraph<S,T,C>(ruleGraph: Graph<S>, isOperator
             edge.b = a
         }
     }
+    //let pattern = graphCopy
+    //let operatorNodes = pattern.nodes.filter(n => isOperator(n))
+    // reorder subgraph for performance
+    //pattern.nodes = dfsWalkArbitrary(pattern.nodes)
     return {
         pattern,
         matcher,

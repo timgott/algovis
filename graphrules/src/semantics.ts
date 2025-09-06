@@ -1,4 +1,5 @@
 import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, extractSubgraph, filteredGraphView, Graph, GraphNode } from "../../localgraphs/src/graph"
+import { dfsWalkArbitrary } from "../../localgraphs/src/graphalgos"
 import { createGraphFromEdges } from "../../localgraphs/src/interaction/examplegraph"
 import { cartesianProduct } from "../../rulegame/src/metagame"
 import { DefaultMap } from "../../shared/defaultmap"
@@ -146,11 +147,12 @@ export function makeVarRuleFromOperatorGraph<T extends NodeData>(ruleGraph: Grap
     // variables may not equal any constant used in the pattern
     // bad idea. makes some things much harder. (which ones? keep enabled until I remember)
     let varExclude = new Set(ruleGraph.nodes.map(v => v.data.label).filter(x => !variables.has(x) && x !== WILDCARD_SYMBOL))
-    console.log("exclude:", [...varExclude])
+    //console.log("exclude:", [...varExclude])
 
     let negativeEdges: [GraphNode<T>, GraphNode<T>][] =
         adjacentArgumentPairs(operators.filter(v => v.data.label === OPERATOR_CONNECT))
 
+    //let matcher: SubgraphMatcher<T,T,VarMap> = makeVarMatcherWithNegativeEdges(variables, negativeEdges)
     let matcher: SubgraphMatcher<T,T,VarMap> = makeVarMatcherWithNegativeEdgesNegDomain(variables, negativeEdges, varExclude)
     let cloner = makeLabelNodeCloner<T>(defaultData)
 

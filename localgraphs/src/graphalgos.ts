@@ -1,3 +1,4 @@
+import { assert, randomChoice } from "../../shared/utils"
 import { Graph, GraphNode } from "./graph"
 
 export enum SearchState {
@@ -181,4 +182,21 @@ export function findDistanceTo<T>(node: GraphNode<T>, predicate: (node: GraphNod
         return SearchState.Continue
     })
     return result
+}
+
+export function dfsWalkArbitrary<T>(nodes: GraphNode<T>[]): GraphNode<T>[] {
+    let remaining = new Set(nodes)
+    let queue: GraphNode<T>[] = []
+    let walk: GraphNode<T>[] = []
+    while (remaining.size > 0) {
+        let node = queue.shift() ?? randomChoice([...remaining])
+        if (remaining.has(node)) {
+            remaining.delete(node)
+            queue.push(...node.neighbors)
+            walk.push(node)
+        }
+    }
+    assert(new Set(walk).size === nodes.length, "wrong number of nodes in walk")
+    assert(walk.length === nodes.length, "duplicate nodes in walk")
+    return walk
 }

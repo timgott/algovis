@@ -6,7 +6,7 @@ import { assertExists, ensured, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController, wrapActionAfterRelease } from "./interaction";
 import { SYMBOL_FORALL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, SYMBOL_IN, SYMBOL_OUT_STEP, SYMBOL_OUT_EXHAUSTED, SYMBOL_PROGRAM_COUNTER, WILDCARD_SYMBOL } from "./semantics";
 import { flattenState, unflattenState } from "./storage";
-import { applyArrowAlignmentForces, applyDirectionAlignmentForces, applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runSelectedRule, selectTool, SYMBOL_ARROW_DOWN, SYMBOL_ARROW_LEFT, SYMBOL_ARROW_RIGHT, SYMBOL_ARROW_UP, ToolName, windowMovingTool, wrapSettleNewNodes, runSmallStepWithControlFlow, setLabelOnSelected, RuleRunner } from "./ui";
+import { applyArrowAlignmentForces, applyDirectionAlignmentForces, applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runSelectedRule, selectTool, SYMBOL_ARROW_DOWN, SYMBOL_ARROW_LEFT, SYMBOL_ARROW_RIGHT, SYMBOL_ARROW_UP, ToolName, windowMovingTool, wrapSettleNewNodes, runSmallStepWithControlFlow, setLabelOnSelected, RuleRunner, runStepWithControlFlow, ruleTimers, ruleCounters } from "./ui";
 import JSURL from "jsurl"
 import { PanZoomController } from "./zooming";
 import { Vector } from "../../shared/vector";
@@ -189,19 +189,22 @@ requireHtmlElement("btn_step").addEventListener("click", () => {
 })
 
 const goButton = requireHtmlElement("btn_go")
-
-//function updateGoButtonText(state: MainState) {
-//    if (state.running) {
-//        goButton.textContent = "Stop"
-//    } else {
-//        goButton.textContent = "Go"
-//    }
-//}
-//updateGoButtonText(globalState)
-
 goButton.addEventListener("click", () => {
     runGlobalUndoableAction(g => {
         g.running = !g.running
+        controller.requestFrame()
+    })
+})
+
+requireHtmlElement("btn_benchmark").addEventListener("click", () => {
+    runGlobalUndoableAction(g => {
+        let startTime = performance.now()
+        while (runStepWithControlFlow(g.data)) {}
+        let endTime = performance.now()
+        console.log("Benchmark time:", endTime-startTime)
+        alert(`Benchmark time: ${endTime-startTime} ms`)
+        console.log("Rule timers", ruleTimers)
+        console.log("Rule counters", ruleCounters)
         controller.requestFrame()
     })
 })

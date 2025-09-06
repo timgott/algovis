@@ -42,6 +42,15 @@ export class InjectiveMap<S,T> {
     toMap(): Map<S,T> {
         return new Map(this.mapping)
     }
+
+    static fromMap<S,T>(map: Map<S,T>): InjectiveMap<S,T> {
+        // errors if not injective
+        let result = new InjectiveMap<S,T>()
+        for (let [k,v] of map) {
+            result.set(k, v)
+        }
+        return result
+    }
 }
 
 export type GenericMatcher<S,T,C> = {
@@ -88,9 +97,9 @@ export function findInjectiveMatchesGeneric<S, T, C>(targets: T[], vars: S[], ma
         // each host node must be used at most one once (map (pattern -> host) is injective),
         // otherwise e.g. a single node with self loop would match every pattern, or a k-clique would match every k-colorable pattern
         if (!partialMatch.hasValue(next)) { 
-            // set current match before checking to match self loops correctly. If no match, this will later be overridden or cleared by backtracking
-            partialMatch.set(patternNode, next)
             if (matcher.check(patternNode, next, partialMatch, context)) { // labels must match under current context (without new node)
+                // Slow! .set is after calling matcher so it might not catch self loops correctly!
+                partialMatch.set(patternNode, next)
                 let newContext = matcher.updated(patternNode, next, context)
                 if (stack.length < vars.length) {
                     stack.push({
@@ -108,4 +117,14 @@ export function findInjectiveMatchesGeneric<S, T, C>(targets: T[], vars: S[], ma
     }
 
     return matches
+}
+
+export function verifyInjectiveMatchGeneric<S, T, C>(match: GenericMatchWithContext<S,T,C>, matcher: GenericMatcher<S,T,C>): boolean {
+    let injectiveMap = InjectiveMap.fromMap(match.embedding)
+    for (let [pattern, host] of match.embedding) {
+        if (!matcher.check(pattern, host, injectiveMap, match.context)) {
+            return false
+        }
+    }
+    return true
 }

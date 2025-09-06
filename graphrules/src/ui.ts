@@ -12,7 +12,7 @@ import { Rect } from "../../shared/rectangle"
 import { randomChoice, randomUniform } from "../../shared/utils"
 import { isDistanceLess, vec, vecdir, vecscale, vecset, Vector } from "../../shared/vector"
 import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse, noopTool } from "./interaction"
-import { findRuleMatches, PatternRule } from "./rule"
+import { findRuleMatches, isRuleMatch, PatternRule } from "./rule"
 import { advanceControlFlow, controlFlowSymbols, extractVarRuleFromBox, findOperatorsAndOperandsSet, isControlInSymbol, isControlOutSymbol, makeDefaultReductionRules, markerSymbols, ruleFromBox, runRulesWithPc, SYMBOL_IN, VarRule, WILDCARD_SYMBOL } from "./semantics"
 import { ZoomState } from "./zooming"
 
@@ -123,13 +123,24 @@ export function applyRandomReduction(state: DataState): boolean {
     return false
 }
 
+export const ruleTimers = [
+    0, 0, 0, 0, 0, 0,
+]
+
+export const ruleCounters = [
+    0, 0, 0, 0, 0, 0,
+]
+
 export function applyExhaustiveReduction(state: DataState) {
     let rules = makeDefaultReductionRules()
     let changed: boolean
     do {
         changed = false
-        for (let rule of rules) {
+        for (let [i,rule] of rules.entries()) {
+            let startTime = performance.now()
             let matches = findRuleMatches(getOutsideGraphFilter(state), rule)
+            ruleTimers[i] += performance.now() - startTime
+            ruleCounters[i] += 1
             if (matches.length > 0) {
                 rule.apply(state.graph, randomChoice(matches))
                 changed = true
@@ -137,7 +148,14 @@ export function applyExhaustiveReduction(state: DataState) {
             }
         }
     } while (changed)
+    // Instead of retrying from the first rule again, it would be possible to
+    // loop on each rule individually to save calls to the subgraph algorithm;
+    // but very often we won't run more than one reduction per step. It is
+    // better to keep the nice semantic properties of this version for now. For
+    // performance optimization, it would be more clever to make an explicit
+    // implementation of the reduction rules anyways.
 }
+
 
 
 function selectNode(state: DataState, node: GraphNode<UiNodeData>) {
