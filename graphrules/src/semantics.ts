@@ -1,14 +1,14 @@
-import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, extractSubgraph, filteredGraphView, Graph, GraphNode } from "../../localgraphs/src/graph"
+import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, extractSubgraph, filteredGraphView, Graph, GraphNode, partitionGraph } from "../../localgraphs/src/graph"
 import { dfsWalkArbitrary } from "../../localgraphs/src/graphalgos"
 import { createGraphFromEdges } from "../../localgraphs/src/interaction/examplegraph"
 import { cartesianProduct } from "../../rulegame/src/metagame"
 import { DefaultMap } from "../../shared/defaultmap"
 import { Rect } from "../../shared/rectangle"
-import { assert, randomChoice } from "../../shared/utils"
+import { assert, mapPair, randomChoice } from "../../shared/utils"
 import { ContextDataMatcher, makeSubgraphMatcher, makeSubgraphMatcherWithNegative, EdgeList, SubgraphMatcher } from "../../subgraph/src/subgraph"
 import { makeWildcardVariableMatcher, makeVariableMatcher, mapMatcher, makeWildcardVariableMatcherWithNegDomain } from "../../subgraph/src/variables"
 import { placeInCenterOf } from "./placement"
-import { findRuleMatches, makeRuleFromOperatorGraph, NodeDataCloner, PatternRule } from "./rule"
+import { findRuleMatches, makeInsertionRule, makeRuleFromOperatorGraph, NodeDataCloner, PatternRule } from "./rule"
 
 export const SYMBOL_FORALL="\u2200" // ∀
 export const OPERATOR_NEW = "new"
@@ -144,6 +144,10 @@ export function makeVarRuleFromOperatorGraph<T extends NodeData>(ruleGraph: Grap
     const operands = findOperands(operators)
     const allOpsAndArgs = new Set([...operators, ...operands])
 
+    // separate pattern and inserted parts of rule
+    let patternNodes = new Set(ruleGraph.nodes).difference(allOpsAndArgs)
+    let partition = partitionGraph(ruleGraph, patternNodes)
+
     // variables may not equal any constant used in the pattern
     // bad idea. makes some things much harder. (which ones? keep enabled until I remember)
     let varExclude = new Set(ruleGraph.nodes.map(v => v.data.label).filter(x => !variables.has(x) && x !== WILDCARD_SYMBOL))
@@ -151,12 +155,13 @@ export function makeVarRuleFromOperatorGraph<T extends NodeData>(ruleGraph: Grap
 
     let negativeEdges: [GraphNode<T>, GraphNode<T>][] =
         adjacentArgumentPairs(operators.filter(v => v.data.label === OPERATOR_CONNECT))
+        .map(mapPair(x => partition.insideMap.get(x)!))
 
     //let matcher: SubgraphMatcher<T,T,VarMap> = makeVarMatcherWithNegativeEdges(variables, negativeEdges)
     let matcher: SubgraphMatcher<T,T,VarMap> = makeVarMatcherWithNegativeEdgesNegDomain(variables, negativeEdges, varExclude)
     let cloner = makeLabelNodeCloner<T>(defaultData)
 
-    return makeRuleFromOperatorGraph(ruleGraph, (v) => allOpsAndArgs.has(v), matcher, cloner)
+    return makeInsertionRule(partition.inside, partition.outside, partition.betweenEdges, matcher, cloner)
 }
 
 function makeLabelNodeCloner<T extends NodeData>(defaultData: T): VarNodeCloner<T> {

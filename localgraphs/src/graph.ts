@@ -190,3 +190,29 @@ export function mapGraphLazy<S,T>(graph: Graph<S>, mapping: (value: S) => T): [G
 export function adjacentEdges<T>(graph: Graph<T>, node: GraphNode<T>) {
     return graph.edges.filter(edge => edge.a === node || edge.b === node)
 }
+
+
+type GraphPartition<T> = {
+    inside: Graph<T>,
+    outside: Graph<T>,
+    betweenEdges: GraphEdge<T>[],
+    insideMap: Map<GraphNode<T>, GraphNode<T>>
+}
+
+export function partitionGraph<T>(graph: Graph<T>, part: Set<GraphNode<T>>, copyData?: NodeDataTransfer<T,T>): GraphPartition<T> {
+    let [partA, mapA] = extractSubgraph(part, copyData)
+    let [partB, mapB] = extractSubgraph(new Set(graph.nodes).difference(part), copyData)
+    let betweenEdgesAB = graph.edges
+        .filter(edge => part.has(edge.a) && !part.has(edge.b))
+        .map(edge => <GraphEdge<T>>{ a: mapA.get(edge.a), b: mapB.get(edge.b), length: edge.length })
+    let betweenEdgesBA = graph.edges
+        .filter(edge => !part.has(edge.a) && part.has(edge.b))
+        .map(edge => <GraphEdge<T>>{ a: mapA.get(edge.b), b: mapB.get(edge.a), length: edge.length })
+    let betweenEdges = [...betweenEdgesAB, ...betweenEdgesBA]
+    return {
+        inside: partA,
+        outside: partB,
+        betweenEdges,
+        insideMap: mapA
+    }
+}

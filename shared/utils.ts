@@ -302,3 +302,7 @@ export function swap<A,B>([a,b]: [A,B]): [B,A] {
 export function mapToIndex<T>(arr: T[]): Map<T, number> {
     return new Map(arr.entries().map(swap))
 }
+
+export function mapPair<T,S>(f: (x: T) => S): (pair: [T,T]) => [S,S] {
+    return ([a,b]) => [f(a), f(b)]
+}
