@@ -12,7 +12,7 @@ import { PanZoomController } from "./zooming";
 import { Vector } from "../../shared/vector";
 
 function tryLoadState(): DataState | null {
-    let hash = window.location.search
+    let hash = window.location.hash
     if (hash === "") {
         return null
     }
@@ -28,7 +28,7 @@ function tryLoadState(): DataState | null {
 function saveState(): DataState {
     let flat = flattenState(globalState.data)
     let str = JSURL.stringify(flat)
-    document.location.search = str
+    document.location.hash = str
     return unflattenState(JSURL.parse(str)) // try parse
 }
 
