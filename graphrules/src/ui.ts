@@ -7,13 +7,13 @@ import { BuildGraphInteraction, ClickNodeInteraction, DeleteInteraction, MoveCom
 import { UndoHistory } from "../../localgraphs/src/interaction/undo"
 import { calcWindowTitleArea, drawResizableWindowWithTitle, satisfyMinBounds, WindowBounds } from "../../localgraphs/src/interaction/windows"
 import { drawArrowTip } from "../../shared/canvas"
-import { DefaultMap } from "../../shared/defaultmap"
+import { collectBins, DefaultMap } from "../../shared/defaultmap"
 import { Rect } from "../../shared/rectangle"
-import { randomChoice, randomUniform } from "../../shared/utils"
+import { assert, ensured, randomChoice, randomUniform } from "../../shared/utils"
 import { isDistanceLess, vec, vecdir, vecscale, vecset, Vector } from "../../shared/vector"
-import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse, noopTool } from "./interaction"
+import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse, noopTool, wrapToolWithHistoryFunc } from "./interaction"
 import { findRuleMatches, isRuleMatch, PatternRule } from "./rule"
-import { advanceControlFlow, controlFlowSymbols, extractVarRuleFromBox, findOperatorsAndOperandsSet, isControlInSymbol, isControlOutSymbol, makeDefaultReductionRules, makePatternOptimizer, markerSymbols, ruleFromBox, runRulesWithPc, SYMBOL_IN, VarRule, WILDCARD_SYMBOL } from "./semantics"
+import { advanceControlFlow, controlPortSymbols, extractVarRuleFromBox, findOperatorsAndOperandsSet, isControlInSymbol, isControlOutSymbol, makeDefaultReductionRules, makePatternOptimizer, ruleMetaSymbols, ruleFromBox, runRandomAction, SYMBOL_IN, VarRule, WILDCARD_SYMBOL, SYMBOL_PROGRAM_POINTER, VarMatch, RuleActionToken, RuleActionTokenStep, findPossibleActions, executeExhaustedAction, executeStepAction, metaSymbols } from "./semantics"
 import { ZoomState } from "./zooming"
 
 export type UiNodeData = {
@@ -22,22 +22,38 @@ export type UiNodeData = {
 
 export type RuleBoxState = WindowBounds
 
-type Rule = VarRule<UiNodeData>
-
 // for now, no "macro" rules (rules that apply inside other rules)
 export type DataState = {
     graph: Graph<UiNodeData>,
     ruleBoxes: RuleBoxState[],
     selectedRule: RuleBoxState | null,
     selectedNodes: Set<GraphNode<UiNodeData>>,
+    action: ActionState
 }
+
+type RuleMatch = VarMatch<UiNodeData>
+
+type ActionStatePlayer = {
+    kind: "player",
+    color: string,
+    matches: RuleMatch[],
+    matchesByNode: DefaultMap<GraphNode<UiNodeData>, RuleMatch[]>,
+    stepIndex: number,
+    patternOrder: GraphNode<UiNodeData>[],
+    execute(match: RuleMatch): void,
+}
+
+type ActionStateAuto = {
+    kind: "auto"
+}
+
+export type ActionState = null | ActionStateAuto | ActionStatePlayer
 
 export type MainState = {
     data: DataState,
     undoHistory: UndoHistory<DataState>,
     selectedTool: ToolName,
     zoom: ZoomState,
-    running: boolean
 }
 
 const defaultNodeData: UiNodeData = {
@@ -96,7 +112,7 @@ export function runSmallStepWithControlFlow(state: DataState): boolean {
     let ruleRects = state.ruleBoxes.map(b => b.bounds)
     let result = advanceControlFlow(state.graph)
     if (!result) {
-        result = runRulesWithPc(state.graph, ruleRects)
+        result = runRandomAction(state.graph, ruleRects)
     }
     applyExhaustiveReduction(state)
     return result
@@ -106,7 +122,7 @@ export function runSmallStepWithControlFlow(state: DataState): boolean {
 export function runStepWithControlFlow(state: DataState): boolean {
     let ruleRects = state.ruleBoxes.map(b => b.bounds)
     let result = advanceControlFlow(state.graph)
-    result = runRulesWithPc(state.graph, ruleRects) || result
+    result = runRandomAction(state.graph, ruleRects) || result
     applyExhaustiveReduction(state)
     return result
 }
@@ -156,7 +172,64 @@ export function applyExhaustiveReduction(state: DataState) {
     // implementation of the reduction rules anyways.
 }
 
+function computeChangingSet(actionState: ActionStatePlayer): Map<GraphNode<UiNodeData>, RuleMatch[]> {
+    return actionState.matchesByNode.toMap()
+        .filter((x, matches) =>
+            matches.length === 1
+            || (matches.length > 0 && matches.length < actionState.matches.length)
+        )
+}
 
+function computeIndexedStepSet(actionState: ActionStatePlayer): Map<GraphNode<UiNodeData>, RuleMatch[]> {
+    while (true) {
+        if (actionState.stepIndex >= actionState.patternOrder.length) {
+            // probably just a single match
+            return new Map()
+        }
+        let stepNode = actionState.patternOrder[actionState.stepIndex]
+        let bins = collectBins(actionState.matches, match => [ensured(match.embedding.get(stepNode))]).toMap()
+        if (bins.size > 1) {
+            return bins
+        }
+        // increase step index until it distinguishes the matches
+        actionState.stepIndex++
+    }
+}
+
+function playerClickNode(actionState: ActionStatePlayer, node: GraphNode<UiNodeData>): boolean {
+    let changingSet = computeChangingSet(actionState)
+    let indexedSet = computeIndexedStepSet(actionState)
+    let newMatchSet = indexedSet.get(node) ?? changingSet.get(node)
+    if (newMatchSet !== undefined) {
+        assert(newMatchSet.length > 0, "misunderstood truthiness in Javascript again")
+        actionState.matches = newMatchSet
+        actionState.matchesByNode = computeMatchesByNode(newMatchSet)
+        if (indexedSet.has(node)) {
+            actionState.stepIndex++
+        }
+        if (newMatchSet.length === 1) {
+            // execute rule
+            let [match] = newMatchSet
+            actionState.execute(match)
+        }
+        return true
+    }
+    return false
+}
+
+function playerTool(state: DataState, mouseX: number, mouseY: number): MouseClickResponse {
+    if (state.action !== null && state.action.kind === "player") {
+        let node = findClosestNode(mouseX, mouseY, state.graph.nodes)
+        if (node !== null) {
+            let success = playerClickNode(state.action, node)
+            console.log("Clicked on node", success)
+            if (success) {
+                return "Click"
+            }
+        }
+    }
+    return "Ignore"
+}
 
 function selectNode(state: DataState, node: GraphNode<UiNodeData>) {
     state.selectedNodes.clear()
@@ -218,7 +291,6 @@ function putNewWindow(bounds: Rect, state: DataState) {
     state.ruleBoxes.push(window)
 }
 
-
 const tools = {
     "none": noopTool,
     "build": graphToolWithClickSelect((s) => new BuildGraphInteraction((g, x, y) => putNewNode(s, x, y), createEdge)),
@@ -228,6 +300,7 @@ const tools = {
     //"duplicate": graphTool(() => new DuplicateInteraction(new SimpleGraphPainter(5, "black"), )),
     "delete": graphTool(() => new DeleteInteraction(deleteNode, deleteEdge)),
     "rulebox": toolWithUndo(makeSpanWindowTool(putNewWindow)),
+    "play": toolWithUndo(playerTool),
 }
 
 export type ToolName = keyof typeof tools
@@ -240,6 +313,11 @@ export const metaEditingTool: MouseInteraction<MainState> = (state, mouseX, mous
 export function selectTool(state: MainState, tool: ToolName) {
     state.selectedTool = tool
     state.data.selectedNodes = new Set()
+    if (tool === "play") {
+        state.data.action = { kind: "auto" }
+    } else {
+        state.data.action = null
+    }
 }
 
 export const metaWindowTool: MouseInteraction<MainState> = (state, mouseX, mouseY) => {
@@ -290,11 +368,12 @@ export function createClearedState() : DataState {
         ruleBoxes: [],
         selectedRule: null,
         selectedNodes: new Set(),
+        action: null,
     }
 }
 
 export function cloneDataState(state: DataState): DataState {
-    return structuredClone(state)
+    return structuredClone({ ...state, action: null })
 }
 
 function getOutsideGraphFilter(state: DataState): Graph<UiNodeData> {
@@ -334,9 +413,10 @@ export class MainPainter implements StatePainter<MainState> {
     constructor(private nodeRadius: number) {
         this.labelColors.set("", "white")
         this.labelColors.set(WILDCARD_SYMBOL, "white")
-        for (let l of markerSymbols) {
+        for (let l of ruleMetaSymbols) {
             this.labelColors.set(l, "#f0f0f0")
         }
+        this.labelColors.set(SYMBOL_PROGRAM_POINTER, "#f0f0f0")
     }
 
     draw(ctx: CanvasRenderingContext2D, state: MainState, frame: AnimationFrame): void {
@@ -345,6 +425,9 @@ export class MainPainter implements StatePainter<MainState> {
         //    let rule = ruleFromBox(state.data, state.data.activeRule)
         //    highlightedNodes = findNodesMatchingRule(getOutsideGraphFilter(state.data), rule)
         //}
+        if (state.data.action !== null && state.data.action.kind === "player") {
+            this.drawMatches(ctx, state.data.action, state.data.graph)
+        }
         this.drawGraph(ctx, state.data.graph, state.data.selectedNodes)
         this.drawRuleBoxes(ctx, state.data)
     }
@@ -370,7 +453,7 @@ export class MainPainter implements StatePainter<MainState> {
             }
         }
         for (let node of graph.nodes) {
-            let isMarker = controlFlowSymbols.has(node.data.label)
+            let isMarker = controlPortSymbols.has(node.data.label)
             this.drawNode(ctx, node, selected.has(node), operators.has(node), isMarker)
         }
     }
@@ -408,7 +491,6 @@ export class MainPainter implements StatePainter<MainState> {
 
     drawControlFlowDirected(ctx: CanvasRenderingContext2D, from: GraphNode<unknown>, to: GraphNode<unknown>) {
         ctx.save()
-        ctx.beginPath()
         ctx.lineWidth = 2
         ctx.strokeStyle = "black"
         ctx.moveTo(from.x, from.y)
@@ -426,6 +508,7 @@ export class MainPainter implements StatePainter<MainState> {
         // circle
         ctx.save()
 
+        ctx.beginPath()
         let color = this.labelColors.get(node.data.label)
         let black = "black"
         let lineWidth = 3
@@ -440,6 +523,7 @@ export class MainPainter implements StatePainter<MainState> {
 
         // selection outline
         if (selected) {
+            ctx.beginPath()
             ctx.lineWidth = 2
             ctx.strokeStyle = "blue"
             ctx.setLineDash([5, 5])
@@ -458,6 +542,7 @@ export class MainPainter implements StatePainter<MainState> {
     drawLabel(ctx: CanvasRenderingContext2D, node: GraphNode<unknown>, text: string, color: string) {
         // label
         //ctx.strokeStyle = color
+        ctx.beginPath()
         ctx.fillStyle = color // text in same color as outline
         ctx.textAlign = "center"
         ctx.textBaseline = "middle"
@@ -465,6 +550,47 @@ export class MainPainter implements StatePainter<MainState> {
         const fontSize = "12pt"
         ctx.font = `${fontWeight} ${fontSize} sans-serif`
         ctx.fillText(text, node.x, node.y)
+    }
+
+    drawMatches(ctx: CanvasRenderingContext2D, state: ActionStatePlayer, graph: Graph<UiNodeData>) {
+        let radius = this.nodeRadius * 2
+        let changingSet = computeChangingSet(state)
+        let singletons = new Set(changingSet.keys())
+        let color = `color-mix(in srgb, ${this.labelColors.get(state.color)} 20%, transparent)`
+        let colorStrong = `color-mix(in srgb, ${this.labelColors.get(state.color)} 40%, transparent)`
+        ctx.save()
+        ctx.beginPath()
+        for (let edge of graph.edges) {
+            if (changingSet.has(edge.a) && changingSet.has(edge.b)) {
+                let setA = new Set(state.matchesByNode.get(edge.a))
+                let setB = new Set(state.matchesByNode.get(edge.b))
+                if (!setA.isDisjointFrom(setB)) {
+                    singletons.delete(edge.a)
+                    singletons.delete(edge.b)
+                    ctx.moveTo(edge.a.x, edge.a.y)
+                    ctx.lineTo(edge.b.x, edge.b.y)
+                }
+            }
+        }
+        ctx.strokeStyle = color
+        ctx.lineWidth = radius * 2
+        ctx.fillStyle = color
+        ctx.lineCap = "round"
+        ctx.stroke()
+
+        for (let node of singletons) {
+            ctx.beginPath()
+            ctx.circle(node.x, node.y, radius)
+            ctx.fill()
+        }
+        let indexedSet = computeIndexedStepSet(state)
+        ctx.fillStyle = colorStrong
+        for (let node of indexedSet.keys()) {
+            ctx.beginPath()
+            ctx.circle(node.x, node.y, radius)
+            ctx.fill()
+        }
+        ctx.restore()
     }
 }
 
@@ -542,18 +668,86 @@ export function applyArrowAlignmentForces(dt: number, graph: Graph<UiNodeData>) 
     }
 }
 
+function runActionWithReductions(state: DataState, action: RuleActionTokenStep, match: RuleMatch): void {
+    executeStepAction(state.graph, action, match)
+    applyExhaustiveReduction(state)
+}
+
+function getControllingPlayer(marker: GraphNode<UiNodeData>): string | null {
+    let players = [...marker.neighbors].map(v => v.data.label).filter(x => !metaSymbols.has(x))
+    if (players.length === 0) {
+        return null
+    }
+    if (players.length > 1) {
+        console.warn("Multiple players for rule! Attached player count:", players.length)
+    }
+    return randomChoice(players)
+}
+
+function computeMatchesByNode(matches: RuleMatch[]): DefaultMap<GraphNode<UiNodeData>, RuleMatch[]> {
+    return collectBins(matches, (match) => match.embedding.values())
+}
+
+export function toggleRunning(state: MainState): void {
+    if (state.data.action !== null) {
+        state.data.action = null
+    } else {
+        state.data.action = { kind: "auto" }
+        state.selectedTool = "play"
+    }
+}
+
 export class RuleRunner implements InteractiveSystem {
-    constructor(protected getState: () => MainState) {}
+    constructor(protected getState: () => DataState) {}
     update(frame: AnimationFrame): SleepState {
         let state = this.getState()
-        if (!state.running) {
+        if (state.action === null) {
             return "Sleeping"
         }
-        let didSomething = wrapSettleNewNodes(state.data, runStepWithControlFlow)
-        if (!didSomething) {
-            state.running = false
+        if (state.action.kind === "player") {
+            // wait for player
             return "Sleeping"
+        }
+        // if possible, advance control flow
+        while (advanceControlFlow(state.graph)) {
+        }
+
+        // find rule matches
+        let ruleRects = state.ruleBoxes.map(b => b.bounds)
+        let actions = findPossibleActions(state.graph, ruleRects)
+        if (actions.length === 0) {
+            state.action = null
+            return "Sleeping"
+        }
+        let action = randomChoice(actions)
+        console.log("Action space:", actions.length)
+        if (action.kind === "exhausted") {
+            state.action = { kind: "auto" }
+            executeExhaustedAction(state.graph, action)
+            return "Running"
         } else {
+            let player = getControllingPlayer(action.control.inNode)
+            if (player === null) {
+                state.action = { kind: "auto" }
+                wrapSettleNewNodes(state, (data) => {
+                    runActionWithReductions(data, action, randomChoice(action.matches))
+                })
+            } else {
+                state.action = {
+                    kind: "player",
+                    color: player,
+                    matches: action.matches,
+                    matchesByNode: computeMatchesByNode(action.matches),
+                    stepIndex: 0,
+                    patternOrder: action.rule.pattern.nodes,
+                    execute(match) {
+                        state.action = { kind: "auto" }
+                        wrapSettleNewNodes(state, (data) => {
+                            runActionWithReductions(data, action, match)
+                        })
+                    },
+                }
+            }
             return "Running"
         }
     }

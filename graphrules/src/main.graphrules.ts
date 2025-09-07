@@ -4,9 +4,9 @@ import { UndoHistory } from "../../localgraphs/src/interaction/undo";
 import { initFullscreenCanvas } from "../../shared/canvas";
 import { assertExists, ensured, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController, wrapActionAfterRelease } from "./interaction";
-import { SYMBOL_FORALL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, SYMBOL_IN, SYMBOL_OUT_STEP, SYMBOL_OUT_EXHAUSTED, SYMBOL_PROGRAM_COUNTER, WILDCARD_SYMBOL } from "./semantics";
+import { SYMBOL_FORALL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, SYMBOL_IN, SYMBOL_OUT_STEP, SYMBOL_OUT_EXHAUSTED, SYMBOL_PROGRAM_POINTER, WILDCARD_SYMBOL } from "./semantics";
 import { flattenState, unflattenState } from "./storage";
-import { applyArrowAlignmentForces, applyDirectionAlignmentForces, applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runSelectedRule, selectTool, SYMBOL_ARROW_DOWN, SYMBOL_ARROW_LEFT, SYMBOL_ARROW_RIGHT, SYMBOL_ARROW_UP, ToolName, windowMovingTool, wrapSettleNewNodes, runSmallStepWithControlFlow, setLabelOnSelected, RuleRunner, runStepWithControlFlow, ruleTimers, ruleCounters } from "./ui";
+import { applyArrowAlignmentForces, applyDirectionAlignmentForces, applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runSelectedRule, selectTool, SYMBOL_ARROW_DOWN, SYMBOL_ARROW_LEFT, SYMBOL_ARROW_RIGHT, SYMBOL_ARROW_UP, ToolName, windowMovingTool, wrapSettleNewNodes, runSmallStepWithControlFlow, setLabelOnSelected, RuleRunner, runStepWithControlFlow, ruleTimers, ruleCounters, toggleRunning } from "./ui";
 import JSURL from "jsurl"
 import { PanZoomController } from "./zooming";
 import { Vector } from "../../shared/vector";
@@ -42,7 +42,6 @@ function initGlobalState(): MainState {
             offset: Vector.Zero,
             scale: 1
         },
-        running: false
     }
 }
 
@@ -73,6 +72,7 @@ toolButton("move");
 toolButton("rulebox");
 toolButton("delete");
 toolButton("shift");
+toolButton("play");
 
 // label input
 
@@ -124,7 +124,7 @@ operatorButton("btn_op_disconnect", OPERATOR_DISCONNECT);
 operatorButton("btn_op_in", SYMBOL_IN);
 operatorButton("btn_op_step", SYMBOL_OUT_STEP);
 operatorButton("btn_op_ex", SYMBOL_OUT_EXHAUSTED);
-operatorButton("btn_op_pc", SYMBOL_PROGRAM_COUNTER);
+operatorButton("btn_op_pc", SYMBOL_PROGRAM_POINTER);
 operatorButton("btn_op_left", SYMBOL_ARROW_LEFT);
 operatorButton("btn_op_right", SYMBOL_ARROW_RIGHT);
 operatorButton("btn_op_up", SYMBOL_ARROW_UP);
@@ -191,7 +191,7 @@ requireHtmlElement("btn_step").addEventListener("click", () => {
 const goButton = requireHtmlElement("btn_go")
 goButton.addEventListener("click", () => {
     runGlobalUndoableAction(g => {
-        g.running = !g.running
+        toggleRunning(g)
         controller.requestFrame()
     })
 })
@@ -247,7 +247,7 @@ let controller = new InteractionController(canvas,
     new PanZoomController(
         () => globalState.zoom,
         new UiStack([
-            new RuleRunner(() => globalState),
+            new RuleRunner(() => globalState.data),
             new ToolController(() => globalState, wrapActionAfterRelease(metaEditingTool, setLabelTextboxFromSelected)),
             new ToolController(() => globalState, metaWindowTool),
             new OnlyGraphPhysicsSimulator(() => globalState.data.graph, physics),

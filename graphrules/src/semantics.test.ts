@@ -16,7 +16,7 @@ describe("test extractVarRuleFromNodes", () => {
             [b,c],
             [c,n]
         ])
-        let rule = extractVarRuleFromNodes(testGraph.nodes, {label: ""}, g => g)
+        let rule = extractVarRuleFromNodes(testGraph.nodes, {label: ""})
         expect(rule.pattern.nodes.map(v => v.data.label).sort()).toEqual(["A", "B"])
     })
 })

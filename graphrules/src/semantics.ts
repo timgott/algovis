@@ -2,10 +2,10 @@ import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, extra
 import { dfsWalkArbitrary, dfsWalkWithIncreasingOrder } from "../../localgraphs/src/graphalgos"
 import { createGraphFromEdges } from "../../localgraphs/src/interaction/examplegraph"
 import { cartesianProduct } from "../../rulegame/src/metagame"
-import { aggregateCounts, DefaultMap } from "../../shared/defaultmap"
+import { collectCounts, DefaultMap } from "../../shared/defaultmap"
 import { Rect } from "../../shared/rectangle"
 import { assert, mapPair, randomChoice } from "../../shared/utils"
-import { ContextDataMatcher, makeSubgraphMatcher, makeSubgraphMatcherWithNegative, EdgeList, SubgraphMatcher } from "../../subgraph/src/subgraph"
+import { ContextDataMatcher, makeSubgraphMatcher, makeSubgraphMatcherWithNegative, EdgeList, SubgraphMatcher, MatchWithContext } from "../../subgraph/src/subgraph"
 import { makeWildcardVariableMatcher, makeVariableMatcher, mapMatcher, makeWildcardVariableMatcherWithNegDomain } from "../../subgraph/src/variables"
 import { placeInCenterOf } from "./placement"
 import { findRuleMatches, makeInsertionRule, NodeDataCloner, PatternRule } from "./rule"
@@ -16,7 +16,7 @@ export const OPERATOR_SET = "set"
 export const OPERATOR_DEL = "del"
 export const OPERATOR_CONNECT = "con"
 export const OPERATOR_DISCONNECT = "dis"
-export const SYMBOL_PROGRAM_COUNTER = "\u261b" // ☛
+export const SYMBOL_PROGRAM_POINTER = "\u261b" // ☛
 export const SYMBOL_IN = "in"
 export const SYMBOL_OUT_STEP = "step" // ✔
 export const SYMBOL_OUT_EXHAUSTED = "ex" // ✗
@@ -37,18 +37,20 @@ export const controlOutSymbols = new Set([
     SYMBOL_OUT_EXHAUSTED
 ])
 
-export const controlFlowSymbols = new Set([
+export const controlPortSymbols = new Set([
     SYMBOL_IN,
     SYMBOL_OUT_STEP,
     SYMBOL_OUT_EXHAUSTED,
 ])
 
-export const markerSymbols = new Set([
-    SYMBOL_IN,
-    SYMBOL_OUT_STEP,
-    SYMBOL_OUT_EXHAUSTED,
+export const ruleMetaSymbols = new Set([
+    ...controlPortSymbols,
     SYMBOL_FORALL,
-    SYMBOL_PROGRAM_COUNTER
+])
+
+export const metaSymbols = new Set([
+    ...ruleMetaSymbols,
+    SYMBOL_PROGRAM_POINTER
 ])
 
 type NodeData = {
@@ -62,6 +64,7 @@ const defaultNodeData = {
 export type VarMap = Map<string, string>
 export type VarRule<T> = PatternRule<T, T, VarMap>
 export type VarNodeCloner<T> = NodeDataCloner<T, T, VarMap>
+export type VarMatch<T> = MatchWithContext<T, VarMap>
 
 function adjacentSet<T>(around: GraphNode<T>[]): Set<GraphNode<T>> {
     return new Set(around.flatMap(v => [...v.neighbors]))
@@ -82,18 +85,18 @@ function adjacentArgumentPairs<T>(around: GraphNode<T>[]): [GraphNode<T>, GraphN
     return around.flatMap(node => allDistinctPairs([...node.neighbors]))
 }
 
-export function extractVarRuleFromBox<T extends NodeData>(graph: Graph<T>, box: Rect, defaultData: T): PatternRule<T, T, VarMap> {
+export function extractVarRuleFromBox<T extends NodeData>(graph: Graph<T>, box: Rect, defaultData: T): VarRule<T> {
     let containedNodes = graph.nodes.filter(v => Rect.containsPos(box, v))
     return extractVarRuleFromNodes(containedNodes, defaultData)
 }
 
-export function extractVarRuleFromNodes<T extends NodeData>(nodes: GraphNode<T>[], defaultData: T): PatternRule<T, T, VarMap> {
+export function extractVarRuleFromNodes<T extends NodeData>(nodes: GraphNode<T>[], defaultData: T): VarRule<T> {
     // extract the nodes that are attached to forall quantifier nodes
     // TODO: move outside rule box? more general and would allow better macros
     let quantifierNodes = nodes.filter(v => v.data.label === SYMBOL_FORALL)
     let quantifiedNodes = adjacentSet(quantifierNodes)
     let normalNodes = nodes.filter(v =>
-        !markerSymbols.has(v.data.label) && !quantifiedNodes.has(v)
+        !ruleMetaSymbols.has(v.data.label) && !quantifiedNodes.has(v)
     )
     // find subgraph of nodes inside rule box
     let [containedSubgraph, _map] = extractSubgraph(normalNodes)
@@ -153,7 +156,7 @@ export function makeVarRuleFromOperatorGraph<T extends NodeData>(ruleGraph: Grap
     // variables may not equal any constant used in the pattern
     // bad idea. makes some things much harder. (which ones? keep enabled until I remember)
     let varExclude = new Set(ruleGraph.nodes.map(v => v.data.label).filter(x => !variables.has(x) && x !== WILDCARD_SYMBOL))
-    //console.log("exclude:", [...varExclude])
+    console.log("exclude:", [...varExclude])
 
     let negativeEdges: [GraphNode<T>, GraphNode<T>][] =
         adjacentArgumentPairs(operators.filter(v => v.data.label === OPERATOR_CONNECT))
@@ -294,7 +297,7 @@ function moveEdgeEndpoint<T>(graph: Graph<T>, start: GraphNode<T>, from: GraphNo
 export function advanceControlFlow(graph: Graph<NodeData>): boolean {
     // move all pc nodes from an out-node to an in-node.
     let doneSomething = false
-    let pcNodes = graph.nodes.filter(n => n.data.label === SYMBOL_PROGRAM_COUNTER)
+    let pcNodes = graph.nodes.filter(n => n.data.label === SYMBOL_PROGRAM_POINTER)
     for (let pc of pcNodes) {
         for (let currentOut of [...pc.neighbors].filter(n => isControlOutSymbol(n.data.label))) {
             for (let nextIn of [...currentOut.neighbors].filter(n => isControlInSymbol(n.data.label))) {
@@ -306,8 +309,8 @@ export function advanceControlFlow(graph: Graph<NodeData>): boolean {
     return doneSomething
 }
 
-export function makePatternOptimizer(completeGraph: Graph<NodeData>): PatternOrderOptimizer<T> {
-    let labelStatistics = aggregateCounts(completeGraph.nodes.map(v => v.data.label))
+export function makePatternOptimizer(completeGraph: Graph<NodeData>): PatternOrderOptimizer<NodeData> {
+    let labelStatistics = collectCounts(completeGraph.nodes.map(v => v.data.label))
     return (graph) => {
         graph.nodes = dfsWalkWithIncreasingOrder(graph.nodes, n => labelStatistics.get(n.data.label)!)
         return graph
@@ -345,48 +348,130 @@ export function hasError(graph: Graph<NodeData>): boolean {
     return graph.nodes.find(n => n.data.label === SYMBOL_ERROR) !== undefined
 }
 
-export function runRulesWithPc(graph: Graph<NodeData>, ruleBoxes: Rect[]): boolean {
-    if (hasError(graph)) {
-        return false
+type PointerControlInfo = {
+    pointer: GraphNode<NodeData>,
+    inNode: GraphNode<NodeData>,
+    outNode: GraphNode<NodeData>,
+}
+
+export type RuleActionTokenExhausted = {
+    kind: "exhausted",
+    control: PointerControlInfo,
+}
+
+export type RuleActionTokenStep = {
+    kind: "step",
+    matches: VarMatch<NodeData>[],
+    rule: VarRule<NodeData>,
+    control: PointerControlInfo,
+}
+
+export type RuleActionToken = RuleActionTokenExhausted | RuleActionTokenStep
+
+function advancePointerStep(graph: Graph<NodeData>, pc: GraphNode<NodeData>, inNode: GraphNode<NodeData>, insideNodes: GraphNode<NodeData>[], exitLabel: string): void {
+    let stepNodes = insideNodes.filter(n => n.data.label === exitLabel)
+    if (stepNodes.length > 0) {
+        if (stepNodes.length > 1) { console.warn(`More than 1 ${exitLabel}-node:`, stepNodes.length) }
+        moveEdgeEndpoint(graph, pc, inNode, randomChoice(stepNodes))
+    } else {
+        putError(graph, [inNode], `cannot continue, no ${exitLabel}-node`)
     }
-    // If the pc is connected to an in-node, then run the rule once at a random match if possible
+}
+
+function makePointerControl(graph: Graph<NodeData>, pointer: GraphNode<NodeData>, inNode: GraphNode<NodeData>, insideNodes: GraphNode<NodeData>[], exitLabel: string): PointerControlInfo | null {
+    let outNodes = insideNodes.filter(n => n.data.label === exitLabel)
+    if (outNodes.length > 0) {
+        if (outNodes.length > 1) { console.warn(`More than 1 ${exitLabel}-node:`, outNodes.length) }
+        let outNode = randomChoice(outNodes)
+        return {
+            outNode,
+            inNode,
+            pointer
+        }
+    } else {
+        putError(graph, [inNode], `cannot continue, no ${exitLabel}-node`)
+        return null
+    }
+}
+
+function makeActionToken(
+    matches: VarMatch<NodeData>[], rule: VarRule<NodeData>,
+    graph: Graph<NodeData>, pc: GraphNode<NodeData>, inNode: GraphNode<NodeData>, insideNodes: GraphNode<NodeData>[]
+): RuleActionToken | null {
     // If no match => move pc to ex-node
-    // If match => move pc to step-node
-    // TODO: can be optimized by precomputing data structures
-    let doneSomething = false
-    let pcNodes = graph.nodes.filter(n => n.data.label === SYMBOL_PROGRAM_COUNTER)
+    // If match => execute rule once and move pc to step-node
+    let exhausted = matches.length === 0
+    let exitSymbol = exhausted ? SYMBOL_OUT_EXHAUSTED : SYMBOL_OUT_STEP
+    let pointerControl = makePointerControl(graph, pc, inNode, insideNodes, exitSymbol)
+    if (pointerControl === null) { return null }
+    if (exhausted) {
+        return {
+            kind: "exhausted",
+            control: pointerControl,
+        }
+    } else {
+        return {
+            kind: "step",
+            matches,
+            rule,
+            control: pointerControl,
+        }
+    }
+}
+
+export function findPossibleActions(graph: Graph<NodeData>, ruleBoxes: Rect[]): RuleActionToken[] {
+    if (hasError(graph)) {
+        return []
+    }
+    // TODO: can be optimized by precomputing data structures for containment and labels
+    let actions: RuleActionToken[] = []
+    let pcNodes = graph.nodes.filter(n => n.data.label === SYMBOL_PROGRAM_POINTER)
     let outsideGraph = getOutsideGraphFilter(graph, ruleBoxes)
     let optimizer = makePatternOptimizer(outsideGraph)
     for (let pc of pcNodes) {
         for (let inNode of [...pc.neighbors].filter(n => isControlInSymbol(n.data.label))) {
             for (let ruleBox of ruleBoxes.filter(box => Rect.containsPos(box, inNode))) {
-                doneSomething = true
                 let insideNodes = graph.nodes.filter(n => Rect.containsPos(ruleBox, n))
-                let exNodes = insideNodes.filter(n => n.data.label === SYMBOL_OUT_EXHAUSTED)
-                let stepNodes = insideNodes.filter(n => n.data.label === SYMBOL_OUT_STEP)
 
                 // applyRuleEverywhere also modifies inside rule boxes, don't use here
                 let rule = ruleFromBox(graph, ruleBox)
                 rule.pattern = optimizer(rule.pattern)
                 let matches = findRuleMatches(outsideGraph, rule)
-                if (matches.length == 0) {
-                    if (exNodes.length > 0) {
-                        if (exNodes.length > 1) { console.warn("More than 1 ex-node:", exNodes.length) }
-                        moveEdgeEndpoint(graph, pc, inNode, randomChoice(exNodes))
-                    } else {
-                        putError(graph, [inNode], `no match and no ${SYMBOL_OUT_EXHAUSTED}-node`)
-                    }
-                } else {
-                    rule.apply(graph, randomChoice(matches))
-                    if (stepNodes.length > 0) {
-                        if (stepNodes.length > 1) { console.warn("More than 1 step-node:", stepNodes.length) }
-                        moveEdgeEndpoint(graph, pc, inNode, randomChoice(stepNodes))
-                    } else {
-                        putError(graph, [inNode], `cannot continue, no ${SYMBOL_OUT_STEP}-node`)
-                    }
+
+                let action = makeActionToken(matches, rule, graph, pc, inNode, insideNodes)
+                if (action !== null) {
+                    actions.push(action)
                 }
             }
         }
     }
-    return doneSomething
+    return actions
+}
+
+function executePointerControl(graph: Graph<NodeData>, control: PointerControlInfo): void {
+    moveEdgeEndpoint(graph, control.pointer, control.inNode, control.outNode)
+}
+
+export function executeExhaustedAction(graph: Graph<NodeData>, action: RuleActionTokenExhausted) {
+    executePointerControl(graph, action.control)
+}
+
+export function executeStepAction(graph: Graph<NodeData>, action: RuleActionTokenStep, match: VarMatch<NodeData>) {
+    action.rule.apply(graph, match)
+    executePointerControl(graph, action.control)
+}
+
+export function runRandomAction(graph: Graph<NodeData>, ruleBoxes: Rect[]): boolean {
+    let actions = findPossibleActions(graph, ruleBoxes)
+    if (actions.length === 0) {
+        return false
+    }
+    for (let action of actions) {
+        if (action.kind === "exhausted") {
+            executeExhaustedAction(graph, action)
+        } else {
+            executeStepAction(graph, action, randomChoice(action.matches))
+        }
+    }
+    return true
 }

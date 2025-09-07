@@ -10,7 +10,7 @@ export class DefaultMap<K, V> {
             return value;
         } else {
             let newValue = this.makeDefault(name);
-            this.values.set(name, newValue);
+            this.values.set(name, newValue); // must be saved, e.g. there can be randomness in makeDefault
             return newValue;
         }
     }
@@ -32,10 +32,20 @@ export class DefaultMap<K, V> {
     }
 }
 
-export function aggregateCounts<T>(items: T[]): DefaultMap<T, number> {
+export function collectCounts<T>(items: T[]): DefaultMap<T, number> {
     let counts = new DefaultMap<T, number>(() => 0)
     for (let x of items) {
         counts.set(x, counts.get(x) + 1)
     }
     return counts
+}
+
+export function collectBins<T,K>(items: T[], keys: (x: T) => Iterable<K>): DefaultMap<K, T[]> {
+    let bins = new DefaultMap<K, T[]>(() => [])
+    for (let x of items) {
+        for (let bin of keys(x)) {
+            bins.get(bin).push(x)
+        }
+    }
+    return bins
 }

@@ -96,6 +96,19 @@ export function wrapToolWithHistory<T>(undoHistory: UndoHistory<T>, tool: MouseI
     }
 }
 
+export function wrapToolWithHistoryFunc<T, S>(undoHistory: (state: T) => UndoHistory<S>, savedState: (state: T) => S, tool: MouseInteraction<T>): MouseInteraction<T> {
+    return (state: T, mouseX: number, mouseY: number): MouseClickOrDragResponse<T> => {
+        // could be improved by not pushing a snapshot on "Ignore" response (e.g. call undo on ignore?)
+        let history = undoHistory(state)
+        let copy = history.clone(savedState(state))
+        let response = tool(state, mouseX, mouseY)
+        if (response !== "Ignore") {
+            history.pushAlreadyCloned(copy)
+        }
+        return response
+    }
+}
+
 export function stealToolClick<S>(click: (state: S, x: number, y: number) => "Click" | "Ignore", tool: MouseInteraction<S>, onlyOnMove: boolean = false): MouseInteraction<S> {
     const threshold = 5 // is a click if mouse has moved less than this
     return (state: S, mouseX: number, mouseY: number): MouseClickOrDragResponse<S> => {
