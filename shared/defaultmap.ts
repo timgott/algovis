@@ -31,3 +31,11 @@ export class DefaultMap<K, V> {
         return new Map(this.values)
     }
 }
+
+export function aggregateCounts<T>(items: T[]): DefaultMap<T, number> {
+    let counts = new DefaultMap<T, number>(() => 0)
+    for (let x of items) {
+        counts.set(x, counts.get(x) + 1)
+    }
+    return counts
+}

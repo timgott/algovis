@@ -7,6 +7,9 @@ type Embedding<T> = Map<GraphNode<unknown>, GraphNode<T>>
 
 // checks whether all neighbors of pattern node p that are matched already map to neighbors of host node h
 function checkNeighborsMatch<S,T>(p: GraphNode<S>, h: GraphNode<T>, mapping: InjectiveMap<GraphNode<unknown>, GraphNode<T>>) {
+    if (h.neighbors.size < p.neighbors.size) {
+        return false // can never match if h has fewer neighbors than p
+    }
     for (let vp of p.neighbors) {
         let vh = mapping.get(vp)
         if (vh && !h.neighbors.has(vh)) {

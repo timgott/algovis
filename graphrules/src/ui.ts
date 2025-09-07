@@ -13,7 +13,7 @@ import { randomChoice, randomUniform } from "../../shared/utils"
 import { isDistanceLess, vec, vecdir, vecscale, vecset, Vector } from "../../shared/vector"
 import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse, noopTool } from "./interaction"
 import { findRuleMatches, isRuleMatch, PatternRule } from "./rule"
-import { advanceControlFlow, controlFlowSymbols, extractVarRuleFromBox, findOperatorsAndOperandsSet, isControlInSymbol, isControlOutSymbol, makeDefaultReductionRules, markerSymbols, ruleFromBox, runRulesWithPc, SYMBOL_IN, VarRule, WILDCARD_SYMBOL } from "./semantics"
+import { advanceControlFlow, controlFlowSymbols, extractVarRuleFromBox, findOperatorsAndOperandsSet, isControlInSymbol, isControlOutSymbol, makeDefaultReductionRules, makePatternOptimizer, markerSymbols, ruleFromBox, runRulesWithPc, SYMBOL_IN, VarRule, WILDCARD_SYMBOL } from "./semantics"
 import { ZoomState } from "./zooming"
 
 export type UiNodeData = {
@@ -112,7 +112,7 @@ export function runStepWithControlFlow(state: DataState): boolean {
 }
 
 export function applyRandomReduction(state: DataState): boolean {
-    let rules = makeDefaultReductionRules()
+    let rules = makeDefaultReductionRules(makePatternOptimizer(state.graph))
     for (let rule of rules) {
         let matches = findRuleMatches(getOutsideGraphFilter(state), rule)
         if (matches.length > 0) {
@@ -132,7 +132,7 @@ export const ruleCounters = [
 ]
 
 export function applyExhaustiveReduction(state: DataState) {
-    let rules = makeDefaultReductionRules()
+    let rules = makeDefaultReductionRules(makePatternOptimizer(state.graph))
     let changed: boolean
     do {
         changed = false

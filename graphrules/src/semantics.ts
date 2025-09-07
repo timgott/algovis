@@ -1,14 +1,14 @@
 import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, extractSubgraph, filteredGraphView, Graph, GraphNode, partitionGraph } from "../../localgraphs/src/graph"
-import { dfsWalkArbitrary } from "../../localgraphs/src/graphalgos"
+import { dfsWalkArbitrary, dfsWalkWithIncreasingOrder } from "../../localgraphs/src/graphalgos"
 import { createGraphFromEdges } from "../../localgraphs/src/interaction/examplegraph"
 import { cartesianProduct } from "../../rulegame/src/metagame"
-import { DefaultMap } from "../../shared/defaultmap"
+import { aggregateCounts, DefaultMap } from "../../shared/defaultmap"
 import { Rect } from "../../shared/rectangle"
 import { assert, mapPair, randomChoice } from "../../shared/utils"
 import { ContextDataMatcher, makeSubgraphMatcher, makeSubgraphMatcherWithNegative, EdgeList, SubgraphMatcher } from "../../subgraph/src/subgraph"
 import { makeWildcardVariableMatcher, makeVariableMatcher, mapMatcher, makeWildcardVariableMatcherWithNegDomain } from "../../subgraph/src/variables"
 import { placeInCenterOf } from "./placement"
-import { findRuleMatches, makeInsertionRule, makeRuleFromOperatorGraph, NodeDataCloner, PatternRule } from "./rule"
+import { findRuleMatches, makeInsertionRule, NodeDataCloner, PatternRule } from "./rule"
 
 export const SYMBOL_FORALL="\u2200" // ∀
 export const OPERATOR_NEW = "new"
@@ -139,6 +139,8 @@ export function findOperatorsAndOperandsSet<T extends NodeData>(graph: Graph<T>)
     return new Set([...operators, ...findOperands(operators)])
 }
 
+type PatternOrderOptimizer<T> = (graph: Graph<T>) => Graph<T>
+
 export function makeVarRuleFromOperatorGraph<T extends NodeData>(ruleGraph: Graph<T>, variables: Set<string>, defaultData: T): PatternRule<T, T, VarMap> {
     const operators = findOperators(ruleGraph)
     const operands = findOperands(operators)
@@ -260,14 +262,18 @@ export function makeReductionRuleConnect(): VarRule<NodeData> {
     }
 }
 
-export function makeDefaultReductionRules(): VarRule<NodeData>[] {
-    return [
+export function makeDefaultReductionRules(optimizer: PatternOrderOptimizer<NodeData>): VarRule<NodeData>[] {
+    let rules = [
         makeReductionRuleNew(),
         makeReductionRuleDel(),
         makeReductionRuleSet(),
         makeReductionRuleConnect(),
         makeReductionRuleDisconnect(),
     ]
+    for (let rule of rules) {
+        rule.pattern = optimizer(rule.pattern)
+    }
+    return rules
 }
 
 export function isControlInSymbol(s: string): boolean {
@@ -298,6 +304,14 @@ export function advanceControlFlow(graph: Graph<NodeData>): boolean {
         }
     }
     return doneSomething
+}
+
+export function makePatternOptimizer(completeGraph: Graph<NodeData>): PatternOrderOptimizer<T> {
+    let labelStatistics = aggregateCounts(completeGraph.nodes.map(v => v.data.label))
+    return (graph) => {
+        graph.nodes = dfsWalkWithIncreasingOrder(graph.nodes, n => labelStatistics.get(n.data.label)!)
+        return graph
+    }
 }
 
 export function ruleFromBox(graph: Graph<NodeData>, box: Rect): PatternRule<NodeData, NodeData, VarMap> {
@@ -341,6 +355,8 @@ export function runRulesWithPc(graph: Graph<NodeData>, ruleBoxes: Rect[]): boole
     // TODO: can be optimized by precomputing data structures
     let doneSomething = false
     let pcNodes = graph.nodes.filter(n => n.data.label === SYMBOL_PROGRAM_COUNTER)
+    let outsideGraph = getOutsideGraphFilter(graph, ruleBoxes)
+    let optimizer = makePatternOptimizer(outsideGraph)
     for (let pc of pcNodes) {
         for (let inNode of [...pc.neighbors].filter(n => isControlInSymbol(n.data.label))) {
             for (let ruleBox of ruleBoxes.filter(box => Rect.containsPos(box, inNode))) {
@@ -351,7 +367,8 @@ export function runRulesWithPc(graph: Graph<NodeData>, ruleBoxes: Rect[]): boole
 
                 // applyRuleEverywhere also modifies inside rule boxes, don't use here
                 let rule = ruleFromBox(graph, ruleBox)
-                let matches = findRuleMatches(getOutsideGraphFilter(graph, ruleBoxes), rule)
+                rule.pattern = optimizer(rule.pattern)
+                let matches = findRuleMatches(outsideGraph, rule)
                 if (matches.length == 0) {
                     if (exNodes.length > 0) {
                         if (exNodes.length > 1) { console.warn("More than 1 ex-node:", exNodes.length) }

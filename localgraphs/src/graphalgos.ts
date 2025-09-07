@@ -1,4 +1,4 @@
-import { assert, randomChoice } from "../../shared/utils"
+import { assert, max, randomChoice } from "../../shared/utils"
 import { Graph, GraphNode } from "./graph"
 
 export enum SearchState {
@@ -193,6 +193,23 @@ export function dfsWalkArbitrary<T>(nodes: GraphNode<T>[]): GraphNode<T>[] {
         if (remaining.has(node)) {
             remaining.delete(node)
             queue.push(...node.neighbors)
+            walk.push(node)
+        }
+    }
+    assert(new Set(walk).size === nodes.length, "wrong number of nodes in walk")
+    assert(walk.length === nodes.length, "duplicate nodes in walk")
+    return walk
+}
+
+export function dfsWalkWithIncreasingOrder<T>(nodes: GraphNode<T>[], key: (node: GraphNode<T>) => number): GraphNode<T>[] {
+    let remaining = new Set(nodes)
+    let queue: GraphNode<T>[] = []
+    let walk: GraphNode<T>[] = []
+    while (remaining.size > 0) {
+        let node = queue.shift() ?? max(remaining, key)!
+        if (remaining.has(node)) {
+            remaining.delete(node)
+            queue.push(...[...node.neighbors].toSorted((a,b) => key(a) - key(b)))
             walk.push(node)
         }
     }
