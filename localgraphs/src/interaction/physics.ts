@@ -1,7 +1,8 @@
 import { Rect } from "../../../shared/rectangle";
 import { assert, min, randomUniform } from "../../../shared/utils";
 import { distance, isDistanceLess, Vector } from "../../../shared/vector";
-import { filteredGraphView, Graph, GraphEdge, GraphNode } from "../graph";
+import { calculateBetweenEdges, filteredGraphView, Graph, GraphEdge, GraphNode } from "../graph";
+import { collectNeighborhood } from "../graphalgos";
 
 export interface LayoutPhysics<T> {
     // Returns number of active nodes, 0 sends simulation to sleep
@@ -165,53 +166,39 @@ function applyCenteringForce(
 // Can be useful to move new nodes into place without disrupting the layout.
 // Don't call this twice to make it two sided though, that is inefficient
 export function applyLayoutForcesOneSided<T>(
-    graph: Graph<T>,
-    layout: LayoutConfig,
     activeNodes: Set<GraphNode<T>>,
+    betweenEdges: Iterable<GraphEdge<T>>, // must go from active to passive
+    nearbyPassiveNodes: Iterable<GraphNode<T>>, // nodes that should repel active nodes
+    layout: LayoutConfig,
     dt: number,
 ) {
-    // make sure no 2 nodes are on the same spot
-    separateNodes(activeNodes, graph.nodes)
-
     // pull together edges
-    for (let edge of graph.edges) {
-        if (edge.a !== edge.b) { // skip self-loops
-            let node: GraphNode<T> | null = null
-            let sign: number = 0
-            if (activeNodes.has(edge.a)) {
-                node = edge.a
-                sign = 1
-            } else if (activeNodes.has(edge.b)) {
-                node = edge.b
-                sign = -1
-            }
-            if (node !== null) {
-                // don't check for active nodes because of edge cases like uncollapsing nodes
-                let dx = edge.b.x - edge.a.x;
-                let dy = edge.b.y - edge.a.y;
-                let dist = Math.sqrt(dx * dx + dy * dy);
-                console.assert(dist > 0, "Points on same spot");
-                let unitX = dx / dist;
-                let unitY = dy / dist;
-                let delta = 0;
-                let length = Math.max(edge.length, layout.minEdgeLength);
-                if (dist > length) {
-                    delta = length - dist;
-                } else if (dist < layout.minEdgeLength) {
-                    delta = layout.minEdgeLength - dist;
-                }
-                let force = delta * layout.edgeForce * dt;
-                node.vx -= force * unitX * sign * 2;
-                node.vy -= force * unitY * sign * 2;
-            }
+    for (let edge of betweenEdges) {
+        assert(activeNodes.has(edge.a), "edge must go from active nodes to passive")
+        assert(!activeNodes.has(edge.b), "edge must go from active nodes to passive")
+        // don't check for active nodes because of edge cases like uncollapsing nodes
+        let dx = edge.b.x - edge.a.x;
+        let dy = edge.b.y - edge.a.y;
+        let dist = Math.sqrt(dx * dx + dy * dy);
+        console.assert(dist > 0, "Points on same spot");
+        let unitX = dx / dist;
+        let unitY = dy / dist;
+        let delta = 0;
+        let length = Math.max(edge.length, layout.minEdgeLength);
+        if (dist > length) {
+            delta = length - dist;
+        } else if (dist < layout.minEdgeLength) {
+            delta = layout.minEdgeLength - dist;
         }
+        let force = -delta * layout.edgeForce * dt;
+        edge.a.vx += force * unitX * 2;
+        edge.a.vy += force * unitY * 2;
     }
     // push apart nodes
     const targetDistSqr = layout.pushDistance * layout.pushDistance;
     const pushForce = layout.pushForce * layout.pushDistance;
-    let otherNodes = graph.nodes.filter(v => !activeNodes.has(v))
     for (let a of activeNodes) {
-        for (let b of otherNodes) {
+        for (let b of nearbyPassiveNodes) {
             if (a !== b && !a.neighbors.has(b)) {
                 let dx = b.x - a.x;
                 let dy = b.y - a.y;
@@ -226,12 +213,26 @@ export function applyLayoutForcesOneSided<T>(
     }
 }
 
-export function settleNodes<T>(graph: Graph<T>, nodes: Set<GraphNode<unknown>>, layoutStyle: (t: number) => LayoutConfig, dt: number, iterations: number,
-    customForces: ((dt: number, graph: Graph<T>) => unknown)[]) {
+export function settleNodes<T>(
+    graph: Graph<T>, nodes: Set<GraphNode<unknown>>,
+    layoutStyle: (t: number) => LayoutConfig,
+    dt: number,
+    iterations: number,
+    customForces: ((dt: number, graph: Graph<T>) => unknown)[]
+): void {
+    if (nodes.size === 0) {
+        return
+    }
     let subgraph = filteredGraphView(graph, (v) => nodes.has(v))
+    let betweenEdges = calculateBetweenEdges(graph.edges, nodes)
+    let nearbyPassiveNodes = graph.nodes
+        .filter(other => !nodes.has(other) && nodes.find(node => isDistanceLess(node, other, layoutStyle(0).pushDistance * nodes.size)) !== undefined)
+    console.log("nearby passive:", nearbyPassiveNodes.length)
+    // make sure no 2 nodes are on the same spot
+    separateNodes(nodes, graph.nodes)
     for (let i = 0; i < iterations; i++) {
         let layout = layoutStyle(1 - i / iterations)
-        applyLayoutForcesOneSided(graph, layout, nodes, dt)
+        applyLayoutForcesOneSided(nodes, betweenEdges, nearbyPassiveNodes, layout, dt)
         applyLayoutForces(subgraph, layout, nodes, dt)
         for (let force of customForces) {
             force(dt, subgraph)

@@ -104,10 +104,23 @@ export function bfsFoldUniform<S, T>(
     })
 }
 
-// set of all nodes within radius distance of node
-export function collectNeighborhood<T>(node: GraphNode<T>, radius: number): Set<GraphNode<T>> {
-    let nodes = new Set<GraphNode<T>>([node])
-    bfs(node, (node, distance) => {
+// set of all nodes within radius distance of aroundNode
+export function collectNeighborhood<T>(aroundNode: GraphNode<T>, radius: number): Set<GraphNode<T>> {
+    let nodes = new Set<GraphNode<T>>([aroundNode])
+    bfs(aroundNode, (node, distance) => {
+        if (distance > radius) {
+            return SearchState.Terminate
+        }
+        nodes.add(node)
+        return SearchState.Continue
+    })
+    return nodes
+}
+
+// set of all nodes within radius distance of aroundSet
+export function collectNeighborhoods<T>(aroundSet: GraphNode<T>[], radius: number): Set<GraphNode<T>> {
+    let nodes = new Set<GraphNode<T>>(aroundSet)
+    bfs(aroundSet, (node, distance) => {
         if (distance > radius) {
             return SearchState.Terminate
         }

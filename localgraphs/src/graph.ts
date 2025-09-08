@@ -199,16 +199,20 @@ type GraphPartition<T> = {
     insideMap: Map<GraphNode<T>, GraphNode<T>>
 }
 
+export function calculateBetweenEdges<T>(graphEdges: GraphEdge<T>[], part: Set<GraphNode<T>>): GraphEdge<T>[] {
+    let betweenEdgesAB = graphEdges
+        .filter(edge => part.has(edge.a) && !part.has(edge.b))
+    let betweenEdgesBA = graphEdges
+        .filter(edge => !part.has(edge.a) && part.has(edge.b))
+        .map(edge => <GraphEdge<T>>{ a: edge.b, b: edge.a, length: edge.length })
+    return [...betweenEdgesAB, ...betweenEdgesBA]
+}
+
 export function partitionGraph<T>(graph: Graph<T>, part: Set<GraphNode<T>>, copyData?: NodeDataTransfer<T,T>): GraphPartition<T> {
     let [partA, mapA] = extractSubgraph(part, copyData)
     let [partB, mapB] = extractSubgraph(new Set(graph.nodes).difference(part), copyData)
-    let betweenEdgesAB = graph.edges
-        .filter(edge => part.has(edge.a) && !part.has(edge.b))
+    let betweenEdges = calculateBetweenEdges(graph.edges, part)
         .map(edge => <GraphEdge<T>>{ a: mapA.get(edge.a), b: mapB.get(edge.b), length: edge.length })
-    let betweenEdgesBA = graph.edges
-        .filter(edge => !part.has(edge.a) && part.has(edge.b))
-        .map(edge => <GraphEdge<T>>{ a: mapA.get(edge.b), b: mapB.get(edge.a), length: edge.length })
-    let betweenEdges = [...betweenEdgesAB, ...betweenEdgesBA]
     return {
         inside: partA,
         outside: partB,
