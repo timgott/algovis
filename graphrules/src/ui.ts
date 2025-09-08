@@ -88,7 +88,7 @@ export function wrapSettleNewNodes<T>(state: DataState, action: (state: DataStat
         pushDistance: 1000 * t + layoutStyle.pushDistance,
         dampening: t*10 + layoutStyle.dampening
     })
-    settleNodes(state.graph, nodesToMove, settlePhysicsConfig, 1. / 60., 1000, [])
+    settleNodes(state.graph, nodesToMove, settlePhysicsConfig, 1. / 60., 1000, []) // the arrow forces are unstable here (they really want to move other nodes)
 
     return result
 }
@@ -314,6 +314,7 @@ export function selectTool(state: MainState, tool: ToolName) {
     state.selectedTool = tool
     state.data.selectedNodes = new Set()
     if (tool === "play") {
+        pushToHistory(state) // the play tool starts execution, push an undo point so that it can be reset
         state.data.action = { kind: "auto" }
     } else {
         state.data.action = null
@@ -698,7 +699,7 @@ export function toggleRunning(state: MainState): void {
 }
 
 export class RuleRunner implements InteractiveSystem {
-    constructor(protected getState: () => DataState) {}
+    constructor(protected getState: () => DataState, protected maxStepsPerFrame: number) {}
     update(frame: AnimationFrame): SleepState {
         let state = this.getState()
         if (state.action === null) {
@@ -708,48 +709,50 @@ export class RuleRunner implements InteractiveSystem {
             // wait for player
             return "Sleeping"
         }
-        // if possible, advance control flow
-        while (advanceControlFlow(state.graph)) {
-        }
-
-        // find rule matches
-        let ruleRects = state.ruleBoxes.map(b => b.bounds)
-        let actions = findPossibleActions(state.graph, ruleRects)
-        if (actions.length === 0) {
-            state.action = null
-            return "Sleeping"
-        }
-        let action = randomChoice(actions)
-        console.log("Action space:", actions.length)
-        if (action.kind === "exhausted") {
-            state.action = { kind: "auto" }
-            executeExhaustedAction(state.graph, action)
-            return "Running"
-        } else {
-            let player = getControllingPlayer(action.control.inNode)
-            if (player === null) {
-                state.action = { kind: "auto" }
-                wrapSettleNewNodes(state, (data) => {
-                    runActionWithReductions(data, action, randomChoice(action.matches))
-                })
-            } else {
-                state.action = {
-                    kind: "player",
-                    color: player,
-                    matches: action.matches,
-                    matchesByNode: computeMatchesByNode(action.matches),
-                    stepIndex: 0,
-                    patternOrder: action.rule.pattern.nodes,
-                    execute(match) {
+        return wrapSettleNewNodes(state, (data) => {
+            for (let i = 0; i < this.maxStepsPerFrame; i++) {
+                // if possible, advance control flow
+                while (advanceControlFlow(state.graph)) {
+                }
+                // find rule matches
+                let ruleRects = state.ruleBoxes.map(b => b.bounds)
+                let actions = findPossibleActions(state.graph, ruleRects)
+                if (actions.length === 0) {
+                    state.action = null
+                    return "Sleeping" // nothing to do left
+                }
+                let action = randomChoice(actions)
+                if (action.kind === "exhausted") {
+                    state.action = { kind: "auto" }
+                    executeExhaustedAction(state.graph, action)
+                } else {
+                    let player = getControllingPlayer(action.control.inNode)
+                    if (player === null) {
+                        // execute on random match
                         state.action = { kind: "auto" }
-                        wrapSettleNewNodes(state, (data) => {
-                            runActionWithReductions(data, action, match)
-                        })
-                    },
+                        let match = randomChoice(action.matches)
+                        runActionWithReductions(state, action, match)
+                    } else {
+                        state.action = {
+                            kind: "player",
+                            color: player,
+                            matches: action.matches,
+                            matchesByNode: computeMatchesByNode(action.matches),
+                            stepIndex: 0,
+                            patternOrder: action.rule.pattern.nodes,
+                            execute(match) {
+                                state.action = { kind: "auto" }
+                                wrapSettleNewNodes(state, (data) => {
+                                    runActionWithReductions(data, action, match)
+                                })
+                            },
+                        }
+                        return "Sleeping" // wait for player interaction
+                    }
                 }
             }
-            return "Running"
-        }
+            return "Running" // reached max steps limit
+        })
     }
     draw(frame: AnimationFrame, ctx: CanvasRenderingContext2D): void {
     }

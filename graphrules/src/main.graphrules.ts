@@ -241,13 +241,15 @@ redoButton.addEventListener("click", () => {
     restoreFromHistory(globalState.undoHistory.redo());
 });
 
+const maxStepsPerFrame = 1
+
 let physics = new GraphLayoutPhysics(layoutStyle, [applyDirectionAlignmentForces, applyArrowAlignmentForces])
 let canvas = ensured(document.getElementById("canvas")) as HTMLCanvasElement;
 let controller = new InteractionController(canvas,
     new PanZoomController(
         () => globalState.zoom,
         new UiStack([
-            new RuleRunner(() => globalState.data),
+            new RuleRunner(() => globalState.data, maxStepsPerFrame),
             new ToolController(() => globalState, wrapActionAfterRelease(metaEditingTool, setLabelTextboxFromSelected)),
             new ToolController(() => globalState, metaWindowTool),
             new OnlyGraphPhysicsSimulator(() => globalState.data.graph, physics),

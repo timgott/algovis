@@ -2,7 +2,7 @@ import { Rect } from "../../../shared/rectangle";
 import { assert, min, randomUniform } from "../../../shared/utils";
 import { distance, isDistanceLess, Vector } from "../../../shared/vector";
 import { calculateBetweenEdges, filteredGraphView, Graph, GraphEdge, GraphNode } from "../graph";
-import { collectNeighborhood } from "../graphalgos";
+import { collectNeighborhood, collectNeighborhoods } from "../graphalgos";
 
 export interface LayoutPhysics<T> {
     // Returns number of active nodes, 0 sends simulation to sleep
@@ -58,7 +58,7 @@ const minDistance = 0.01;
 
 function separatePair(active: GraphNode<unknown>, passive: GraphNode<unknown>) {
     if (active !== passive) {
-        while (isDistanceLess(active, passive, minDistance)) {
+        if (isDistanceLess(active, passive, minDistance)) {
             let v = Vector.fromAngle(randomUniform(0, 2 * Math.PI), minDistance)
             active.x += v.x
             active.y += v.y
@@ -96,9 +96,6 @@ function applyLayoutForces<T>(
             node.vy = 0;
         }
     }
-
-    // make sure no 2 nodes are on the same spot
-    separateNodes(activeNodes, graph.nodes)
 
     // pull together edges
     for (let edge of graph.edges) {
@@ -227,9 +224,11 @@ export function settleNodes<T>(
     let betweenEdges = calculateBetweenEdges(graph.edges, nodes)
     let nearbyPassiveNodes = graph.nodes
         .filter(other => !nodes.has(other) && nodes.find(node => isDistanceLess(node, other, layoutStyle(0).pushDistance * nodes.size)) !== undefined)
+    //let nearbyPassiveNodes = [...collectNeighborhoods([...nodes], 2)]
     console.log("nearby passive:", nearbyPassiveNodes.length)
     // make sure no 2 nodes are on the same spot
-    separateNodes(nodes, graph.nodes)
+    separateNodes(nodes, nodes)
+    separateNodes(nodes, nearbyPassiveNodes)
     for (let i = 0; i < iterations; i++) {
         let layout = layoutStyle(1 - i / iterations)
         applyLayoutForcesOneSided(nodes, betweenEdges, nearbyPassiveNodes, layout, dt)
@@ -271,12 +270,13 @@ export class GraphLayoutPhysics<T> implements LayoutPhysics<T> {
         bounds: Rect,
         dt: number,
     ) {
-        let activeNodes = findActiveNodes(graph, this.layoutStyle.sleepVelocity)
+        let newNodes = new Set<GraphNode<unknown>>()
         for (let node of graph.nodes) {
             if (!this.lastNodes.has(node)) {
-                activeNodes.add(node)
+                newNodes.add(node)
             }
         }
+        let activeNodes = findActiveNodes(graph, this.layoutStyle.sleepVelocity).union(newNodes)
         this.lastNodes = new Set(graph.nodes);
 
         for (let custom of this.customForces) {
