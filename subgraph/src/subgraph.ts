@@ -1,7 +1,7 @@
 import { Graph, GraphNode } from "../../localgraphs/src/graph";
 import { DefaultMap } from "../../shared/defaultmap";
 import { assert } from "../../shared/utils";
-import { findInjectiveMatchesGeneric, GenericMatcher, InjectiveMap } from "./matching";
+import { findAllInjectiveMatchesGeneric, GenericMatcher, InjectiveMap } from "./matching";
 
 type Embedding<T> = Map<GraphNode<unknown>, GraphNode<T>>
 
@@ -107,11 +107,11 @@ export function findSubgraphMatches<S, T>(host: Graph<T>, pattern: Graph<S>, dat
 // Like findSubgraphMatches, but allows the matcher to track a context, meant for allowing unification of pattern variables
 export function findSubgraphMatchesWithContext<S, T, C>(host: Graph<T>, pattern: Graph<S>, matcher: ContextDataMatcher<S,T,C>): MatchWithContext<T,C>[] {
     // TODO: Could be optimized for the case that pattern is a connected graph. Treat components separately and only generate extensions that are neighbors of existing matches
-    return findInjectiveMatchesGeneric(host.nodes, pattern.nodes, makeSubgraphMatcher(matcher))
+    return findAllInjectiveMatchesGeneric(host.nodes, pattern.nodes, makeSubgraphMatcher(matcher))
 }
 
 // Like findSubgraphMatchesWithContext, but does not match if a negative edges exists in the host
 export function findSubgraphMatchesWithNegative<S, T, C>(host: Graph<T>, pattern: Graph<S>, matcher: ContextDataMatcher<S,T,C>, negativeEdges: EdgeList<S>): MatchWithContext<T,C>[] {
     // TODO: Could be optimized for the case that pattern is a connected graph. Treat components separately and only generate extensions that are neighbors of existing matches
-    return findInjectiveMatchesGeneric(host.nodes, pattern.nodes, makeSubgraphMatcherWithNegative(matcher, negativeEdges))
+    return findAllInjectiveMatchesGeneric(host.nodes, pattern.nodes, makeSubgraphMatcherWithNegative(matcher, negativeEdges))
 }

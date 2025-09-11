@@ -1,4 +1,4 @@
-import { assert, max, randomChoice } from "../../shared/utils"
+import { assert, max, min, randomChoice } from "../../shared/utils"
 import { Graph, GraphNode } from "./graph"
 
 export enum SearchState {
@@ -216,13 +216,14 @@ export function dfsWalkArbitrary<T>(nodes: GraphNode<T>[]): GraphNode<T>[] {
 
 export function dfsWalkWithIncreasingOrder<T>(nodes: GraphNode<T>[], key: (node: GraphNode<T>) => number): GraphNode<T>[] {
     let remaining = new Set(nodes)
-    let queue: GraphNode<T>[] = []
+    let stack: GraphNode<T>[] = []
     let walk: GraphNode<T>[] = []
     while (remaining.size > 0) {
-        let node = queue.shift() ?? max(remaining, key)!
+        let node = stack.pop() ?? min(remaining, key)!
         if (remaining.has(node)) {
             remaining.delete(node)
-            queue.push(...[...node.neighbors].toSorted((a,b) => key(a) - key(b)))
+            // append in reverse order such that top of stack is min neighbor
+            stack.push(...[...node.neighbors].toSorted((a,b) => key(b) - key(a)))
             walk.push(node)
         }
     }

@@ -3,7 +3,7 @@ import { bfs, dfsWalkArbitrary, SearchState } from "../../localgraphs/src/grapha
 import { stretchEdgesToRelax } from "../../localgraphs/src/interaction/physics"
 import { assert, ensured, mapPair, max, randomUniform } from "../../shared/utils"
 import { distance, Positioned, vec, Vector } from "../../shared/vector"
-import { findInjectiveMatchesGeneric, GenericMatcher, verifyInjectiveMatchGeneric } from "../../subgraph/src/matching"
+import { findAllInjectiveMatchesGeneric as findInjectiveMatchesGeneric, GenericMatcher, verifyInjectiveMatchGeneric } from "../../subgraph/src/matching"
 import { ContextDataMatcher, DataMatcher, findSubgraphMatchesWithContext, makeSubgraphMatcher, makeSubgraphMatcherWithNegative, MatchWithContext, simpleDataMatcher, SubgraphMatcher } from "../../subgraph/src/subgraph"
 import { placeNewNodesBetweenOld } from "./placement"
 
@@ -13,8 +13,17 @@ export type PatternRule<S,T,C> = {
     apply: (graph: Graph<T>, match: MatchWithContext<T,C>) => unknown
 }
 
-export function findRuleMatches<T,S,C>(graph: Graph<T>, rule: PatternRule<S,T,C>): MatchWithContext<T, C>[] {
-    return findInjectiveMatchesGeneric(graph.nodes, rule.pattern.nodes, rule.matcher)
+export function findAllRuleMatches<T,S,C>(graph: Graph<T>, rule: PatternRule<S,T,C>): MatchWithContext<T, C>[] {
+    return [...findInjectiveMatchesGeneric(graph.nodes, rule.pattern.nodes, rule.matcher)]
+}
+
+export function findFirstRuleMatch<T,S,C>(graph: Graph<T>, rule: PatternRule<S,T,C>): MatchWithContext<T, C> | null {
+    let result = findInjectiveMatchesGeneric(graph.nodes, rule.pattern.nodes, rule.matcher).next()
+    if (result.done) {
+        return null
+    } else {
+        return result.value
+    }
 }
 
 export function isRuleMatch<T,S,C>(match: MatchWithContext<T, C>, rule: PatternRule<S,T,C>): boolean {
@@ -23,7 +32,7 @@ export function isRuleMatch<T,S,C>(match: MatchWithContext<T, C>, rule: PatternR
 
 // useful if the rule does not make new patterns appear (no recursion)
 export function applyRuleEverywhere<T,S,C>(graph: Graph<T>, rule: PatternRule<S,T,C>): void {
-    let matches = findRuleMatches(graph, rule)
+    let matches = findAllRuleMatches(graph, rule)
     for (let match of matches) {
         rule.apply(graph, match)
     }

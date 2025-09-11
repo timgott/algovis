@@ -12,8 +12,8 @@ import { Rect } from "../../shared/rectangle"
 import { assert, ensured, randomChoice, randomUniform } from "../../shared/utils"
 import { isDistanceLess, vec, vecdir, vecscale, vecset, Vector } from "../../shared/vector"
 import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse, noopTool, wrapToolWithHistoryFunc } from "./interaction"
-import { findRuleMatches, isRuleMatch, PatternRule } from "./rule"
-import { advanceControlFlow, controlPortSymbols, extractVarRuleFromBox, findOperatorsAndOperandsSet, isControlInSymbol, isControlOutSymbol, makeDefaultReductionRules, makePatternOptimizer, ruleMetaSymbols, ruleFromBox, runRandomAction, SYMBOL_IN, VarRule, WILDCARD_SYMBOL, SYMBOL_PROGRAM_POINTER, VarMatch, RuleActionToken, RuleActionTokenStep, findPossibleActions, executeExhaustedAction, executeStepAction, metaSymbols } from "./semantics"
+import { findAllRuleMatches, findFirstRuleMatch, isRuleMatch, PatternRule } from "./rule"
+import { advanceControlFlow, controlPortSymbols, extractVarRuleFromBox, findOperatorsAndOperandsSet, isControlInSymbol, isControlOutSymbol, makeDefaultReductionRules, makePatternOptimizer, ruleMetaSymbols, ruleFromBox, runRandomAction, SYMBOL_IN, VarRule, WILDCARD_SYMBOL, SYMBOL_PROGRAM_POINTER, VarMatch, RuleActionToken, RuleActionTokenStep, findPossibleActions, executeExhaustedAction, executeStepAction, metaSymbols, runFirstAction, findFirstPossibleAction } from "./semantics"
 import { ZoomState } from "./zooming"
 
 export type UiNodeData = {
@@ -99,7 +99,7 @@ export function runSelectedRule(state: DataState) {
     }
     let rule = ruleFromBox(state.graph, state.selectedRule.bounds)
     // applyRuleEverywhere also modifies the rule itself, don't use here
-    let matches = findRuleMatches(getOutsideGraphFilter(state), rule)
+    let matches = findAllRuleMatches(getOutsideGraphFilter(state), rule)
     if (matches.length == 0) {
         console.log("No matches")
         return
@@ -122,7 +122,7 @@ export function runSmallStepWithControlFlow(state: DataState): boolean {
 export function runStepWithControlFlow(state: DataState): boolean {
     let ruleRects = state.ruleBoxes.map(b => b.bounds)
     let result = advanceControlFlow(state.graph)
-    result = runRandomAction(state.graph, ruleRects) || result
+    result = runFirstAction(state.graph, ruleRects) || result
     applyExhaustiveReduction(state)
     return result
 }
@@ -130,7 +130,7 @@ export function runStepWithControlFlow(state: DataState): boolean {
 export function applyRandomReduction(state: DataState): boolean {
     let rules = makeDefaultReductionRules(makePatternOptimizer(state.graph))
     for (let rule of rules) {
-        let matches = findRuleMatches(getOutsideGraphFilter(state), rule)
+        let matches = findAllRuleMatches(getOutsideGraphFilter(state), rule)
         if (matches.length > 0) {
             rule.apply(state.graph, randomChoice(matches))
             return true
@@ -154,11 +154,12 @@ export function applyExhaustiveReduction(state: DataState) {
         changed = false
         for (let [i,rule] of rules.entries()) {
             let startTime = performance.now()
-            let matches = findRuleMatches(getOutsideGraphFilter(state), rule)
-            ruleTimers[i] += performance.now() - startTime
+            let match = findAllRuleMatches(getOutsideGraphFilter(state), rule)[0] ?? null
+            let endTime = performance.now()
+            ruleTimers[i] += endTime - startTime
             ruleCounters[i] += 1
-            if (matches.length > 0) {
-                rule.apply(state.graph, randomChoice(matches))
+            if (match !== null) {
+                rule.apply(state.graph, match)
                 changed = true
                 break
             }
@@ -388,21 +389,6 @@ function getOutsideGraphFilter(state: DataState): Graph<UiNodeData> {
     })
 }
 
-function findNodesMatchingRule<S,T,C>(graph: Graph<T>, rule: PatternRule<S,T,C>): Set<GraphNode<T>> {
-    if (countConnectedComponents(rule.pattern) > 1) {
-        console.warn("disconnected component found, not yet optimized! ignoring!")
-        return new Set()
-    };
-    let matches = findRuleMatches(graph, rule)
-    let nodes = new Set<GraphNode<T>>()
-    for (let match of matches) {
-        for (let node of match.embedding.values()) {
-            nodes.add(node)
-        }
-    }
-    return nodes
-}
-
 function randomNodeColor() {
     //return `oklch(${Math.random() * 0.5 + 0.5} ${Math.random() * 0.25} ${Math.random() * 360})`
     return `oklab(${randomUniform(0.5, 1.0)} ${randomUniform(-1, 1)*0.3} ${randomUniform(-1, 1)*0.3})`
@@ -469,12 +455,14 @@ export class MainPainter implements StatePainter<MainState> {
 
     drawEdge(ctx: CanvasRenderingContext2D, edge: GraphEdge<UiNodeData>, hasOperator: boolean) {
         ctx.save()
-        ctx.beginPath()
         ctx.lineWidth = 3
         ctx.strokeStyle = hasOperator ? this.getOperatorBlack() : "black"
         if (hasOperator) {
             ctx.setLineDash([5, 5])
+        } else {
+            ctx.setLineDash([])
         }
+        ctx.beginPath()
         if (edge.a == edge.b) {
             // self loop
             ctx.lineWidth = 1
@@ -716,12 +704,19 @@ export class RuleRunner implements InteractiveSystem {
                 }
                 // find rule matches
                 let ruleRects = state.ruleBoxes.map(b => b.bounds)
+
                 let actions = findPossibleActions(state.graph, ruleRects)
                 if (actions.length === 0) {
                     state.action = null
                     return "Sleeping" // nothing to do left
                 }
                 let action = randomChoice(actions)
+                //let action = findFirstPossibleAction(state.graph, ruleRects)
+                if (action === null) {
+                    state.action = null
+                    return "Sleeping" // nothing to do left
+                }
+
                 if (action.kind === "exhausted") {
                     state.action = { kind: "auto" }
                     executeExhaustedAction(state.graph, action)

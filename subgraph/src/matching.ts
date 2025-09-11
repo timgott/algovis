@@ -67,9 +67,9 @@ export type GenericMatchWithContext<S,T,C> = {
 }
 
 // finds all possible injective maps (pattern -> value) which are accepted by the matcher
-export function findInjectiveMatchesGeneric<S, T, C>(targets: T[], vars: S[], matcher: GenericMatcher<S,T,C>): GenericMatchWithContext<S,T,C>[] {
+export function* findAllInjectiveMatchesGeneric<S, T, C>(targets: T[], vars: S[], matcher: GenericMatcher<S,T,C>) {
     if (vars.length === 0) {
-        return []
+        return
     }
 
     // keeps remaining possibilities at every level
@@ -107,16 +107,14 @@ export function findInjectiveMatchesGeneric<S, T, C>(targets: T[], vars: S[], ma
                         context: newContext,
                     })
                 } else {
-                    matches.push({
+                    yield <GenericMatchWithContext<S,T,C>>{
                         embedding: partialMatch.toMap(),
                         context: newContext,
-                    })
+                    }
                 }
             }
         }
     }
-
-    return matches
 }
 
 export function verifyInjectiveMatchGeneric<S, T, C>(match: GenericMatchWithContext<S,T,C>, matcher: GenericMatcher<S,T,C>): boolean {

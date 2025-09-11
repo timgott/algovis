@@ -225,7 +225,7 @@ export function settleNodes<T>(
     let nearbyPassiveNodes = graph.nodes
         .filter(other => !nodes.has(other) && nodes.find(node => isDistanceLess(node, other, layoutStyle(0).pushDistance * nodes.size)) !== undefined)
     //let nearbyPassiveNodes = [...collectNeighborhoods([...nodes], 2)]
-    console.log("nearby passive:", nearbyPassiveNodes.length)
+    //console.log("nearby passive:", nearbyPassiveNodes.length)
     // make sure no 2 nodes are on the same spot
     separateNodes(nodes, nodes)
     separateNodes(nodes, nearbyPassiveNodes)
