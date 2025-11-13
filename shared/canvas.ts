@@ -2,25 +2,45 @@
 
 import { degToRad } from "./utils";
 
-// necessary because canvas is unscaled by default
-export function setCanvasSize(canvas: HTMLCanvasElement, width: number, height: number) {
+export function setCanvasInternalSize(canvas: HTMLCanvasElement, width: number, height: number) {
     const dpiRatio = window.devicePixelRatio || 1;
     canvas.width = width * dpiRatio;
     canvas.height = height * dpiRatio;
-    canvas.style.width = width + "px";
-    canvas.style.height = height + "px";
-    canvas.style.touchAction = "none";
-    canvas.style.userSelect = "none";
     const ctx = canvas.getContext("2d") as CanvasRenderingContext2D
     ctx.scale(dpiRatio, dpiRatio);
 }
 
+// necessary because canvas is unscaled by default
+export function setCanvasCssSize(canvas: HTMLCanvasElement, width: number, height: number) {
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    canvas.style.touchAction = "none";
+    canvas.style.userSelect = "none";
+}
+
 export function initFullscreenCanvas(canvas: HTMLCanvasElement, repaint?: () => void): void {
     function resize() {
-        setCanvasSize(canvas, window.innerWidth, window.innerHeight)
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        setCanvasCssSize(canvas, w, h)
+        setCanvasInternalSize(canvas, w, h);
         repaint?.()
     }
     window.addEventListener('resize', resize);
+    resize()
+}
+
+export function initRepaintOnResize(canvas: HTMLCanvasElement, container: HTMLElement, repaint?: () => void): void {
+    function resize() {
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        setCanvasInternalSize(canvas, w, h)
+        repaint?.()
+    }
+    const observer = new ResizeObserver((entries) => {
+        resize()
+    })
+    observer.observe(container)
     resize()
 }
 

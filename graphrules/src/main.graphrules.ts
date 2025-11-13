@@ -1,7 +1,7 @@
 import { InteractionController, UiStack } from "../../localgraphs/src/interaction/controller";
 import { GraphLayoutPhysics, LayoutConfig } from "../../localgraphs/src/interaction/physics";
 import { UndoHistory } from "../../localgraphs/src/interaction/undo";
-import { initFullscreenCanvas } from "../../shared/canvas";
+import { initRepaintOnResize, initFullscreenCanvas } from "../../shared/canvas";
 import { assertExists, ensured, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController, wrapActionAfterRelease } from "./interaction";
 import { SYMBOL_FORALL, OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, SYMBOL_IN, SYMBOL_OUT_STEP, SYMBOL_OUT_EXHAUSTED, SYMBOL_PROGRAM_POINTER, WILDCARD_SYMBOL } from "./semantics";
@@ -257,5 +257,5 @@ let controller = new InteractionController(canvas,
         ]),
     ),
 )
-initFullscreenCanvas(canvas)
+initRepaintOnResize(canvas, ensured(document.getElementById("canvas_container")), () => controller.frameCallback(document.timeline.currentTime as number || 0))
 controller.requestFrame()

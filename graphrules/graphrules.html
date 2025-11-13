@@ -7,45 +7,52 @@
     <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-    <canvas id="canvas"></canvas>
-    <div id="control_bar" class="control_bar">
-        <button id="tool_none">Pan</button>
-        <button id="tool_play">Play</button>
-        <button id="tool_build">Build</button>
-        <button id="tool_drag">Drag</button>
-        <button id="tool_move">Move</button>
-        <button id="tool_shift">Shift</button>
-        <button id="tool_delete">Delete</button>
-        <button id="tool_rulebox">Rule Box</button>
-        <button id="btn_test">Only Apply</button>
-        <button id="btn_reduce">Reduce</button>
-        <button id="btn_apply">Apply</button>
-        <button hidden id="btn_apply_repeat">Apply 10x</button>
-        <button hidden id="btn_step">Step</button>
-        <button hidden id="btn_go">Go</button>
-        <button id="btn_benchmark">Benchmark</button>
-        <button id="btn_reset">Reset</button>
-        <button id="btn_undo">Undo</button>
-        <button id="btn_redo">Redo</button>
-        <button id="btn_save">Save</button>
-    </div>
-    <div class="bottom_bar control_bar">
-        <input type="text" id="input_label"></input>
-        <button id="btn_op_wildcard">_</button>
-        <button id="btn_op_for">for</button>
-        <button id="btn_op_new">new</button>
-        <button id="btn_op_set">set</button>
-        <button id="btn_op_del">del</button>
-        <button id="btn_op_connect">con</button>
-        <button id="btn_op_disconnect">dis</button>
-        <button id="btn_op_in">in</button>
-        <button id="btn_op_step">step</button>
-        <button id="btn_op_ex">ex</button>
-        <button id="btn_op_pc">pc</button>
-        <button id="btn_op_left">left</button>
-        <button id="btn_op_right">right</button>
-        <button id="btn_op_up">up</button>
-        <button id="btn_op_down">down</button>
+    <div class="fullscreen flex">
+        <div class="vflex flex_fill">
+            <div id="control_bar" class="control_bar">
+                <button id="tool_none">Pan</button>
+                <button id="tool_play">Play</button>
+                <button id="tool_build">Build</button>
+                <button id="tool_drag">Drag</button>
+                <button id="tool_move">Move</button>
+                <button id="tool_shift">Shift</button>
+                <button id="tool_delete">Delete</button>
+                <button id="tool_rulebox">Rule Box</button>
+                <button id="btn_test">Only Apply</button>
+                <button id="btn_reduce">Reduce</button>
+                <button id="btn_apply">Apply</button>
+                <button hidden id="btn_apply_repeat">Apply 10x</button>
+                <button hidden id="btn_step">Step</button>
+                <button hidden id="btn_go">Go</button>
+                <button id="btn_benchmark">Benchmark</button>
+                <button id="btn_reset">Reset</button>
+                <button id="btn_undo">Undo</button>
+                <button id="btn_redo">Redo</button>
+                <button id="btn_save">Save</button>
+            </div>
+            <div id="canvas_container" class="flex_fill">
+                <canvas id="canvas" class="main_canvas"></canvas>
+            </div>
+            <div class="bottom_bar control_bar">
+                <input type="text" id="input_label"></input>
+                <button id="btn_op_wildcard">_</button>
+                <button id="btn_op_for">for</button>
+                <button id="btn_op_new">new</button>
+                <button id="btn_op_set">set</button>
+                <button id="btn_op_del">del</button>
+                <button id="btn_op_connect">con</button>
+                <button id="btn_op_disconnect">dis</button>
+                <button id="btn_op_in">in</button>
+                <button id="btn_op_step">step</button>
+                <button id="btn_op_ex">ex</button>
+                <button id="btn_op_pc">pc</button>
+                <button id="btn_op_left">left</button>
+                <button id="btn_op_right">right</button>
+                <button id="btn_op_up">up</button>
+                <button id="btn_op_down">down</button>
+            </div>
+        </div>
+        <div id="toolbox" class="resizable right_pane">Test 2</div>
     </div>
 
     <script type="module" src="src/main.graphrules.ts"></script>
