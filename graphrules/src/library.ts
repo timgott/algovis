@@ -1,4 +1,5 @@
 import { Graph } from "../../localgraphs/src/graph"
+import { initRepaintOnResize } from "../../shared/canvas"
 import { Rect } from "../../shared/rectangle"
 import { ensured } from "../../shared/utils"
 import { Vector } from "../../shared/vector"
@@ -10,57 +11,64 @@ export type LibraryEntry = {
 }
 
 function zoomCanvasToFit(ctx: CanvasRenderingContext2D, points: Iterable<Vector>) {
-    let contentRect = Rect.pad(Rect.fromPoints(points), 20)
-    console.log(contentRect)
+    const padding = 30;
+    let contentRect = Rect.pad(Rect.fromPoints(points), padding)
     ctx.resetTransform()
     let scaleX = ctx.canvas.width / Rect.width(contentRect)
     let scaleY = ctx.canvas.height / Rect.height(contentRect)
     let scale = Math.min(scaleX, scaleY, 1)
     let contentCenter = Rect.center(contentRect)
-    console.log(scale)
     // YES THIS ORDER IS RIGHT AND DON'T ASK WHY
     ctx.scale(scale, scale)
     ctx.translate(-contentCenter.x, -contentCenter.y)
     ctx.translate(ctx.canvas.width / 2 / scale, ctx.canvas.height / 2 / scale)
 }
 
+type LibraryEntryHTML = {
+    caption: Element
+    canvas: HTMLCanvasElement
+    canvasContainer: Element
+    root: HTMLElement
+}
+
 export class LibraryController {
     lib: LibraryEntry[] = []
+    painter: MainPainter = new MainPainter(16)
 
     constructor(private template: HTMLTemplateElement, private root: HTMLElement) {
     }
 
-    instantiateTemplate() {
-        return this.template.content.cloneNode(true) as HTMLElement
+    instantiateTemplate(): LibraryEntryHTML {
+        let root = this.template.content.cloneNode(true) as HTMLElement
+        let caption = ensured(root.querySelector(".caption"))
+        let canvas = ensured(root.querySelector("canvas"))
+        let canvasContainer = ensured(root.querySelector(".canvas_container"))
+        return { root, caption, canvas, canvasContainer }
+    }
+
+    paintEntry(canvas: HTMLCanvasElement, entry: LibraryEntry) {
+        let ctx = canvas.getContext("2d")
+        if (ctx === null) {
+            console.error("getting canvas context failed")
+            return
+        }
+        zoomCanvasToFit(ctx, entry.graph.nodes)
+        this.painter.drawGraph(ctx, entry.graph, new Set())
     }
 
     createEntryHTML(entry: LibraryEntry) {
-        let elem = this.instantiateTemplate()
-        this.updateEntryHTML(elem, entry)
-        return elem
-    }
-
-    paintEntry(ctx: CanvasRenderingContext2D, entry: LibraryEntry) {
-        zoomCanvasToFit(ctx, entry.graph.nodes)
-        let painter = new MainPainter(16)
-        painter.drawGraph(ctx, entry.graph, new Set())
-    }
-
-    updateEntryHTML(elem: HTMLElement, entry: LibraryEntry) {
-        let captionElem = ensured(elem.querySelector(".caption"))
-        let canvas = ensured(elem.querySelector("canvas"))
-        captionElem.textContent = entry.name
-        let ctx = canvas.getContext("2d")
-        if (ctx !== null) {
-            this.paintEntry(ctx, entry)
-        } else {
-            console.warn("getting canvas context failed")
-        }
+        // will forever draw exactly this entry
+        let html = this.instantiateTemplate()
+        html.caption.textContent = entry.name
+        initRepaintOnResize(html.canvas, html.canvasContainer, () => {
+            this.paintEntry(html.canvas, entry)
+        })
+        return html
     }
 
     rebuild() {
         // improvement: update instead of rebuilding?
-        this.root.replaceChildren(...this.lib.map(x => this.createEntryHTML(x)))
+        this.root.replaceChildren(...this.lib.map(x => this.createEntryHTML(x).root))
     }
 
     addToLibrary(entry: LibraryEntry) {

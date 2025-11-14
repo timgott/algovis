@@ -677,7 +677,7 @@ function initSketch(sketch) {
     globalTimeRemainder += sketch.deltaTime
     globalTimeRemainder = sketch.min(globalTimeRemainder, PHYSICS_STEP * 10)
 
-    
+
     if (globalTimeRemainder >= PHYSICS_STEP) {
       sketch.background(220);
       globalPlanningCounter = (globalPlanningCounter + 1) % PLAN_EVERY

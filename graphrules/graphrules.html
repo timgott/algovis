@@ -32,7 +32,7 @@
                 <button id="btn_stash">Put in library</button>
                 <button id="btn_save">Save in URL</button>
             </div>
-            <div id="canvas_container" class="flex_fill">
+            <div id="main_canvas_container" class="flex_fill">
                 <canvas id="canvas" class="main_canvas"></canvas>
             </div>
             <div class="bottom_bar control_bar">
@@ -54,13 +54,17 @@
                 <button id="btn_op_down">down</button>
             </div>
         </div>
-        <div id="toolbox" class="resizable right_pane toolbox">Test 2</div>
+        <div id="toolbox" class="resizable toolbox">
+            <p class="placeholder">Toolbox is empty</p>
+        </div>
     </div>
 
     <template id="tmpl_library_entry">
         <div>
             <p class="caption"></p>
-            <canvas></canvas>
+            <div class="canvas_container">
+                <canvas></canvas>
+            </div>
         </div>
     </template>
 

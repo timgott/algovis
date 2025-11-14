@@ -8,7 +8,7 @@ export function ruleRotations<T>(rule: MultiRule<T>): MultiRule<T>[] {
         rule = rule.map(subrule => {
            return {
                 pattern: subrule.pattern.rotate(),
-                after: subrule.update.rotate()
+                update: subrule.update.rotate()
             }
         })
     }
@@ -22,7 +22,7 @@ export function ruleSymmetriesH<T>(rule: MultiRule<T>): MultiRule<T>[] {
         rule = rule.map(subrule => {
             return {
                 pattern: subrule.pattern.mirror(),
-                after: subrule.update.mirror()
+                update: subrule.update.mirror()
             }
         })
     }

@@ -151,7 +151,7 @@ export class ColoredGridSvg {
     }
 
     clearCellHighlight(x: number, y: number) {
-        this.cellHighlight(x, y, "transparent")
+        this.cellHighlight(x, y, "transparent", "0")
     }
 
     cellLabel(x: number, y: number, text: string) {

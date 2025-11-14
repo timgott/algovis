@@ -12,8 +12,11 @@ body {
     position: absolute;
 }
 .control_bar {
-    background: #f0f0f0;
+    background: transparent;
     padding: 8px;
+    /*box-shadow: 0px 0px 10px rgba(0,0,0,0.5);*/
+    border-top: 1px solid rgba(0,0,0,0.1);
+    border-bottom: 1px solid rgba(0,0,0,0.1);
 }
 .control_bar button {
     margin: 0 4px;
@@ -38,13 +41,25 @@ body {
 }
 .resizable {
     resize: horizontal;
-    overflow: hidden;
+    overflow-x: hidden;
 }
-.right_pane {
-    border-left: 1px solid dimgray;
+.toolbox {
     width: 300px;
     height: 100%;
+    background-color: ghostwhite;
+    border-left: 1px solid rgba(0,0,0,0.1);
+    direction: rtl; /* hack to move resizable to the left */
 }
+.toolbox * {
+    direction: ltr;
+}
+.toolbox p {
+    margin: 10px;
+}
+.placeholder {
+    font-style: italic;
+}
+
 /* Large input elements */
 button,
 input,
@@ -53,5 +68,13 @@ select {
 }
 
 .toolbox canvas {
-    background: #f0f0f0;
+    background: rgba(0,0,0,0.05);
+}
+
+.canvas_container {
+    overflow: hidden;
+}
+
+.toolbox .canvas_container {
+    aspect-ratio: 1;
 }

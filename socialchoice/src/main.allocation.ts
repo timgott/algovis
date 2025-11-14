@@ -62,7 +62,10 @@ class AllocationDemo {
   constructor(public generatorState: HiddenInstanceState<unknown, unknown>) {
     this.items = [];
     this.agents = [];
-    this.clearAllocation(); // empty market outcome
+    this.market = { // empty market outcome
+      allocation: new Map(),
+      prices: new Map(),
+    };
   }
 
   addItem(): Item {

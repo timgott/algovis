@@ -218,6 +218,7 @@ requireHtmlElement("btn_save").addEventListener("click", () => {
 })
 
 requireHtmlElement("btn_stash").addEventListener("click", () => {
+    // TODO: generate default name, later edit
     let saveName = prompt("Save selection to library under name")
     if (saveName !== null) {
         library.addToLibrary({
@@ -275,5 +276,5 @@ let library = new LibraryController(
     ensured(document.getElementById("toolbox"))
 )
 
-initRepaintOnResize(canvas, ensured(document.getElementById("canvas_container")), () => controller.frameCallback(document.timeline.currentTime as number || 0))
+initRepaintOnResize(canvas, ensured(document.getElementById("main_canvas_container")), () => controller.frameCallback(document.timeline.currentTime as number || 0))
 controller.requestFrame()

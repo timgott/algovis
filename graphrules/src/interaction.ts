@@ -58,6 +58,13 @@ export function mapTool<S, T>(f: (state: S) => T, interaction: (state: S) => Mou
     }
 }
 
+export function multiplexTool<S>(f: (state: S, x: number, y: number) => MouseInteraction<S>): MouseInteraction<S> {
+    return (state: S, mouseX: number, mouseY: number) => {
+        let tool = f(state, mouseX, mouseY)
+        return tool(state, mouseX, mouseY)
+    }
+}
+
 export function nestedGraphTool<S, T>(f: (state: S) => Graph<T>, tool: (state: S) => GraphInteraction<T>): MouseInteraction<S> {
     return (state: S, mouseX: number, mouseY: number): MouseClickOrDragResponse<S> => {
         let interaction = tool(state)
@@ -172,10 +179,10 @@ export function wrapActionAfterRelease<S>(tool: MouseInteraction<S>, afterAction
         } else {
             return {
                 dragDraw(state, mouseX, mouseY, drawCtx, deltaTime) {
-                    response.dragDraw?.(state, mouseX, mouseY, drawCtx, deltaTime) 
+                    response.dragDraw?.(state, mouseX, mouseY, drawCtx, deltaTime)
                 },
                 dragStep(state, mouseX, mouseY, deltaTime) {
-                    response.dragStep?.(state, mouseX, mouseY, deltaTime) 
+                    response.dragStep?.(state, mouseX, mouseY, deltaTime)
                 },
                 mouseUp(state, mouseX, mouseY) {
                     assert(response.mouseUp !== undefined, "action after release, but wrapped tool does nothing on release")
@@ -365,5 +372,24 @@ export function makeSpanWindowTool<S>(createWindow: (bounds: Rect, state: S) => 
                 createWindow(bounds, state)
             }
         }
+    }
+}
+
+export class MultiClickDetector {
+    lastKey: unknown = undefined
+    lastTime: number = -Infinity
+    count: number = 0
+    constructor(private timeout: number) {}
+
+    click(key?: unknown): number {
+        let now = performance.now()
+        if (key == this.lastKey && now - this.lastTime < this.timeout) {
+            this.count += 1
+        } else {
+            this.count = 1
+        }
+        this.lastKey = key
+        this.lastTime = now
+        return this.count
     }
 }

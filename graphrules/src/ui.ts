@@ -1,5 +1,5 @@
 import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, extractSubgraph, filteredGraphView, Graph, GraphEdge, GraphNode } from "../../localgraphs/src/graph"
-import { countConnectedComponents } from "../../localgraphs/src/graphalgos"
+import { collectNeighborhood, countConnectedComponents } from "../../localgraphs/src/graphalgos"
 import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "../../localgraphs/src/interaction/controller"
 import { DragNodeInteraction, findClosestNode, GraphInteraction } from "../../localgraphs/src/interaction/graphsim"
 import { LayoutConfig as LayoutPhysicsConfig, separateNodes, settleNodes, stretchEdgesToFit, stretchEdgesToRelax } from "../../localgraphs/src/interaction/physics"
@@ -11,7 +11,7 @@ import { collectBins, DefaultMap } from "../../shared/defaultmap"
 import { Rect } from "../../shared/rectangle"
 import { assert, ensured, randomChoice, randomUniform } from "../../shared/utils"
 import { isDistanceLess, vec, vecdir, vecscale, vecset, Vector } from "../../shared/vector"
-import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse, noopTool, wrapToolWithHistoryFunc } from "./interaction"
+import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse, noopTool, wrapToolWithHistoryFunc, multiplexTool, ExtraClickData, MultiClickDetector } from "./interaction"
 import { findAllRuleMatches, findFirstRuleMatch, isRuleMatch, PatternRule } from "./rule"
 import { advanceControlFlow, controlPortSymbols, extractVarRuleFromBox, findOperatorsAndOperandsSet, isControlInSymbol, isControlOutSymbol, makeDefaultReductionRules, makePatternOptimizer, ruleMetaSymbols, ruleFromBox, runRandomAction, SYMBOL_IN, VarRule, WILDCARD_SYMBOL, SYMBOL_PROGRAM_POINTER, VarMatch, RuleActionToken, RuleActionTokenStep, findPossibleActions, executeExhaustedAction, executeStepAction, metaSymbols, runFirstAction, findFirstPossibleAction } from "./semantics"
 import { ZoomState } from "./zooming"
@@ -219,6 +219,7 @@ function playerClickNode(actionState: ActionStatePlayer, node: GraphNode<UiNodeD
 }
 
 function playerTool(state: DataState, mouseX: number, mouseY: number): MouseClickResponse {
+    // TODO: if action = null, place new program pointer!!!!!!
     if (state.action !== null && state.action.kind === "player") {
         let node = findClosestNode(mouseX, mouseY, state.graph.nodes)
         if (node !== null) {
@@ -242,6 +243,14 @@ function toggleNodeSelected(state: DataState, node: GraphNode<UiNodeData>) {
         state.selectedNodes.delete(node)
     } else {
         state.selectedNodes.add(node)
+    }
+}
+
+function imitateSelectedState(state: DataState, node: GraphNode<UiNodeData>, reference: GraphNode<UiNodeData>) {
+    if (state.selectedNodes.has(reference)) {
+        state.selectedNodes.add(node)
+    } else {
+        state.selectedNodes.delete(node)
     }
 }
 
@@ -281,17 +290,29 @@ function graphToolWithClickSelect(tool: (state: DataState) => GraphInteraction<U
 }
 
 function graphToolAlwaysSelect(tool: (state: DataState) => GraphInteraction<UiNodeData>): MouseInteraction<MainState> {
-    return toolWithUndo(withToolClick(selectClosest, nestedGraphTool(s => s.graph, tool)))
+    return toolWithUndo(withToolClick((s,x,y) => selectClosest(s,x,y), nestedGraphTool(s => s.graph, tool)))
 }
 
-const toolMultiSelect: MouseInteraction<DataState> = (state: DataState, mouseX: number, mouseY: number): "Click" => {
-    let node = findClosestNode(mouseX, mouseY, state.graph.nodes)
-    if (node !== null) {
-        toggleNodeSelected(state, node)
-    } else{
-        state.selectedNodes.clear()
+function selectionTool(clicker: MultiClickDetector): MouseInteraction<MainState> {
+    let dataTool = (state: DataState, mouseX: number, mouseY: number): "Click" => {
+        let clickedNode = findClosestNode(mouseX, mouseY, state.graph.nodes)
+        if (clickedNode !== null) {
+            let clickCount = clicker.click(clickedNode)
+            console.log("click count", clickCount)
+            if (clickCount === 1) {
+                toggleNodeSelected(state, clickedNode)
+            } else {
+                let nodes = collectNeighborhood(clickedNode, clickCount - 1)
+                for (let other of nodes) {
+                    imitateSelectedState(state, other, clickedNode)
+                }
+            }
+        } else {
+            state.selectedNodes.clear()
+        }
+        return "Click"
     }
-    return "Click"
+    return mapTool(g => g.data, g => dataTool)
 }
 
 function putNewNode(state: DataState, x: number, y: number): GraphNode<UiNodeData> {
@@ -324,15 +345,14 @@ const tools = {
     "delete": graphTool(() => new DeleteInteraction(deleteNode, deleteEdge)),
     "rulebox": toolWithUndo(makeSpanWindowTool(putNewWindow)),
     "play": toolWithUndo(playerTool),
-    "select": mapTool((g: MainState) => g.data, g => toolMultiSelect),
+    "select": selectionTool(new MultiClickDetector(500)),
 }
 
 export type ToolName = keyof typeof tools
 
-export const metaEditingTool: MouseInteraction<MainState> = (state, mouseX, mouseY) => {
-    let tool = tools[state.selectedTool]
-    return tool(state, mouseX, mouseY)
-}
+export const metaEditingTool: MouseInteraction<MainState> =
+    multiplexTool(state => tools[state.selectedTool])
+
 
 export function selectTool(state: MainState, tool: ToolName) {
     state.selectedTool = tool
@@ -345,13 +365,13 @@ export function selectTool(state: MainState, tool: ToolName) {
     }
 }
 
-export const metaWindowTool: MouseInteraction<MainState> = (state, mouseX, mouseY) => {
+export const metaWindowTool: MouseInteraction<MainState> = multiplexTool(state => {
     if (state.selectedTool === "delete") {
-        return deleteWindowTool(state, mouseX, mouseY)
+        return deleteWindowTool
     } else {
-        return windowMovingTool(state, mouseX, mouseY)
+        return windowMovingTool
     }
-}
+})
 
 export const windowMovingTool: MouseInteraction<MainState> =
     toolWithUndo(mapTool(

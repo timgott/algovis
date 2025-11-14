@@ -1,3 +1,4 @@
+import { Rect } from "../../../shared/rectangle";
 import { Graph, GraphNode } from "../graph";
 import { bfsFold } from "../graphalgos";
 import { applyVelocityStep, findActiveNodes, LayoutPhysics } from "./physics";
@@ -119,7 +120,7 @@ export class TreeLayoutPhysics implements LayoutPhysics<unknown> {
     private tree: InferredTree<unknown> | null = null;
 
     constructor(private layoutStyle: TreeLayoutConfig) {}
-    step(graph: Graph<unknown>, width: number, height: number, dt: number) {
+    step(graph: Graph<unknown>, bounds: Rect, dt: number) {
         if (this.tree === null) {
             return 0;
         }
@@ -132,8 +133,8 @@ export class TreeLayoutPhysics implements LayoutPhysics<unknown> {
         applyLayoutForces(
             this.tree,
             this.layoutStyle,
-            width,
-            height,
+            Rect.width(bounds),
+            Rect.height(bounds),
             dt,
         );
 

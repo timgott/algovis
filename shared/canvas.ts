@@ -30,7 +30,7 @@ export function initFullscreenCanvas(canvas: HTMLCanvasElement, repaint?: () => 
     resize()
 }
 
-export function initRepaintOnResize(canvas: HTMLCanvasElement, container: HTMLElement, repaint?: () => void): void {
+export function initRepaintOnResize(canvas: HTMLCanvasElement, container: Element, repaint?: () => void): void {
     function resize() {
         const w = container.clientWidth;
         const h = container.clientHeight;
