@@ -51,3 +51,7 @@ input,
 select {
     padding: 8px;
 }
+
+.toolbox canvas {
+    background: #f0f0f0;
+}

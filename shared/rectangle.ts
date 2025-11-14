@@ -91,5 +91,14 @@ export const Rect = {
             { left: rect.left, top: rect.top, right: splitX, bottom: rect.bottom },
             { left: splitX, top: rect.top, right: rect.right, bottom: rect.bottom }
         ]
+    },
+
+    pad(rect: Rect, padding: number): Rect {
+        return {
+            left: rect.left - padding,
+            top: rect.top - padding,
+            right: rect.right + padding,
+            bottom: rect.bottom + padding
+        }
     }
 }

@@ -13,6 +13,7 @@
                 <button id="tool_none">Pan</button>
                 <button id="tool_play">Play</button>
                 <button id="tool_build">Build</button>
+                <button id="tool_select">Select</button>
                 <button id="tool_drag">Drag</button>
                 <button id="tool_move">Move</button>
                 <button id="tool_shift">Shift</button>
@@ -28,7 +29,8 @@
                 <button id="btn_reset">Reset</button>
                 <button id="btn_undo">Undo</button>
                 <button id="btn_redo">Redo</button>
-                <button id="btn_save">Save</button>
+                <button id="btn_stash">Put in library</button>
+                <button id="btn_save">Save in URL</button>
             </div>
             <div id="canvas_container" class="flex_fill">
                 <canvas id="canvas" class="main_canvas"></canvas>
@@ -52,8 +54,15 @@
                 <button id="btn_op_down">down</button>
             </div>
         </div>
-        <div id="toolbox" class="resizable right_pane">Test 2</div>
+        <div id="toolbox" class="resizable right_pane toolbox">Test 2</div>
     </div>
+
+    <template id="tmpl_library_entry">
+        <div>
+            <p class="caption"></p>
+            <canvas></canvas>
+        </div>
+    </template>
 
     <script type="module" src="src/main.graphrules.ts"></script>
 </body>

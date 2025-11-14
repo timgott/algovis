@@ -1,4 +1,4 @@
-import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, filteredGraphView, Graph, GraphEdge, GraphNode } from "../../localgraphs/src/graph"
+import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, extractSubgraph, filteredGraphView, Graph, GraphEdge, GraphNode } from "../../localgraphs/src/graph"
 import { countConnectedComponents } from "../../localgraphs/src/graphalgos"
 import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "../../localgraphs/src/interaction/controller"
 import { DragNodeInteraction, findClosestNode, GraphInteraction } from "../../localgraphs/src/interaction/graphsim"
@@ -237,6 +237,18 @@ function selectNode(state: DataState, node: GraphNode<UiNodeData>) {
     state.selectedNodes.add(node)
 }
 
+function toggleNodeSelected(state: DataState, node: GraphNode<UiNodeData>) {
+    if (state.selectedNodes.has(node)) {
+        state.selectedNodes.delete(node)
+    } else {
+        state.selectedNodes.add(node)
+    }
+}
+
+export function getSelectedSubgraph(state: DataState): Graph<UiNodeData> {
+    return extractSubgraph(state.selectedNodes)[0]
+}
+
 const nodeClickDistance = 30
 
 function selectClosest(state: DataState, mouseX: number, mouseY: number, limit?: number): "Click" | "Ignore" {
@@ -272,6 +284,16 @@ function graphToolAlwaysSelect(tool: (state: DataState) => GraphInteraction<UiNo
     return toolWithUndo(withToolClick(selectClosest, nestedGraphTool(s => s.graph, tool)))
 }
 
+const toolMultiSelect: MouseInteraction<DataState> = (state: DataState, mouseX: number, mouseY: number): "Click" => {
+    let node = findClosestNode(mouseX, mouseY, state.graph.nodes)
+    if (node !== null) {
+        toggleNodeSelected(state, node)
+    } else{
+        state.selectedNodes.clear()
+    }
+    return "Click"
+}
+
 function putNewNode(state: DataState, x: number, y: number): GraphNode<UiNodeData> {
     let node = createNode<UiNodeData>(state.graph, {...defaultNodeData}, x, y)
     state.selectedNodes = new Set([node])
@@ -302,6 +324,7 @@ const tools = {
     "delete": graphTool(() => new DeleteInteraction(deleteNode, deleteEdge)),
     "rulebox": toolWithUndo(makeSpanWindowTool(putNewWindow)),
     "play": toolWithUndo(playerTool),
+    "select": mapTool((g: MainState) => g.data, g => toolMultiSelect),
 }
 
 export type ToolName = keyof typeof tools
@@ -394,7 +417,7 @@ function randomNodeColor() {
     return `oklab(${randomUniform(0.5, 1.0)} ${randomUniform(-1, 1)*0.3} ${randomUniform(-1, 1)*0.3})`
 }
 
-export class MainPainter implements StatePainter<MainState> {
+export class MainPainter implements StatePainter<DataState> {
     labelColors = new DefaultMap<string, string>(() => randomNodeColor())
 
     constructor(private nodeRadius: number) {
@@ -406,17 +429,17 @@ export class MainPainter implements StatePainter<MainState> {
         this.labelColors.set(SYMBOL_PROGRAM_POINTER, "#f0f0f0")
     }
 
-    draw(ctx: CanvasRenderingContext2D, state: MainState, frame: AnimationFrame): void {
+    draw(ctx: CanvasRenderingContext2D, state: DataState, frame: AnimationFrame): void {
         //let highlightedNodes = new Set<GraphNode<UiNodeData>>()
         //if (state.data.activeRule) {
         //    let rule = ruleFromBox(state.data, state.data.activeRule)
         //    highlightedNodes = findNodesMatchingRule(getOutsideGraphFilter(state.data), rule)
         //}
-        if (state.data.action !== null && state.data.action.kind === "player") {
-            this.drawMatches(ctx, state.data.action, state.data.graph)
+        if (state.action !== null && state.action.kind === "player") {
+            this.drawMatches(ctx, state.action, state.graph)
         }
-        this.drawGraph(ctx, state.data.graph, state.data.selectedNodes)
-        this.drawRuleBoxes(ctx, state.data)
+        this.drawGraph(ctx, state.graph, state.selectedNodes)
+        this.drawRuleBoxes(ctx, state)
     }
 
     drawRuleBoxes(ctx: CanvasRenderingContext2D, state: DataState): void {
