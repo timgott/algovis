@@ -258,6 +258,8 @@ const maxStepsPerFrame = 1
 
 let physics = new GraphLayoutPhysics(layoutStyle, [applyDirectionAlignmentForces, applyArrowAlignmentForces])
 let canvas = ensured(document.getElementById("canvas")) as HTMLCanvasElement;
+let painter = new MainPainter(layoutStyle.nodeRadius)
+
 let controller = new InteractionController(canvas,
     new PanZoomController(
         () => globalState.zoom,
@@ -266,14 +268,15 @@ let controller = new InteractionController(canvas,
             new ToolController(() => globalState, wrapActionAfterRelease(metaEditingTool, setLabelTextboxFromSelected)),
             new ToolController(() => globalState, metaWindowTool),
             new OnlyGraphPhysicsSimulator(() => globalState.data.graph, physics),
-            new PaintingSystem(() => globalState.data, new MainPainter(layoutStyle.nodeRadius)),
+            new PaintingSystem(() => globalState.data, painter),
         ]),
     ),
 )
 
 let library = new LibraryController(
     ensured(document.getElementById("tmpl_library_entry")) as HTMLTemplateElement,
-    ensured(document.getElementById("toolbox"))
+    ensured(document.getElementById("toolbox")),
+    painter,
 )
 
 initRepaintOnResize(canvas, ensured(document.getElementById("main_canvas_container")), () => controller.frameCallback(document.timeline.currentTime as number || 0))

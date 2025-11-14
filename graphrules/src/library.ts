@@ -33,9 +33,8 @@ type LibraryEntryHTML = {
 
 export class LibraryController {
     lib: LibraryEntry[] = []
-    painter: MainPainter = new MainPainter(16)
 
-    constructor(private template: HTMLTemplateElement, private root: HTMLElement) {
+    constructor(private template: HTMLTemplateElement, private root: HTMLElement, private painter: MainPainter) {
     }
 
     instantiateTemplate(): LibraryEntryHTML {
