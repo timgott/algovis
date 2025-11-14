@@ -1,8 +1,5 @@
-import { describe, expect, test, jest } from '@jest/globals';
-import { applyRuleEverywhere, makeSimpleRuleFromGraph, NodeDataCloner } from './rule';
+import { describe, expect, test } from '@jest/globals';
 import { createGraphFromEdges } from '../../localgraphs/src/interaction/examplegraph';
-import { ContextDataMatcher } from '../../subgraph/src/subgraph';
-import { GraphNode, NodeDataTransfer } from '../../localgraphs/src/graph';
 import { extractVarRuleFromNodes, OPERATOR_NEW } from './semantics';
 
 describe("test extractVarRuleFromNodes", () => {

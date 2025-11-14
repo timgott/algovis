@@ -1,12 +1,12 @@
-import { filteredGraphView, Graph, GraphNode } from "../../localgraphs/src/graph"
+import { Graph } from "../../localgraphs/src/graph"
 import { InteractiveSystem, PointerId, AnimationFrame, SleepState, MouseDownResponse } from "../../localgraphs/src/interaction/controller"
-import { GraphInteraction, GraphPainter } from "../../localgraphs/src/interaction/graphsim"
+import { GraphInteraction } from "../../localgraphs/src/interaction/graphsim"
 import { LayoutPhysics } from "../../localgraphs/src/interaction/physics"
 import { UndoHistory } from "../../localgraphs/src/interaction/undo"
 import { calcWindowResizeArea, calcWindowTitleArea, WindowBounds } from "../../localgraphs/src/interaction/windows"
 import { Rect } from "../../shared/rectangle"
-import { assert, ensured, unreachable } from "../../shared/utils"
-import { distance, isDistanceLess, vec, vecsub, Vector } from "../../shared/vector"
+import { assert } from "../../shared/utils"
+import { isDistanceLess, vec, vecsub } from "../../shared/vector"
 
 // generalization to localgraphs interaction model
 // TODO: merge both and put into shared

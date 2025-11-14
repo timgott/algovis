@@ -1,10 +1,9 @@
-import { copyGraph, copyGraphTo, copySubgraphTo, createEdge, createEmptyGraph, deleteNode, extractSubgraph, filteredGraphView, Graph, GraphEdge, GraphNode, mapSubgraphTo, NodeDataTransfer, partitionGraph } from "../../localgraphs/src/graph"
-import { bfs, dfsWalkArbitrary, SearchState } from "../../localgraphs/src/graphalgos"
+import { createEdge, deleteNode, Graph, GraphEdge, GraphNode, mapSubgraphTo, NodeDataTransfer, partitionGraph } from "../../localgraphs/src/graph"
 import { stretchEdgesToRelax } from "../../localgraphs/src/interaction/physics"
-import { assert, ensured, mapPair, max, randomUniform } from "../../shared/utils"
-import { distance, Positioned, vec, Vector } from "../../shared/vector"
+import { assert, ensured, mapPair } from "../../shared/utils"
+import { distance } from "../../shared/vector"
 import { findAllInjectiveMatchesGeneric as findInjectiveMatchesGeneric, GenericMatcher, verifyInjectiveMatchGeneric } from "../../subgraph/src/matching"
-import { ContextDataMatcher, DataMatcher, findSubgraphMatchesWithContext, makeSubgraphMatcher, makeSubgraphMatcherWithNegative, MatchWithContext, simpleDataMatcher, SubgraphMatcher } from "../../subgraph/src/subgraph"
+import { DataMatcher, makeSubgraphMatcher, makeSubgraphMatcherWithNegative, MatchWithContext, simpleDataMatcher, SubgraphMatcher } from "../../subgraph/src/subgraph"
 import { placeNewNodesBetweenOld } from "./placement"
 
 export type PatternRule<S,T,C> = {
