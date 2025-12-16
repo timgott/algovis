@@ -1,9 +1,9 @@
 // placement helpers
 
-import { GraphNode } from "../../localgraphs/src/graph";
-import { bfs, SearchState } from "../../localgraphs/src/graphalgos";
-import { randomUniform, assert } from "../../shared/utils";
-import { Positioned, Vector } from "../../shared/vector";
+import { GraphNode } from "../../../localgraphs/src/graph";
+import { bfs, SearchState } from "../../../localgraphs/src/graphalgos";
+import { randomUniform, assert } from "../../../shared/utils";
+import { Positioned, Vector } from "../../../shared/vector";
 
 export function centerOfPoints(points: Iterable<Positioned>) {
     let sum = Vector.Zero;

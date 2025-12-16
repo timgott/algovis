@@ -1,3 +1,5 @@
+import { DefaultMap } from "./defaultmap"
+
 export function createEmptyGrid<T>(rows: number, columns: number): (T|null)[][] {
     return createGrid<T|null>(rows, columns, (i, j) => null)
 }
@@ -268,10 +270,12 @@ export function degToRad(degrees: number) {
     return degrees * Math.PI / 180
 }
 
-export function mapFromFunction<K,V>(keys: Iterable<K>, f: (key: K) => V) {
+export function mapFromFunction<K,V>(keys: Iterable<K>, f: (key: K, index: number) => V) {
     let result = new Map<K, V>()
+    let i = 0
     for (let key of keys) {
-        result.set(key, f(key))
+        result.set(key, f(key, i))
+        i += 1
     }
     return result
 }
@@ -280,7 +284,7 @@ export function mapValues<K,V,W>(m: Map<K,V>, f: (v: V) => W): Map<K,W> {
     return mapFromFunction(m.keys(), k => f(m.get(k)!))
 }
 
-export function sum(array: number[]) {
+export function sum(array: Iterable<number>) {
     let result = 0;
     for (let x of array) {
         result += x;
@@ -333,4 +337,25 @@ export function benchmark(f: () => unknown) {
     f()
     let end = performance.now()
     console.log("benchmark:", end - start, "ms")
+}
+
+// contains all unordered pairs {x,y} for x,y in items, i.e.,
+// if it contains (x,y) then it does not contain (y,x)
+export function allDistinctPairs<T>(items: T[]): [T, T][] {
+    let result: [T, T][] = []
+    for (let i = 0; i < items.length - 1; i++) {
+        for (let j = i + 1; j < items.length; j++) {
+            result.push([items[i], items[j]])
+        }
+    }
+    return result
+}
+
+export function neighborMapFromEdges<T>(edges: Iterable<[T, T]>): Map<T, Set<T>> {
+    let map = new DefaultMap<T, Set<T>>(() => new Set())
+    for (let [a,b] of edges) {
+        map.get(a).add(b)
+        map.get(b).add(a)
+    }
+    return map.toMap()
 }

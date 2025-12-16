@@ -59,7 +59,7 @@ export class VariablePropagator<V, Lv, W, Lw> implements BinaryCspPropagator<V, 
 }
 
 export function makeLabeledGraphDomains<V,L,W>(patternGraph: LabeledGraph<V,L>, hostGraph: LabeledGraph<W,L>, variables: Set<L>) {
-    // O(n^2)
+    // O(n*m)
     let hostNodes = new Set(hostGraph.allNodes())
     return mapFromFunction(patternGraph.allNodes(), v => {
         let label = patternGraph.label(v)

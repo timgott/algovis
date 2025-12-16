@@ -1,3 +1,5 @@
+// @ts-nocheck
+// not all values have been typed yet
 import * as p5 from 'p5';
 import { MCTS, SeenMCTSNode, createMctsRoot, propagateAverageValue, treePolicyUct, runMctsTimeout, treePolicyEpsilonGreedy } from './mcts';
 import { randomChoice, range } from '../shared/utils';

@@ -146,6 +146,21 @@ export function computeDistances<T>(center: GraphNode<T>|GraphNode<T>[], nodes: 
 
 // find connected components, given by the component id each node belongs to
 export type Component = number
+export function findConnectedComponentsGeneric<T>(seeds: Iterable<T>, neighbors: (node: T) => Iterable<T>): [number, Map<T, Component>] {
+    let components = new Map<T, Component>()
+    let componentIndex = 0
+    for (let seed of seeds) {
+        if (!components.has(seed)) {
+            bfsSimple(seed, (node) => {
+                components.set(node, componentIndex)
+                return neighbors(node)
+            })
+            componentIndex++
+        }
+    }
+    return [componentIndex, components]
+}
+
 export function findConnectedComponents<T>(seeds: Iterable<GraphNode<T>>, skip: (node: GraphNode<T>) => boolean): [number, Map<GraphNode<T>, Component>] {
     let components = new Map<GraphNode<T>, Component>()
     let componentIndex = 0

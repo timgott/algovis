@@ -12,53 +12,7 @@ import { Rect } from "../../shared/rectangle"
 import { assert, ensured, randomChoice, randomUniform } from "../../shared/utils"
 import { isDistanceLess, vec, vecdir, Vector } from "../../shared/vector"
 import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse, noopTool, multiplexTool, MultiClickDetector } from "./interaction"
-import { findAllRuleMatches } from "./rule"
-import { advanceControlFlow, controlPortSymbols, findOperatorsAndOperandsSet, isControlInSymbol, isControlOutSymbol, makeDefaultReductionRules, makePatternOptimizer, ruleMetaSymbols, ruleFromBox, runRandomAction, WILDCARD_SYMBOL, SYMBOL_PROGRAM_POINTER, VarMatch, RuleActionTokenStep, findPossibleActions, executeExhaustedAction, executeStepAction, metaSymbols, runFirstAction } from "./semantics"
 import { ZoomState } from "./zooming"
-
-export type UiNodeData = {
-    label: string,
-}
-
-export type RuleBoxState = WindowBounds
-
-// for now, no "macro" rules (rules that apply inside other rules)
-export type DataState = {
-    graph: Graph<UiNodeData>,
-    ruleBoxes: RuleBoxState[],
-    selectedRule: RuleBoxState | null,
-    selectedNodes: Set<GraphNode<UiNodeData>>,
-    action: ActionState
-}
-
-type RuleMatch = VarMatch<UiNodeData>
-
-type ActionStatePlayer = {
-    kind: "player",
-    color: string,
-    matches: RuleMatch[],
-    matchesByNode: DefaultMap<GraphNode<UiNodeData>, RuleMatch[]>,
-    stepIndex: number,
-    patternOrder: GraphNode<UiNodeData>[],
-    execute(match: RuleMatch): void,
-}
-
-type ActionStateAuto = {
-    kind: "auto"
-}
-
-export type ActionState = null | ActionStateAuto | ActionStatePlayer
-
-export type MainState = {
-    data: DataState,
-    undoHistory: UndoHistory<DataState>,
-    selectedTool: ToolName,
-    zoom: ZoomState,
-}
-
-const defaultNodeData: UiNodeData = {
-    label: "",
-}
 
 export function setLabelOnSelected(state: MainState, label: string) {
     for (let node of state.data.selectedNodes) {

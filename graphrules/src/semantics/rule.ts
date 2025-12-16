@@ -3,7 +3,7 @@ import { stretchEdgesToRelax } from "../../localgraphs/src/interaction/physics"
 import { assert, ensured, mapPair } from "../../shared/utils"
 import { distance } from "../../shared/vector"
 import { findAllInjectiveMatchesGeneric as findInjectiveMatchesGeneric, GenericMatcher, verifyInjectiveMatchGeneric } from "../../subgraph/src/matching"
-import { DataMatcher, makeSubgraphMatcher, makeSubgraphMatcherWithNegative, MatchWithContext, simpleDataMatcher, SubgraphMatcher } from "../../subgraph/src/subgraph"
+import { DataMatcher, makeSubgraphMatcher, makeSubgraphMatcherWithNegative, MatchWithContext, simpleDataMatcher, SubgraphMatcher } from "../../../subgraph/src/subgraph"
 import { placeNewNodesBetweenOld } from "./placement"
 
 export type PatternRule<S,T,C> = {

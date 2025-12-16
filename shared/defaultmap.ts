@@ -40,11 +40,21 @@ export function collectCounts<T>(items: T[]): DefaultMap<T, number> {
     return counts
 }
 
-export function collectBins<T,K>(items: T[], keys: (x: T) => Iterable<K>): DefaultMap<K, T[]> {
+export function collectBins<T,K>(items: Iterable<T>, keys: (x: T) => Iterable<K>): DefaultMap<K, T[]> {
     let bins = new DefaultMap<K, T[]>(() => [])
     for (let x of items) {
         for (let bin of keys(x)) {
             bins.get(bin).push(x)
+        }
+    }
+    return bins
+}
+
+export function collectBinsSets<T,K>(items: Iterable<T>, keys: (x: T) => Iterable<K>): DefaultMap<K, Set<T>> {
+    let bins = new DefaultMap<K, Set<T>>(() => new Set())
+    for (let x of items) {
+        for (let bin of keys(x)) {
+            bins.get(bin).add(x)
         }
     }
     return bins

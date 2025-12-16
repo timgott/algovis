@@ -1,6 +1,6 @@
 import { Graph, GraphNode } from "../../localgraphs/src/graph";
 import { DefaultMap } from "../../shared/defaultmap";
-import { assert } from "../../shared/utils";
+import { assert, neighborMapFromEdges } from "../../shared/utils";
 import { findAllInjectiveMatchesGeneric, GenericMatcher, InjectiveMap } from "./matching";
 
 type Embedding<T> = Map<GraphNode<unknown>, GraphNode<T>>
@@ -68,15 +68,6 @@ export function makeSubgraphMatcher<S,T,C>(dataMatcher: ContextDataMatcher<S,T,C
         empty: dataMatcher.empty,
         updated: (pattern, host, context) => dataMatcher.updated(pattern.data, host.data, context),
     }
-}
-
-function neighborMapFromEdges<T>(edges: [T, T][]): Map<T, Set<T>> {
-    let map = new DefaultMap<T, Set<T>>(() => new Set())
-    for (let [a,b] of edges) {
-        map.get(a).add(b)
-        map.get(b).add(a)
-    }
-    return map.toMap()
 }
 
 // does not allow the edges from negative edges to occur in host
