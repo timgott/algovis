@@ -1,7 +1,7 @@
 import { DragNodeInteraction, GraphInteraction, GraphPainter, GraphPhysicsSimulator, findClosestNode, offsetNodes, moveSlightly } from "../../localgraphs/src/interaction/graphsim.js";
 import { drawArrowTip, initFullscreenCanvas } from "../../shared/canvas.js"
 import { Graph, GraphEdge, GraphNode, MappedNode, copySubgraphTo, createEdge, createEmptyGraph, createNode, deleteNode, extractSubgraph, filteredGraphView, mapGraph, mapGraphLazy } from "../../localgraphs/src/graph.js";
-import { assertExists, ensured, invertBijectiveMap, randomChoice } from "../../shared/utils.js";
+import { assertExists, benchmark, ensured, invertBijectiveMap, invertMap, mapFromFunction, max, randomChoice, range } from "../../shared/utils.js";
 import { collectNeighborhood, computeDistances, findConnectedComponents, findConnectedComponentsSimple, getNodesByComponent } from "../../localgraphs/src/graphalgos.js";
 import { AnimationFrame, InteractionController, UiStack } from "../../localgraphs/src/interaction/controller.js";
 import { ClickNodeInteraction, BuildGraphInteraction, MoveComponentInteraction, DuplicateInteraction, SpanWindowTool } from "../../localgraphs/src/interaction/tools.js";
@@ -10,12 +10,15 @@ import { GraphLayoutPhysics, LayoutConfig } from "../../localgraphs/src/interact
 import { drawWindowTitle, satisfyMinBounds, WindowBounds, WindowController,  } from "../../localgraphs/src/interaction/windows.js";
 import { Rect } from "../../shared/rectangle.js";
 import { vec, vecscale } from "../../shared/vector.js";
-import { ContextDataMatcher, findSubgraphMatches, findSubgraphMatchesWithContext } from "./subgraph.js";
+import { ContextDataMatcher, findSubgraphMatches, findSubgraphMatchesWithContext, MatchWithContext } from "./subgraph.js";
 import { makeVariableMatcher, mapMatcher } from "./variables.js";
+import { CspController, makeMostConstrainedOrdering, makeMostConstraining as makeMostConstrainingOrdering, MultiConstraintPropagator, solveCsp, VariableOrdering, } from "./csp.js";
+import { DistinctnessPropagator, EdgePropagator, makeLabeledGraphDomains, VariablePropagator } from "./cspsubgraph.js";
 
 let undoButton = document.getElementById("undo") as HTMLButtonElement
 let redoButton = document.getElementById("redo") as HTMLButtonElement
 let resetButton = document.getElementById("reset") as HTMLButtonElement
+let checkboxCsp = document.getElementById("chk_csp") as HTMLInputElement
 
 const undoHistorySize = 100
 
@@ -74,6 +77,40 @@ function putNewWindow(bounds: Rect) {
     controller.requestFrame()
 }
 
+function abstractifyGraph<T,L>(graph: Graph<T>, getLabel: (data: T) => L): LabeledGraph<GraphNode<T>, L> {
+    let nodesWithLabel = invertMap(mapFromFunction(graph.nodes, v => getLabel(v.data)))
+    return {
+        allNodes: () => graph.nodes,
+        neighbors: (node: GraphNode<T>) => node.neighbors,
+        nodesWithLabel: (label: L): Set<GraphNode<T>> => new Set(nodesWithLabel.get(label)),
+        label: (node: GraphNode<T>) => getLabel(node.data)
+    }
+}
+
+function findSubgraphMatchesUsingCsp(host: Graph<NodeData>, pattern: Graph<NodeData>, vars: Set<string>) {
+    let p = abstractifyGraph(pattern, d => d.label)
+    let h = abstractifyGraph(host, d => d.label)
+    let domains = makeLabeledGraphDomains(p, h, vars)
+    let constraints = new MultiConstraintPropagator<GraphNode<NodeData>, GraphNode<NodeData>>([
+        new EdgePropagator(p, h),
+        new DistinctnessPropagator(),
+        new VariablePropagator(p, vars, h)
+    ])
+    let degreeOdering: VariableOrdering<GraphNode<NodeData>, unknown> = {
+        pickNextToBranch: function (unassignedVars: Set<GraphNode<NodeData>>, domains: Map<GraphNode<NodeData>, Set<unknown>>): GraphNode<NodeData> {
+            return max(unassignedVars, x => x.neighbors.size)!
+        }
+    }
+    let csp = new CspController<GraphNode<NodeData>, unknown, GraphNode<NodeData>>(
+        constraints,
+        degreeOdering,
+        //makeMostConstrainedOrdering(constraints),
+        //makeMostConstrainingOrdering(constraints), // TODO: degree ordering
+        domains
+    )
+    return [...solveCsp(csp)]
+}
+
 class ColoredGraphPainter implements GraphPainter<NodeData> {
     constructor(private nodeRadius: number, public showParities: boolean = false) { }
 
@@ -83,16 +120,28 @@ class ColoredGraphPainter implements GraphPainter<NodeData> {
             let [containedSubgraph, _map] = extractSubgraph(
                 graph.nodes.filter(v => Rect.containsPos(window.bounds, v))
             )
-            let [componentCount, _componentMap] = findConnectedComponentsSimple(containedSubgraph);
-            if (componentCount === 1) {
-                let matcher = mapMatcher((x: NodeData) => x.label, makeVariableMatcher(new Set(["x", "y", "z"])))
-                let matches = findSubgraphMatchesWithContext(graph, containedSubgraph, matcher)
-                //console.log("Matches:", matches.length)
-                for (let {embedding} of matches) {
-                    for (let [_, node] of embedding) {
-                        highlightedNodes.add(node)
+            //let [componentCount, _componentMap] = findConnectedComponentsSimple(containedSubgraph);
+            let variables = new Set(["x", "y", "z"])
+            if (checkboxCsp.checked) {
+                benchmark(() => {
+                    let matches = findSubgraphMatchesUsingCsp(graph, containedSubgraph, variables)
+                    for (let match of matches) {
+                        for (let [,node] of match) {
+                            highlightedNodes.add(node)
+                        }
                     }
-                }
+                })
+            } else {
+                benchmark(() => {
+                    let matcher = mapMatcher((x: NodeData) => x.label, makeVariableMatcher(variables))
+                    let matches = findSubgraphMatchesWithContext(graph, containedSubgraph, matcher)
+                    //console.log("Matches:", matches.length)
+                    for (let {embedding} of matches) {
+                        for (let [_, node] of embedding) {
+                            highlightedNodes.add(node)
+                        }
+                    }
+                })
             }
         }
         for (let edge of graph.edges) {

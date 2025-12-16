@@ -176,6 +176,7 @@ export function* range(a: number, b?: number): Iterable<number> {
 declare global {
     interface Set<T> {
         map<U>(f: (item: T) => U): Set<U>
+        filter(f: (item: T) => boolean): Set<T>
         find(predicate: (item: T) => boolean): T | undefined
     }
 }
@@ -184,6 +185,16 @@ Set.prototype.map = function<T, U>(this: Set<T>, f: (item: T) => U): Set<U> {
     let result = new Set<U>()
     for (let item of this) {
         result.add(f(item))
+    }
+    return result
+}
+
+Set.prototype.filter = function<T>(this: Set<T>, f: (item: T) => boolean): Set<T> {
+    let result = new Set<T>()
+    for (let item of this) {
+        if (f(item)) {
+            result.add(item)
+        }
     }
     return result
 }
@@ -305,4 +316,21 @@ export function mapToIndex<T>(arr: T[]): Map<T, number> {
 
 export function mapPair<T,S>(f: (x: T) => S): (pair: [T,T]) => [S,S] {
     return ([a,b]) => [f(a), f(b)]
+}
+
+export function unionAll<T>(sets: Iterable<Iterable<T>>) {
+    let result = new Set<T>()
+    for (let set of sets) {
+        for (let elem of set) {
+            result.add(elem)
+        }
+    }
+    return result
+}
+
+export function benchmark(f: () => unknown) {
+    let start = performance.now()
+    f()
+    let end = performance.now()
+    console.log("benchmark:", end - start, "ms")
 }
