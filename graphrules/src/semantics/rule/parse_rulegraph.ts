@@ -47,6 +47,6 @@ export function parseRule<V>(graph: GraphWithParserAccess<V>, ruleRoot: V): Rule
         insertion,
         connectingEdges,
         negativeEdges,
-        vars
+        freeVars: vars
     }
 }

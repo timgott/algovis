@@ -2,8 +2,9 @@ import { Graph, GraphNode } from "../../../localgraphs/src/graph"
 import { UndoHistory } from "../../../localgraphs/src/interaction/undo"
 import { WindowBounds } from "../../../localgraphs/src/interaction/windows"
 import { DefaultMap } from "../../../shared/defaultmap"
-import { ToolName } from "../ui"
+import { ToolName } from "../tools"
 import { ZoomState } from "../zooming"
+import { VirtualNode } from "./boxsemantics"
 
 export type UiNodeData = {
     label: string,
@@ -20,7 +21,7 @@ export type DataState = {
     action: ActionState
 }
 
-type RuleMatch = VarMatch<UiNodeData>
+type RuleMatch = Map<VirtualNode, GraphNode<UiNodeData>>
 
 type ActionStatePlayer = {
     kind: "player",
@@ -45,6 +46,6 @@ export type MainState = {
     zoom: ZoomState,
 }
 
-const defaultNodeData: UiNodeData = {
+export const defaultNodeData: UiNodeData = {
     label: "",
 }

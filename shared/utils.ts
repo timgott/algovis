@@ -284,6 +284,14 @@ export function mapValues<K,V,W>(m: Map<K,V>, f: (v: V) => W): Map<K,W> {
     return mapFromFunction(m.keys(), k => f(m.get(k)!))
 }
 
+export function mapObject<K extends string,V,W>(obj: Record<K,V>, f: (v: V) => W): Record<K,W> {
+    let result = {} as Record<K,W>
+    for (let k in obj) {
+        result[k] = f(obj[k])
+    }
+    return result
+}
+
 export function sum(array: Iterable<number>) {
     let result = 0;
     for (let x of array) {
@@ -351,6 +359,7 @@ export function allDistinctPairs<T>(items: T[]): [T, T][] {
     return result
 }
 
+// ensures symmetry
 export function neighborMapFromEdges<T>(edges: Iterable<[T, T]>): Map<T, Set<T>> {
     let map = new DefaultMap<T, Set<T>>(() => new Set())
     for (let [a,b] of edges) {
@@ -359,3 +368,20 @@ export function neighborMapFromEdges<T>(edges: Iterable<[T, T]>): Map<T, Set<T>>
     }
     return map.toMap()
 }
+
+// Contains edges only in one direction. Requires that neighbors map is symmetric.
+export function edgesFromSymmNeighborMap<T>(neighborMap: Map<T, Iterable<T>>): [T,T][] {
+    let result: [T,T][] = []
+    let closed = new Set()
+    for (let [v,neighbors] of neighborMap) {
+        for (let w of neighbors) {
+            if (!closed.has(w)) {
+                result.push([v,w])
+            }
+        }
+        closed.add(v)
+    }
+    return result
+}
+
+export type ValueOf<T> = T[keyof T]

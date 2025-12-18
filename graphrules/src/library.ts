@@ -3,7 +3,8 @@ import { initRepaintOnResize } from "../../shared/canvas"
 import { Rect } from "../../shared/rectangle"
 import { ensured } from "../../shared/utils"
 import { Vector } from "../../shared/vector"
-import { MainPainter, UiNodeData } from "./ui"
+import { UiNodeData } from "./viewmodel/state"
+import { MainPainter } from "./painter"
 
 export type LibraryEntry = {
     name: string,

@@ -1,17 +1,17 @@
-import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, extractSubgraph, filteredGraphView, Graph, GraphEdge, GraphNode } from "../../localgraphs/src/graph"
-import { collectNeighborhood } from "../../localgraphs/src/graphalgos"
+import { createEmptyGraph, filteredGraphView, Graph, GraphNode } from "../../localgraphs/src/graph"
 import { AnimationFrame, InteractiveSystem, MouseDownResponse, PointerId, SleepState } from "../../localgraphs/src/interaction/controller"
-import { DragNodeInteraction, findClosestNode, GraphInteraction } from "../../localgraphs/src/interaction/graphsim"
-import { LayoutConfig as LayoutPhysicsConfig, separateNodes, settleNodes, stretchEdgesToRelax } from "../../localgraphs/src/interaction/physics"
-import { BuildGraphInteraction, DeleteInteraction, MoveComponentInteraction, ShiftNodeInteraction } from "../../localgraphs/src/interaction/tools"
+import { LayoutConfig as LayoutPhysicsConfig, separateNodes, settleNodes } from "../../localgraphs/src/interaction/physics"
 import { UndoHistory } from "../../localgraphs/src/interaction/undo"
-import { calcWindowTitleArea, drawResizableWindowWithTitle, satisfyMinBounds, WindowBounds } from "../../localgraphs/src/interaction/windows"
-import { drawArrowTip } from "../../shared/canvas"
+import { WindowBounds } from "../../localgraphs/src/interaction/windows"
 import { collectBins, DefaultMap } from "../../shared/defaultmap"
 import { Rect } from "../../shared/rectangle"
-import { assert, ensured, randomChoice, randomUniform } from "../../shared/utils"
-import { isDistanceLess, vec, vecdir, Vector } from "../../shared/vector"
-import { nestedGraphTool, StatePainter, MouseInteraction, mapTool, wrapToolWithHistory, makeSpanWindowTool, makeWindowMovingTool, stealToolClick, withToolClick, MouseClickResponse, noopTool, multiplexTool, MultiClickDetector } from "./interaction"
+import { assert, ensured, randomChoice } from "../../shared/utils"
+import { findRuleMatches } from "./semantics/rule/matching"
+import { parseRule } from "./semantics/rule/parse_rulegraph"
+import { applyRule } from "./semantics/rule/rule_application"
+import { metaSymbols } from "./semantics/symbols"
+import { makeVirtualGraphToRealInserter, makeVirtualGraphEmbedding } from "./viewmodel/boxsemantics"
+import { DataState, MainState, RuleBoxState, UiNodeData } from "./viewmodel/state"
 import { ZoomState } from "./zooming"
 
 export function setLabelOnSelected(state: MainState, label: string) {
@@ -51,14 +51,16 @@ export function runSelectedRule(state: DataState) {
     if (state.selectedRule === null) {
         return
     }
-    let rule = ruleFromBox(state.graph, state.selectedRule.bounds)
+    let virtual = makeVirtualGraphEmbedding(state.graph, state.ruleBoxes)
+    let ruleRoot = ensured(virtual.boxMapping.get(state.selectedRule)).root
+    let rule = parseRule(virtual.virtualGraph, ruleRoot)
     // applyRuleEverywhere also modifies the rule itself, don't use here
-    let matches = findAllRuleMatches(getOutsideGraphFilter(state), rule)
+    let matches = [...findRuleMatches(rule, virtual.virtualGraph)]
     if (matches.length == 0) {
         console.log("No matches")
         return
     }
-    rule.apply(state.graph, randomChoice(matches))
+    applyRule(rule, randomChoice(matches), makeVirtualGraphToRealInserter(state.graph))
 }
 
 // runs control flow and rule execution in separate steps
@@ -101,33 +103,7 @@ export const ruleCounters = [
     0, 0, 0, 0, 0, 0,
 ]
 
-export function applyExhaustiveReduction(state: DataState) {
-    let rules = makeDefaultReductionRules(makePatternOptimizer(state.graph))
-    let changed: boolean
-    do {
-        changed = false
-        for (let [i,rule] of rules.entries()) {
-            let startTime = performance.now()
-            let match = findAllRuleMatches(getOutsideGraphFilter(state), rule)[0] ?? null
-            let endTime = performance.now()
-            ruleTimers[i] += endTime - startTime
-            ruleCounters[i] += 1
-            if (match !== null) {
-                rule.apply(state.graph, match)
-                changed = true
-                break
-            }
-        }
-    } while (changed)
-    // Instead of retrying from the first rule again, it would be possible to
-    // loop on each rule individually to save calls to the subgraph algorithm;
-    // but very often we won't run more than one reduction per step. It is
-    // better to keep the nice semantic properties of this version for now. For
-    // performance optimization, it would be more clever to make an explicit
-    // implementation of the reduction rules anyways.
-}
-
-function computeChangingSet(actionState: ActionStatePlayer): Map<GraphNode<UiNodeData>, RuleMatch[]> {
+export function computeChangingSet(actionState: ActionStatePlayer): Map<GraphNode<UiNodeData>, RuleMatch[]> {
     return actionState.matchesByNode.toMap()
         .filter((x, matches) =>
             matches.length === 1
@@ -135,7 +111,7 @@ function computeChangingSet(actionState: ActionStatePlayer): Map<GraphNode<UiNod
         )
 }
 
-function computeIndexedStepSet(actionState: ActionStatePlayer): Map<GraphNode<UiNodeData>, RuleMatch[]> {
+export function computeIndexedStepSet(actionState: ActionStatePlayer): Map<GraphNode<UiNodeData>, RuleMatch[]> {
     while (true) {
         if (actionState.stepIndex >= actionState.patternOrder.length) {
             // probably just a single match
@@ -150,216 +126,6 @@ function computeIndexedStepSet(actionState: ActionStatePlayer): Map<GraphNode<Ui
         actionState.stepIndex++
     }
 }
-
-function playerClickNode(actionState: ActionStatePlayer, node: GraphNode<UiNodeData>): boolean {
-    let changingSet = computeChangingSet(actionState)
-    let indexedSet = computeIndexedStepSet(actionState)
-    let newMatchSet = indexedSet.get(node) ?? changingSet.get(node)
-    if (newMatchSet !== undefined) {
-        assert(newMatchSet.length > 0, "misunderstood truthiness in Javascript again")
-        actionState.matches = newMatchSet
-        actionState.matchesByNode = computeMatchesByNode(newMatchSet)
-        if (indexedSet.has(node)) {
-            actionState.stepIndex++
-        }
-        if (newMatchSet.length === 1) {
-            // execute rule
-            let [match] = newMatchSet
-            actionState.execute(match)
-        }
-        return true
-    }
-    return false
-}
-
-function playerTool(state: DataState, mouseX: number, mouseY: number): MouseClickResponse {
-    // TODO: if action = null, place new program pointer!!!!!!
-    if (state.action !== null && state.action.kind === "player") {
-        let node = findClosestNode(mouseX, mouseY, state.graph.nodes)
-        if (node !== null) {
-            let success = playerClickNode(state.action, node)
-            console.log("Clicked on node", success)
-            if (success) {
-                return "Click"
-            }
-        }
-    }
-    return "Ignore"
-}
-
-function selectNode(state: DataState, node: GraphNode<UiNodeData>) {
-    state.selectedNodes.clear()
-    state.selectedNodes.add(node)
-}
-
-function toggleNodeSelected(state: DataState, node: GraphNode<UiNodeData>) {
-    if (state.selectedNodes.has(node)) {
-        state.selectedNodes.delete(node)
-    } else {
-        state.selectedNodes.add(node)
-    }
-}
-
-function imitateSelectedState(state: DataState, node: GraphNode<UiNodeData>, reference: GraphNode<UiNodeData>) {
-    if (state.selectedNodes.has(reference)) {
-        state.selectedNodes.add(node)
-    } else {
-        state.selectedNodes.delete(node)
-    }
-}
-
-export function getSelectedSubgraph(state: DataState): Graph<UiNodeData> {
-    return extractSubgraph(state.selectedNodes)[0]
-}
-
-const nodeClickDistance = 30
-
-function selectClosest(state: DataState, mouseX: number, mouseY: number, limit?: number): "Click" | "Ignore" {
-    let node = findClosestNode(mouseX, mouseY, state.graph.nodes)
-    if (node !== null) {
-        selectNode(state, node)
-        if (isDistanceLess(vec(mouseX, mouseY), node, nodeClickDistance)) {
-            return "Click"
-        } else {
-            return "Ignore"
-        }
-    }
-    return "Ignore"
-}
-
-function selectClicked(state: DataState, mouseX: number, mouseY: number): "Click" | "Ignore" {
-    return selectClosest(state, mouseX, mouseY, nodeClickDistance)
-}
-
-function toolWithUndo(tool: MouseInteraction<DataState>): MouseInteraction<MainState> {
-    return mapTool(g => g.data, g => wrapToolWithHistory(g.undoHistory, tool))
-}
-
-function graphTool(tool: (state: DataState) => GraphInteraction<UiNodeData>): MouseInteraction<MainState> {
-    return toolWithUndo(nestedGraphTool(s => s.graph, tool))
-}
-
-function graphToolWithClickSelect(tool: (state: DataState) => GraphInteraction<UiNodeData>): MouseInteraction<MainState> {
-    return toolWithUndo(stealToolClick(selectClicked, nestedGraphTool(s => s.graph, tool), true))
-}
-
-function graphToolAlwaysSelect(tool: (state: DataState) => GraphInteraction<UiNodeData>): MouseInteraction<MainState> {
-    return toolWithUndo(withToolClick((s,x,y) => selectClosest(s,x,y), nestedGraphTool(s => s.graph, tool)))
-}
-
-function selectionTool(clicker: MultiClickDetector): MouseInteraction<MainState> {
-    let dataTool = (state: DataState, mouseX: number, mouseY: number): "Click" => {
-        let clickedNode = findClosestNode(mouseX, mouseY, state.graph.nodes)
-        if (clickedNode !== null) {
-            let clickCount = clicker.click(clickedNode)
-            console.log("click count", clickCount)
-            if (clickCount === 1) {
-                toggleNodeSelected(state, clickedNode)
-            } else {
-                let nodes = collectNeighborhood(clickedNode, clickCount - 1)
-                for (let other of nodes) {
-                    imitateSelectedState(state, other, clickedNode)
-                }
-            }
-        } else {
-            state.selectedNodes.clear()
-        }
-        return "Click"
-    }
-    return mapTool(g => g.data, g => dataTool)
-}
-
-function putNewNode(state: DataState, x: number, y: number): GraphNode<UiNodeData> {
-    let node = createNode<UiNodeData>(state.graph, {...defaultNodeData}, x, y)
-    state.selectedNodes = new Set([node])
-    return node
-}
-
-function putNewWindow(bounds: Rect, state: DataState) {
-    let color = `hsl(${Math.random() * 360}, 70%, 40%)`
-    let window = {
-        bounds,
-        borderColor: color,
-        resizing: {
-            minWidth: 50,
-            minHeight: 30,
-        }
-    }
-    satisfyMinBounds(window)
-    state.ruleBoxes.push(window)
-}
-
-const tools = {
-    "none": noopTool,
-    "build": graphToolWithClickSelect((s) => new BuildGraphInteraction((g, x, y) => putNewNode(s, x, y), createEdge)),
-    "drag": graphTool(() => new DragNodeInteraction()),
-    "shift": graphTool(() => new ShiftNodeInteraction()),
-    "move": graphTool(() => new MoveComponentInteraction()),
-    //"duplicate": graphTool(() => new DuplicateInteraction(new SimpleGraphPainter(5, "black"), )),
-    "delete": graphTool(() => new DeleteInteraction(deleteNode, deleteEdge)),
-    "rulebox": toolWithUndo(makeSpanWindowTool(putNewWindow)),
-    "play": toolWithUndo(playerTool),
-    "select": selectionTool(new MultiClickDetector(500)),
-}
-
-export type ToolName = keyof typeof tools
-
-export const metaEditingTool: MouseInteraction<MainState> =
-    multiplexTool(state => tools[state.selectedTool])
-
-
-export function selectTool(state: MainState, tool: ToolName) {
-    state.selectedTool = tool
-    state.data.selectedNodes = new Set()
-    if (tool === "play") {
-        pushToHistory(state) // the play tool starts execution, push an undo point so that it can be reset
-        state.data.action = { kind: "auto" }
-    } else {
-        state.data.action = null
-    }
-}
-
-export const metaWindowTool: MouseInteraction<MainState> = multiplexTool(state => {
-    if (state.selectedTool === "delete") {
-        return deleteWindowTool
-    } else {
-        return windowMovingTool
-    }
-})
-
-export const windowMovingTool: MouseInteraction<MainState> =
-    toolWithUndo(mapTool(
-        s => s.ruleBoxes,
-        s => makeWindowMovingTool({
-            moveWindow(window) {
-                let insideNodes = new Set(s.graph.nodes.filter((node) => Rect.contains(window.bounds, node.x, node.y)))
-                let connectedEdges = s.graph.edges.filter(edge => insideNodes.has(edge.a) != insideNodes.has(edge.b))
-                return (dx, dy) => {
-                    for (let node of insideNodes) {
-                        node.x += dx
-                        node.y += dy
-                    }
-                    stretchEdgesToRelax(connectedEdges)
-                }
-            },
-            clickWindow(window) {
-                s.selectedRule = window
-            }
-        })
-    ))
-
-const deleteWindowTool: MouseInteraction<MainState> =
-    toolWithUndo((state: DataState, x: number, y: number): MouseClickResponse => {
-        for (let [i,box] of state.ruleBoxes.entries()) {
-            let titleArea = calcWindowTitleArea(box.bounds)
-            if (Rect.contains(titleArea, x, y)) {
-                state.ruleBoxes.splice(i, 1)
-                return "Click"
-            }
-        }
-        return "Ignore"
-    })
-
 
 export function createClearedState() : DataState {
     return {
@@ -386,200 +152,6 @@ function getOutsideGraphFilter(state: DataState): Graph<UiNodeData> {
     })
 }
 
-function randomNodeColor() {
-    //return `oklch(${Math.random() * 0.5 + 0.5} ${Math.random() * 0.25} ${Math.random() * 360})`
-    return `oklab(${randomUniform(0.5, 1.0)} ${randomUniform(-1, 1)*0.3} ${randomUniform(-1, 1)*0.3})`
-}
-
-export class MainPainter implements StatePainter<DataState> {
-    labelColors = new DefaultMap<string, string>(() => randomNodeColor())
-
-    constructor(private nodeRadius: number) {
-        this.labelColors.set("", "white")
-        this.labelColors.set(WILDCARD_SYMBOL, "white")
-        for (let l of ruleMetaSymbols) {
-            this.labelColors.set(l, "#f0f0f0")
-        }
-        this.labelColors.set(SYMBOL_PROGRAM_POINTER, "#f0f0f0")
-    }
-
-    draw(ctx: CanvasRenderingContext2D, state: DataState, frame: AnimationFrame): void {
-        //let highlightedNodes = new Set<GraphNode<UiNodeData>>()
-        //if (state.data.activeRule) {
-        //    let rule = ruleFromBox(state.data, state.data.activeRule)
-        //    highlightedNodes = findNodesMatchingRule(getOutsideGraphFilter(state.data), rule)
-        //}
-        if (state.action !== null && state.action.kind === "player") {
-            this.drawMatches(ctx, state.action, state.graph)
-        }
-        this.drawGraph(ctx, state.graph, state.selectedNodes)
-        this.drawRuleBoxes(ctx, state)
-    }
-
-    drawRuleBoxes(ctx: CanvasRenderingContext2D, state: DataState): void {
-        for (let box of state.ruleBoxes) {
-            let inactiveColor = `color-mix(in srgb, ${box.borderColor} 10%, rgba(50, 50, 50, 0.5))`
-            let color = state.selectedRule === box ? box.borderColor : inactiveColor
-            drawResizableWindowWithTitle(ctx, box.bounds, "Rule", color)
-        }
-    }
-
-    drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<UiNodeData>, selected: Set<GraphNode<UiNodeData>>): void {
-        let operators = findOperatorsAndOperandsSet(graph)
-        for (let edge of graph.edges) {
-            let hasOperator = operators.has(edge.a) || operators.has(edge.b)
-            if (isControlInSymbol(edge.a.data.label) && isControlOutSymbol(edge.b.data.label)) {
-                this.drawControlFlowDirected(ctx, edge.b, edge.a)
-            } else if (isControlInSymbol(edge.b.data.label) && isControlOutSymbol(edge.a.data.label)) {
-                this.drawControlFlowDirected(ctx, edge.a, edge.b)
-            } else {
-                this.drawEdge(ctx, edge, hasOperator)
-            }
-        }
-        for (let node of graph.nodes) {
-            let isMarker = controlPortSymbols.has(node.data.label)
-            this.drawNode(ctx, node, selected.has(node), operators.has(node), isMarker)
-        }
-    }
-
-    getOperatorBlack() {
-        return this.getOperatorFill("black") //`rgba(127, 127, 127, 1.0)`
-    }
-
-    getOperatorFill(color: string) {
-        return `color-mix(in srgb, ${color} 50%, white)`
-    }
-
-    drawEdge(ctx: CanvasRenderingContext2D, edge: GraphEdge<UiNodeData>, hasOperator: boolean) {
-        ctx.save()
-        ctx.lineWidth = 3
-        ctx.strokeStyle = hasOperator ? this.getOperatorBlack() : "black"
-        if (hasOperator) {
-            ctx.setLineDash([5, 5])
-        } else {
-            ctx.setLineDash([])
-        }
-        ctx.beginPath()
-        if (edge.a == edge.b) {
-            // self loop
-            ctx.lineWidth = 1
-            let cx = edge.a.x + this.nodeRadius;
-            let cy = edge.a.y - this.nodeRadius;
-            ctx.arc(cx, cy, this.nodeRadius, -Math.PI, Math.PI / 2, false);
-            //drawArrowTip(edge.a.x + this.nodeRadius * 8, edge.a.y - this.nodeRadius, edge.a.x + this.nodeRadius, edge.a.y, this.nodeRadius / 2, ctx)
-        } else {
-            ctx.moveTo(edge.a.x, edge.a.y)
-            ctx.lineTo(edge.b.x, edge.b.y)
-        }
-        ctx.stroke()
-        ctx.restore()
-    }
-
-    drawControlFlowDirected(ctx: CanvasRenderingContext2D, from: GraphNode<unknown>, to: GraphNode<unknown>) {
-        ctx.save()
-        ctx.lineWidth = 2
-        ctx.strokeStyle = "black"
-        ctx.moveTo(from.x, from.y)
-        const offset = Vector.scale(this.nodeRadius, vecdir(from, to))
-        const tip = Vector.sub(to, offset)
-        ctx.lineTo(tip.x, tip.y)
-        drawArrowTip(from.x, from.y, tip.x, tip.y, 12, ctx)
-        ctx.stroke()
-        ctx.restore()
-    }
-
-    drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<UiNodeData>, selected: boolean, operator: boolean, controlFlow: boolean) {
-        // no special treatment for operator, because it must maintain contrast. Only edge is modified
-
-        // circle
-        ctx.save()
-
-        ctx.beginPath()
-        let color = this.labelColors.get(node.data.label)
-        let black = "black"
-        let lineWidth = 3
-        ctx.fillStyle = color
-        ctx.strokeStyle = black
-        ctx.lineWidth = lineWidth
-        ctx.circle(node.x, node.y, this.nodeRadius)
-        ctx.fill()
-        if (!controlFlow) {
-            ctx.stroke()
-        }
-
-        // selection outline
-        if (selected) {
-            ctx.beginPath()
-            ctx.lineWidth = 2
-            ctx.strokeStyle = "blue"
-            ctx.setLineDash([5, 5])
-            ctx.circle(node.x, node.y, this.nodeRadius * 1.5)
-            ctx.stroke()
-            ctx.setLineDash([])
-        }
-
-        if (node.data.label) {
-            this.drawLabel(ctx, node, node.data.label, black)
-        }
-
-        ctx.restore()
-    }
-
-    drawLabel(ctx: CanvasRenderingContext2D, node: GraphNode<unknown>, text: string, color: string) {
-        // label
-        //ctx.strokeStyle = color
-        ctx.beginPath()
-        ctx.fillStyle = color // text in same color as outline
-        ctx.textAlign = "center"
-        ctx.textBaseline = "middle"
-        const fontWeight = "normal"
-        const fontSize = "12pt"
-        ctx.font = `${fontWeight} ${fontSize} sans-serif`
-        ctx.fillText(text, node.x, node.y)
-    }
-
-    drawMatches(ctx: CanvasRenderingContext2D, state: ActionStatePlayer, graph: Graph<UiNodeData>) {
-        let radius = this.nodeRadius * 2
-        let changingSet = computeChangingSet(state)
-        let singletons = new Set(changingSet.keys())
-        let color = `color-mix(in srgb, ${this.labelColors.get(state.color)} 20%, transparent)`
-        let colorStrong = `color-mix(in srgb, ${this.labelColors.get(state.color)} 40%, transparent)`
-        ctx.save()
-        ctx.beginPath()
-        for (let edge of graph.edges) {
-            if (changingSet.has(edge.a) && changingSet.has(edge.b)) {
-                let setA = new Set(state.matchesByNode.get(edge.a))
-                let setB = new Set(state.matchesByNode.get(edge.b))
-                if (!setA.isDisjointFrom(setB)) {
-                    singletons.delete(edge.a)
-                    singletons.delete(edge.b)
-                    ctx.moveTo(edge.a.x, edge.a.y)
-                    ctx.lineTo(edge.b.x, edge.b.y)
-                }
-            }
-        }
-        ctx.strokeStyle = color
-        ctx.lineWidth = radius * 2
-        ctx.fillStyle = color
-        ctx.lineCap = "round"
-        ctx.stroke()
-
-        for (let node of singletons) {
-            ctx.beginPath()
-            ctx.circle(node.x, node.y, radius)
-            ctx.fill()
-        }
-        let indexedSet = computeIndexedStepSet(state)
-        ctx.fillStyle = colorStrong
-        for (let node of indexedSet.keys()) {
-            ctx.beginPath()
-            ctx.circle(node.x, node.y, radius)
-            ctx.fill()
-        }
-        ctx.restore()
-    }
-}
-
 export const layoutStyle: LayoutPhysicsConfig = {
     nodeRadius: 14,
     pushDistance: 30,
@@ -589,69 +161,6 @@ export const layoutStyle: LayoutPhysicsConfig = {
     centeringForce: 0.0,
     dampening: 10.0,
     sleepVelocity: 0.5,
-}
-
-export const SYMBOL_HORIZONTAL_ALIGN = "—"
-export const SYMBOL_VERTICAL_ALIGN = "|"
-export const SYMBOL_ARROW_LEFT = "←"
-export const SYMBOL_ARROW_RIGHT = "→"
-export const SYMBOL_ARROW_UP = "↑"
-export const SYMBOL_ARROW_DOWN = "↓"
-
-export function applyDirectionAlignmentForces(dt: number, graph: Graph<UiNodeData>) {
-    const forceStrength = 200
-    for (let node of graph.nodes) {
-        if (node.neighbors.size === 2) {
-            switch (node.data.label) {
-            case SYMBOL_HORIZONTAL_ALIGN:
-                for (let other of node.neighbors) {
-                    let force = forceStrength * (node.y - other.y)
-                    other.vy += force * dt
-                    node.vy -= force * dt
-                }
-                break;
-            case SYMBOL_VERTICAL_ALIGN:
-                for (let other of node.neighbors) {
-                    let force = forceStrength * (node.x - other.x)
-                    other.vx += force * dt
-                    node.vx -= force * dt
-                }
-                break
-            }
-        }
-    }
-}
-
-export function applyArrowAlignmentForces(dt: number, graph: Graph<UiNodeData>) {
-    const forceStrength = 50
-    const arrows = new Map([
-        [SYMBOL_ARROW_LEFT, {opposite: SYMBOL_ARROW_RIGHT, dir: vec(-1, 0)}],
-        [SYMBOL_ARROW_RIGHT, {opposite: SYMBOL_ARROW_LEFT, dir: vec(1, 0)}],
-        [SYMBOL_ARROW_UP, {opposite: SYMBOL_ARROW_DOWN, dir: vec(0, -1)}],
-        [SYMBOL_ARROW_DOWN, {opposite: SYMBOL_ARROW_UP, dir: vec(0, 1)}],
-    ])
-    for (let node of graph.nodes) {
-        if (node.neighbors.size === 2) {
-            let arrow = arrows.get(node.data.label)
-            if (arrow) {
-                for (let other of node.neighbors) {
-                    let dir = Vector.sub(node, other)
-                    let ortho = Vector.rotate(dir, Math.PI / 2, Vector.Zero)
-                    let orthodot = Vector.dot(ortho, arrow.dir)
-                    let v = Vector.scale(forceStrength * dt * orthodot, Vector.normalize(ortho))
-                    if (other.data.label === arrow.opposite) {
-                        node.vx -= v.x
-                        node.vy -= v.y
-                    } else {
-                        other.vx -= v.x
-                        other.vy -= v.y
-                        node.vx += v.x
-                        node.vy += v.y
-                    }
-                }
-            }
-        }
-    }
 }
 
 function runActionWithReductions(state: DataState, action: RuleActionTokenStep, match: RuleMatch): void {
@@ -681,6 +190,27 @@ export function toggleRunning(state: MainState): void {
         state.data.action = { kind: "auto" }
         state.selectedTool = "play"
     }
+}
+
+export function playerClickNode(actionState: ActionStatePlayer, node: GraphNode<UiNodeData>): boolean {
+    let changingSet = computeChangingSet(actionState)
+    let indexedSet = computeIndexedStepSet(actionState)
+    let newMatchSet = indexedSet.get(node) ?? changingSet.get(node)
+    if (newMatchSet !== undefined) {
+        assert(newMatchSet.length > 0, "misunderstood truthiness in Javascript again")
+        actionState.matches = newMatchSet
+        actionState.matchesByNode = computeMatchesByNode(newMatchSet)
+        if (indexedSet.has(node)) {
+            actionState.stepIndex++
+        }
+        if (newMatchSet.length === 1) {
+            // execute rule
+            let [match] = newMatchSet
+            actionState.execute(match)
+        }
+        return true
+    }
+    return false
 }
 
 export class RuleRunner implements InteractiveSystem {

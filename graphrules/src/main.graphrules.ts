@@ -5,12 +5,16 @@ import { initRepaintOnResize } from "../../shared/canvas";
 import { ensured, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController, wrapActionAfterRelease } from "./interaction";
 import { flattenState, unflattenState } from "./storage";
-import { applyArrowAlignmentForces, applyDirectionAlignmentForces, applyExhaustiveReduction, applyRandomReduction, cloneDataState, createClearedState, DataState, layoutStyle, MainPainter, MainState, metaEditingTool, metaWindowTool, pushToHistory, runSelectedRule, selectTool, SYMBOL_ARROW_DOWN, SYMBOL_ARROW_LEFT, SYMBOL_ARROW_RIGHT, SYMBOL_ARROW_UP, ToolName, wrapSettleNewNodes, runSmallStepWithControlFlow, setLabelOnSelected, RuleRunner, runStepWithControlFlow, ruleTimers, ruleCounters, toggleRunning, getSelectedSubgraph } from "./ui";
+import { applyRandomReduction, cloneDataState, createClearedState, layoutStyle, pushToHistory, runSelectedRule, wrapSettleNewNodes, runSmallStepWithControlFlow, setLabelOnSelected, RuleRunner, runStepWithControlFlow, ruleTimers, ruleCounters, toggleRunning } from "./ui";
+import { applyArrowAlignmentForces, applyDirectionAlignmentForces, SYMBOL_ARROW_DOWN, SYMBOL_ARROW_LEFT, SYMBOL_ARROW_RIGHT, SYMBOL_ARROW_UP } from "./specialforces";
+import { metaEditingTool, metaWindowTool, selectTool, ToolName, getSelectedSubgraph } from "./tools";
+import { MainPainter } from "./painter";
 import JSURL from "jsurl"
 import { PanZoomController } from "./zooming";
 import { Vector } from "../../shared/vector";
 import { LibraryController } from "./library";
 import { OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, SYMBOL_FORALL, SYMBOL_IN, SYMBOL_OUT_EXHAUSTED, SYMBOL_OUT_STEP, SYMBOL_PROGRAM_POINTER, WILDCARD_SYMBOL } from "./semantics/symbols";
+import { DataState, MainState } from "./viewmodel/state";
 
 function tryLoadState(): DataState | null {
     let hash = window.location.hash
@@ -166,7 +170,7 @@ requireHtmlElement("btn_apply").addEventListener("click", () => {
     runGlobalUndoableAction(g => {
         wrapSettleNewNodes(g.data, () => {
             runSelectedRule(g.data);
-            applyExhaustiveReduction(g.data)
+            //applyExhaustiveReduction(g.data)
         })
     })
 })

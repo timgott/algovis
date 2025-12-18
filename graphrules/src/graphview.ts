@@ -7,6 +7,7 @@ interface BasicGraph<V> {
 interface FinGraph<V> extends BasicGraph<V> {
     allNodes(): ReadonlySet<V>
     countEdges(): number
+    enumerateEdges(): Iterable<[V,V]>
     neighbors(node: V): ReadonlySet<V>
 }
 
@@ -40,7 +41,11 @@ interface LabeledNeighborAccessor<V, L> {
 
 // Writable graph
 
-interface LabeledGraphInserter<V, L> {
+interface LabeledGraphInserter<V, L,> {
     insertNode(label: L): V
     insertEdge(a: V, b: V): void
+}
+
+interface ConnectingLabeledGraphInserter<V, L, C=V> extends LabeledGraphInserter<V,L> {
+    insertConnectingEdge(a: C, b: V): void
 }

@@ -1,7 +1,7 @@
 // default implementations
 
 import { collectBins, collectBinsSets } from "../../shared/defaultmap"
-import { ensured, mapFromFunction, neighborMapFromEdges, sum } from "../../shared/utils"
+import { edgesFromSymmNeighborMap, ensured, mapFromFunction, neighborMapFromEdges, sum } from "../../shared/utils"
 import { GraphWithParserAccess } from "./semantics/rule/parse_rulegraph"
 
 export function extractBetweenEdges<V, W>(graph: FinGraph<V | W>, setA: ReadonlySet<V>, setB: ReadonlySet<W>): Map<V, Set<W>> {
@@ -19,11 +19,12 @@ export function makeFinGraphFromNodesEdges<V>(nodes: Iterable<V>, edges: [V,V][]
 // caller must pass a symmetric neighbors map!
 export function makeFinGraphFromNodesNeighbors<V>(nodes: Iterable<V>, neighbors: Map<V,ReadonlySet<V>>): FinGraph<V> {
     let nodeSet = new Set(nodes)
-    let edgeCount = sum(neighbors.values().map(s => s.size))
+    let edges = edgesFromSymmNeighborMap(neighbors)
     return {
         allNodes: () => nodeSet,
-        countEdges: () => edgeCount,
-        neighbors: (node: V) => ensured(neighbors.get(node)),
+        countEdges: () => edges.length,
+        enumerateEdges: () => edges,
+        neighbors: (node: V) => neighbors.get(node) ?? new Set(),
     }
 }
 
@@ -73,5 +74,22 @@ export function makeParserGraphAccessor<V,L>(graph: LabeledGraph<V,L>): GraphWit
         ...graph,
         ...makeContainerGraphAccessor(graph),
         ...makeLabeledNeighborAccessor(graph)
+    }
+}
+
+export class CollectingLabeledGraphInserter<V,L> implements LabeledGraphInserter<V,L> {
+    newNodes: V[] = []
+    edges: [V,V][] = []
+
+    constructor(private actualInserter: LabeledGraphInserter<V,L>) {}
+
+    insertNode(label: L): V {
+        let v = this.actualInserter.insertNode(label)
+        this.newNodes.push(v)
+        return v
+    }
+    insertEdge(a: V, b: V): void {
+        this.actualInserter.insertEdge(a, b)
+        this.edges.push([a,b])
     }
 }
