@@ -5,7 +5,7 @@ import { Label } from "../symbols"
 // sufficient for finding matches
 export type PatternGraph<V> = {
     pattern: LabeledGraph<V, Label>
-    negativeEdges: [V, V][]
+    negativeEdges: BasicGraph<V> // must contain all nodes of pattern (might have no neighbors)
     freeVars: Set<Label>
 }
 // sufficient for finding matches and insert something into the graph

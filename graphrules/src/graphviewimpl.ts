@@ -12,7 +12,7 @@ export function extractBetweenEdges<V, W>(graph: FinGraph<V | W>, setA: Readonly
     )
 }
 
-export function makeFinGraphFromNodesEdges<V>(nodes: Iterable<V>, edges: [V,V][]): FinGraph<V> {
+export function makeFinGraphFromNodesEdges<V>(nodes: Iterable<V>, edges: Iterable<[V,V]>): FinGraph<V> {
     let neighbors = neighborMapFromEdges(edges)
     return makeFinGraphFromNodesNeighbors(nodes, neighbors)
 }
@@ -110,4 +110,27 @@ export function abstractifyGraph<T,L>(graph: Graph<T>, getLabel: (data: T) => L)
 
 export function abstractifyGraphSimple<L, T extends { label: L }>(graph: Graph<T>): LabeledGraph<GraphNode<T>, L> {
     return abstractifyGraph(graph, data => data.label)
+}
+
+export function makeInfiniteUnconnectedGraph<V>(): BasicGraph<V> {
+    return {
+        neighbors: () => new Set(),
+    }
+}
+
+// not exported because not useful
+function makeEmptyGraph<V,L>(): LabeledGraph<V,L> {
+    const emptySet = new Set<V>()
+    return {
+        allNodes: () => emptySet,
+        countEdges: () => 0,
+        enumerateEdges: () => [],
+        neighbors(node: V): ReadonlySet<V> {
+            throw new Error("empty graph, does not contain nodes")
+        },
+        label(node) {
+            throw new Error("empty graph, does not contain nodes")
+        },
+        nodesWithLabel: () => emptySet,
+    }
 }

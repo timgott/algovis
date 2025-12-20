@@ -1,5 +1,5 @@
 import { Graph } from "../../localgraphs/src/graph";
-import { assert, mapFromFunction, unionAll } from "../../shared/utils";
+import { assert, assertExists, intersectAll, mapFromFunction, unionAll } from "../../shared/utils";
 import { BinaryCspPropagator, CspPropagator } from "./csp";
 
 export class EdgePropagator<V,W> implements BinaryCspPropagator<V,W> {
@@ -55,6 +55,25 @@ export class VariablePropagator<V, Lv, W, Lw> implements BinaryCspPropagator<V, 
             return this.patternGraph.nodesWithLabel(label)
         }
         return []
+    }
+}
+
+export class NegativeEdgePropagator<V,W> implements BinaryCspPropagator<V,W> {
+    constructor(private negativeGraph: BasicGraph<V>, private hostGraph: FinGraph<W>) {}
+    propagateTo(node: V, domain: Set<W>, from: V, fromDomain: Set<W>): Set<W> {
+        // domain of node = (domain of node) minus intersection of negative neighbors of fromDomain
+        let negative = intersectAll<W>([...fromDomain].map(w => this.hostGraph.neighbors(w)))
+        assertExists(negative) // this should not be called if fromDomain is empty
+        return domain.difference(negative)
+    }
+    constraints(node: V, domains: Map<V, Set<W>>): Iterable<V> {
+        let domain = domains.get(node)!
+        if (domain.size === 1) {
+            return this.negativeGraph.neighbors(node)
+        } else {
+            // probably not worth updating if there is more than 1 node in domain
+            return []
+        }
     }
 }
 

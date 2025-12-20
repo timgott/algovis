@@ -60,7 +60,7 @@ describe("test makeRuleFromOperatorGraph", () => {
     test("negative edges subgraph symm", () => {
         let [pattern, [a, b, c]] = createPathGraph(["a", "b", "c"])
         let matcher = makeSubgraphMatcherWithNegative(simpleDataMatcher((a,b) => a==b), [[c,a]])
-        
+
         let graph = copyGraph(pattern)
         expect([...findAllInjectiveMatchesGeneric(graph.nodes, pattern.nodes, matcher)]).toHaveLength(1)
         createEdge(graph, a, c)

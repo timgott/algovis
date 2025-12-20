@@ -167,13 +167,19 @@ export function makeMostConstraining<V,D>(propagator: CspPropagator<V,unknown,D>
     }
 }
 export interface CspPropagator<V,C,D> {
-    propagateTo(node: V, domains: Map<V,Set<D>>, constraint: C): Set<D> // update nodes based on constraint, returns whether node changed
-    constraints(node: V, domains: Map<V,Set<D>>): Iterable<[C, Iterable<V>]> // all constraints that are incompatible with some value of node's domain together with neighbor nodes
+    // all constraints that might be incompatible with some value of node's domain (=should be updated) together with neighbor nodes
+    constraints(node: V, domains: Map<V,Set<D>>): Iterable<[C, Iterable<V>]>
+
+    // update nodes based on constraint, returns whether node changed
+    propagateTo(node: V, domains: Map<V,Set<D>>, constraint: C): Set<D>
 }
 
 export interface BinaryCspPropagator<V, D> {
-    propagateTo(node: V, domain: Set<D>, from: V, fromDomain: Set<D>): Set<D> // update nodes based on constraint, returns whether node changed
-    constraints(node: V, domains: Map<V,Set<D>>): Iterable<V> // all constraints that are incompatible with some value of node's domain together with neighbor nodes
+    // all constraints that might be incompatible with some value of node's domain (=should be updated) together with neighbor nodes
+    constraints(node: V, domains: Map<V,Set<D>>): Iterable<V>
+
+    // update nodes based on constraint, returns whether node changed
+    propagateTo(node: V, domain: Set<D>, from: V, fromDomain: Set<D>): Set<D>
 }
 
 export type ConstraintArc<V,D> = [BinaryCspPropagator<V,D>, from: V]

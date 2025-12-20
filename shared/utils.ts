@@ -340,6 +340,21 @@ export function unionAll<T>(sets: Iterable<Iterable<T>>) {
     return result
 }
 
+export function intersectAll<T>(sets: Iterable<T>[]): null | Set<T> {
+    if (sets.length === 0) {
+        // intersection of nothing is not defined
+        return null
+    } else {
+        let result = new Set(sets[0])
+        for (let set of sets.slice(1)) {
+            for (let elem of set) {
+                result.delete(elem)
+            }
+        }
+        return result
+    }
+}
+
 export function benchmark(f: () => unknown) {
     let start = performance.now()
     f()

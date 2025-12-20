@@ -1,9 +1,13 @@
-import { createEdge, createEmptyGraph, createNode, Graph, GraphNode } from "../../../localgraphs/src/graph"
-import { WILDCARD_SYMBOL } from "./symbols"
+import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, Graph, GraphNode } from "../../../localgraphs/src/graph"
+import { ensured } from "../../../shared/utils"
+import { abstractifyGraphSimple, makeFinGraphFromNodesEdges, makeInfiniteUnconnectedGraph } from "../graphviewimpl"
+import { UiNodeData } from "../viewmodel/state"
+import { PatternGraph } from "./rule/rulegraph"
+import { OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, WILDCARD_SYMBOL } from "./symbols"
 
-export function createLabeledPathGraph(labels: string[]): [Graph<NodeData>, GraphNode<NodeData>[]] {
-    let graph = createEmptyGraph<NodeData>()
-    let last: GraphNode<NodeData> | null = null
+export function createLabeledPathGraph(labels: string[]): [Graph<UiNodeData>, GraphNode<UiNodeData>[]] {
+    let graph = createEmptyGraph<UiNodeData>()
+    let last: GraphNode<UiNodeData> | null = null
     for (let v of labels) {
         let node = createNode(graph, { label: v })
         if (last !== null) {
@@ -16,82 +20,96 @@ export function createLabeledPathGraph(labels: string[]): [Graph<NodeData>, Grap
 
 const ANY = WILDCARD_SYMBOL
 
-export function makeReductionRuleSet(): VarRule<NodeData> {
-    let [pattern, [opNode, argNode, targetNode]] = createLabeledPathGraph([OPERATOR_SET, "val", "target"])
-    let matcher = makeSubgraphVarMatcher(new Set(["val", "target"]))
+export type ReductionRule<V=GraphNode<UiNodeData>> = {
+    pattern: PatternGraph<V>
+    apply(graph: Graph<UiNodeData>, embedding: Map<V,GraphNode<UiNodeData>>): void
+}
+
+type BasicReductionRuleSource = {
+    pattern: Graph<UiNodeData>,
+    apply(graph: Graph<UiNodeData>, embedding: Map<GraphNode<UiNodeData>,GraphNode<UiNodeData>>): void,
+    freeVars?: string[],
+    negativeEdges?: [GraphNode<UiNodeData>, GraphNode<UiNodeData>][]
+}
+function makeSimpleReductionRule(source: BasicReductionRuleSource): ReductionRule {
     return {
-        pattern,
-        matcher,
-        apply(graph, {embedding, context}) {
-            deleteNode(graph, embedding.get(opNode)!)
-            deleteNode(graph, embedding.get(argNode)!)
-            embedding.get(targetNode)!.data.label = context.get("val")!
+        pattern: {
+            pattern: abstractifyGraphSimple(source.pattern),
+            freeVars: new Set(source.freeVars ?? []),
+            negativeEdges:
+                source.negativeEdges !== undefined
+                ? makeFinGraphFromNodesEdges(source.pattern.nodes, source.negativeEdges)
+                : makeInfiniteUnconnectedGraph()
         },
+        apply: source.apply
     }
 }
 
-export function makeReductionRuleDel(): VarRule<NodeData> {
+export function makeReductionRuleAssign(): ReductionRule {
+    let [patternGraph, [opNode, argNode, targetNode]] = createLabeledPathGraph([OPERATOR_SET, "val", "target"])
+    return makeSimpleReductionRule({
+        pattern: patternGraph,
+        freeVars: ["val", "target"],
+        apply(graph, embedding) {
+            deleteNode(graph, ensured(embedding.get(opNode)))
+            deleteNode(graph, ensured(embedding.get(argNode)))
+            embedding.get(targetNode)!.data.label = embedding.get(argNode)!.data.label
+        }
+    })
+}
+
+export function makeReductionRuleDel(): ReductionRule {
     let [pattern, [opNode, argNode]] = createLabeledPathGraph([OPERATOR_DEL, ANY])
-    let matcher = makeSubgraphWildcardMatcher()
-    return {
-        pattern,
-        matcher,
-        apply(graph, {embedding}) {
+    return makeSimpleReductionRule({
+        pattern: pattern,
+        apply(graph, embedding) {
             deleteNode(graph, embedding.get(opNode)!)
             deleteNode(graph, embedding.get(argNode)!)
-        },
-    }
+        }
+    })
 }
 
-export function makeReductionRuleNew(): VarRule<NodeData> {
+export function makeReductionRuleNew(): ReductionRule {
     let [pattern, [opNode]] = createLabeledPathGraph([OPERATOR_NEW])
-    let matcher = makeSubgraphWildcardMatcher()
-    return {
-        pattern,
-        matcher,
-        apply(graph, {embedding}) {
+    return makeSimpleReductionRule({
+        pattern: pattern,
+        apply(graph, embedding) {
             deleteNode(graph, embedding.get(opNode)!)
-        },
-    }
+        }
+    })
 }
 
-export function makeReductionRuleDisconnect(): VarRule<NodeData> {
+export function makeReductionRuleDisconnect(): ReductionRule {
     let [pattern, [argA, opNode, argB]] = createLabeledPathGraph([ANY, OPERATOR_DISCONNECT, ANY])
     createEdge(pattern, argA, argB) // complete triangle
-    let matcher = makeSubgraphWildcardMatcher()
-    return {
-        pattern,
-        matcher,
-        apply(graph, {embedding, context}) {
+    return makeSimpleReductionRule({
+        pattern: pattern,
+        apply(graph, embedding) {
             deleteNode(graph, embedding.get(opNode)!)
             deleteEdge(graph, embedding.get(argA)!, embedding.get(argB)!)
-        },
-    }
+        }
+    })
 }
 
-export function makeReductionRuleConnect(): VarRule<NodeData> {
+export function makeReductionRuleConnect(): ReductionRule {
     let [pattern, [argA, opNode, argB]] = createLabeledPathGraph([ANY, OPERATOR_CONNECT, ANY])
-    let matcher = makeVarMatcherWithNegativeEdges(new Set(), [[argA, argB]])
-    return {
+    return makeSimpleReductionRule({
         pattern,
-        matcher,
-        apply(graph, {embedding, context}) {
+        negativeEdges: [[argA, argB]],
+        apply(graph, embedding) {
             deleteNode(graph, embedding.get(opNode)!)
             createEdge(graph, embedding.get(argA)!, embedding.get(argB)!)
         },
-    }
+    })
 }
 
-export function makeDefaultReductionRules(optimizer: PatternOrderOptimizer<NodeData>): VarRule<NodeData>[] {
+export function makeDefaultReductionRules(): ReductionRule[] {
     let rules = [
         makeReductionRuleNew(),
         makeReductionRuleDel(),
-        makeReductionRuleSet(),
+        makeReductionRuleAssign(),
         makeReductionRuleConnect(),
         makeReductionRuleDisconnect(),
     ]
-    for (let rule of rules) {
-        rule.pattern = optimizer(rule.pattern)
-    }
     return rules
 }

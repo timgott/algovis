@@ -1,5 +1,5 @@
 import { allDistinctPairs, mapFromFunction } from "../../../../shared/utils";
-import { extractBetweenEdges } from "../../graphviewimpl";
+import { extractBetweenEdges, makeFinGraphFromNodesEdges } from "../../graphviewimpl";
 import { Label, SYMBOL_RULE_INSERTION, SYMBOL_RULE_NEGATIVE, SYMBOL_RULE_PATTERN } from "../symbols";
 import { RuleGraph } from "./rulegraph";
 
@@ -35,12 +35,17 @@ function* parseNegativeEdges<V>(graph: GraphWithParserAccess<V>, ruleRoot: V, pa
     }
 }
 
+function parseNegativeSubgraph<V>(graph: GraphWithParserAccess<V>, ruleRoot: V, patternSubgraph: FinGraph<V>): FinGraph<V> {
+    let edges = parseNegativeEdges(graph, ruleRoot, patternSubgraph)
+    return makeFinGraphFromNodesEdges(patternSubgraph.allNodes(), edges)
+}
+
 
 export function parseRule<V>(graph: GraphWithParserAccess<V>, ruleRoot: V): RuleGraph<V> {
     let pattern = parseRuleSubgraph(graph, ruleRoot, SYMBOL_RULE_PATTERN, "pattern")
     let insertion = parseRuleSubgraph(graph, ruleRoot, SYMBOL_RULE_INSERTION, "insertion")
     let connectingEdges = extractBetweenEdges(graph, pattern.allNodes(), insertion.allNodes())
-    let negativeEdges = [...parseNegativeEdges(graph, ruleRoot, pattern)]
+    let negativeEdges = parseNegativeSubgraph(graph, ruleRoot, pattern)
     let vars = new Set<Label>() // TODO!!!!!!!!!!!!!!!!
     return {
         pattern,

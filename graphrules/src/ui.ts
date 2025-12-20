@@ -6,13 +6,15 @@ import { WindowBounds } from "../../localgraphs/src/interaction/windows"
 import { collectBins, DefaultMap } from "../../shared/defaultmap"
 import { Rect } from "../../shared/rectangle"
 import { assert, ensured, randomChoice } from "../../shared/utils"
-import { findRuleMatches } from "./semantics/rule/matching"
+import { applyExhaustiveReduction } from "./semantics/reductionapply"
+import { findRuleMatches } from "./semantics/rule/patternmatching"
 import { parseRule } from "./semantics/rule/parse_rulegraph"
 import { applyRule } from "./semantics/rule/rule_application"
 import { metaSymbols } from "./semantics/symbols"
 import { makeVirtualGraphToRealInserter, makeVirtualGraphEmbedding, applyRuleOnGraph } from "./viewmodel/boxsemantics"
 import { DataState, MainState, RuleBoxState, UiNodeData } from "./viewmodel/state"
 import { ZoomState } from "./zooming"
+import { makeDefaultReductionRules } from "./semantics/reductions"
 
 export function setLabelOnSelected(state: MainState, label: string) {
     for (let node of state.data.selectedNodes) {
@@ -84,26 +86,6 @@ export function runStepWithControlFlow(state: DataState): boolean {
     // TODO: placement inside boxes?
     return result
 }
-
-export function applyRandomReduction(state: DataState): boolean {
-    let rules = makeDefaultReductionRules(makePatternOptimizer(state.graph))
-    for (let rule of rules) {
-        let matches = findAllRuleMatches(getOutsideGraphFilter(state), rule)
-        if (matches.length > 0) {
-            rule.apply(state.graph, randomChoice(matches))
-            return true
-        }
-    }
-    return false
-}
-
-export const ruleTimers = [
-    0, 0, 0, 0, 0, 0,
-]
-
-export const ruleCounters = [
-    0, 0, 0, 0, 0, 0,
-]
 
 export function computeChangingSet(actionState: ActionStatePlayer): Map<GraphNode<UiNodeData>, RuleMatch[]> {
     return actionState.matchesByNode.toMap()
