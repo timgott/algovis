@@ -167,9 +167,9 @@ export function makeVirtualGraphToRealInserter(graph: Graph<UiNodeData>)
 }
 
 // the mapping of VirtualNode in match.values must refer to nodes in graph.nodes
-export function applyRuleOnGraph(rule: RuleGraph<VirtualNode>, match: Map<VirtualNode, VirtualNode>, graph: Graph<UiNodeData>) {
+export function applyRuleOnGraph(rule: RuleGraph<VirtualNode>, match: Map<VirtualNode, VirtualNode>, emb: VirtualGraphEmbedding, graph: Graph<UiNodeData>) {
     let inserter = new GraphInsertionsCollector(makeVirtualGraphToRealInserter(graph))
-    applyRule(rule, match, inserter)
+    applyRule(rule, match, emb.virtualGraph.label, inserter)
     // TODO: placement inside boxes?
     let normalExistingNodes =
         match.values()

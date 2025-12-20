@@ -63,7 +63,7 @@ export function runSelectedRule(state: DataState) {
         return
     }
 
-    applyRuleOnGraph(rule, randomChoice(matches), state.graph)
+    applyRuleOnGraph(rule, randomChoice(matches), virtual, state.graph)
 }
 
 // runs control flow and rule execution in separate steps
