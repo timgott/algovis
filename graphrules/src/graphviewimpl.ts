@@ -1,7 +1,8 @@
 // default implementations
 
+import { Graph, GraphNode } from "../../localgraphs/src/graph"
 import { collectBins, collectBinsSets } from "../../shared/defaultmap"
-import { edgesFromSymmNeighborMap, ensured, mapFromFunction, neighborMapFromEdges, sum } from "../../shared/utils"
+import { edgesFromSymmNeighborMap, ensured, invertMap, mapFromFunction, neighborMapFromEdges, sum } from "../../shared/utils"
 import { GraphWithParserAccess } from "./semantics/rule/parse_rulegraph"
 
 export function extractBetweenEdges<V, W>(graph: FinGraph<V | W>, setA: ReadonlySet<V>, setB: ReadonlySet<W>): Map<V, Set<W>> {
@@ -77,19 +78,36 @@ export function makeParserGraphAccessor<V,L>(graph: LabeledGraph<V,L>): GraphWit
     }
 }
 
-export class CollectingLabeledGraphInserter<V,L> implements LabeledGraphInserter<V,L> {
-    newNodes: V[] = []
-    edges: [V,V][] = []
+export class CollectInsertions<V,L,C,E> implements ConnectingLabeledGraphInserter<V,L,C,E> {
+    public newNodes: V[] = []
+    public edges: E[] = []
+    public connectors: C[] = []
 
-    constructor(private actualInserter: LabeledGraphInserter<V,L>) {}
+    constructor(private actualInserter: ConnectingLabeledGraphInserter<V,L,C,E>) {}
 
     insertNode(label: L): V {
         let v = this.actualInserter.insertNode(label)
         this.newNodes.push(v)
         return v
     }
-    insertEdge(a: V, b: V): void {
-        this.actualInserter.insertEdge(a, b)
-        this.edges.push([a,b])
+    insertEdge(a: V, b: V): E {
+        let e = this.actualInserter.insertEdge(a, b)
+        this.edges.push(e)
+        return e
     }
+    insertConnectingEdge(a: C, b: V): void {
+        let e = this.actualInserter.insertConnectingEdge(a, b)
+        this.connectors.push(a)
+    }
+}
+
+export function abstractifyGraph<T,L>(graph: Graph<T>, getLabel: (data: T) => L): LabeledGraph<GraphNode<T>, L> {
+    return makeLabeledGraphFromFingraph(
+        makeFinGraphFromNodesEdges(graph.nodes, graph.edges.map(edge => [edge.a, edge.b])),
+        node => getLabel(node.data)
+    )
+}
+
+export function abstractifyGraphSimple<L, T extends { label: L }>(graph: Graph<T>): LabeledGraph<GraphNode<T>, L> {
+    return abstractifyGraph(graph, data => data.label)
 }

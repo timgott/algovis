@@ -41,11 +41,11 @@ interface LabeledNeighborAccessor<V, L> {
 
 // Writable graph
 
-interface LabeledGraphInserter<V, L,> {
+interface LabeledGraphInserter<V, L, E> {
     insertNode(label: L): V
-    insertEdge(a: V, b: V): void
+    insertEdge(a: V, b: V): E
 }
 
-interface ConnectingLabeledGraphInserter<V, L, C=V> extends LabeledGraphInserter<V,L> {
+interface ConnectingLabeledGraphInserter<V, L, C=V, E=unknown> extends LabeledGraphInserter<V,L,E> {
     insertConnectingEdge(a: C, b: V): void
 }

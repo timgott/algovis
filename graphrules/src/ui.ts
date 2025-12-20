@@ -10,7 +10,7 @@ import { findRuleMatches } from "./semantics/rule/matching"
 import { parseRule } from "./semantics/rule/parse_rulegraph"
 import { applyRule } from "./semantics/rule/rule_application"
 import { metaSymbols } from "./semantics/symbols"
-import { makeVirtualGraphToRealInserter, makeVirtualGraphEmbedding } from "./viewmodel/boxsemantics"
+import { makeVirtualGraphToRealInserter, makeVirtualGraphEmbedding, applyRuleOnGraph } from "./viewmodel/boxsemantics"
 import { DataState, MainState, RuleBoxState, UiNodeData } from "./viewmodel/state"
 import { ZoomState } from "./zooming"
 
@@ -60,7 +60,8 @@ export function runSelectedRule(state: DataState) {
         console.log("No matches")
         return
     }
-    applyRule(rule, randomChoice(matches), makeVirtualGraphToRealInserter(state.graph))
+
+    applyRuleOnGraph(rule, randomChoice(matches), state.graph)
 }
 
 // runs control flow and rule execution in separate steps
@@ -80,6 +81,7 @@ export function runStepWithControlFlow(state: DataState): boolean {
     let result = advanceControlFlow(state.graph)
     result = runFirstAction(state.graph, ruleRects) || result
     applyExhaustiveReduction(state)
+    // TODO: placement inside boxes?
     return result
 }
 

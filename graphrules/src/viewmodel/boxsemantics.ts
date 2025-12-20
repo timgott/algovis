@@ -1,10 +1,14 @@
-import { createEdge, createNode, Graph, GraphNode } from "../../../localgraphs/src/graph";
+import { createEdge, createNode, Graph, GraphEdge, GraphNode } from "../../../localgraphs/src/graph";
+import { stretchEdgesToFit, stretchEdgesToRelax } from "../../../localgraphs/src/interaction/physics";
 import { WindowBounds } from "../../../localgraphs/src/interaction/windows";
 import { collectBins } from "../../../shared/defaultmap";
 import { Rect } from "../../../shared/rectangle";
-import { invertMap, invertMultiMap, mapFromFunction, mapObject, mapToIndex, neighborMapFromEdges, range, unreachable, ValueOf } from "../../../shared/utils";
-import { makeFinGraphFromNodesEdges, makeLabeledGraphFromFingraph, makeParserGraphAccessor } from "../graphviewimpl";
+import { ensured, invertMap, invertMultiMap, mapFromFunction, mapObject, mapToIndex, neighborMapFromEdges, range, unreachable, ValueOf } from "../../../shared/utils";
+import { CollectInsertions as GraphInsertionsCollector, makeFinGraphFromNodesEdges, makeLabeledGraphFromFingraph, makeParserGraphAccessor } from "../graphviewimpl";
+import { placeNewNodesBetweenOld } from "../semantics/placement";
 import { GraphWithParserAccess } from "../semantics/rule/parse_rulegraph";
+import { applyRule } from "../semantics/rule/rule_application";
+import { RuleGraph } from "../semantics/rule/rulegraph";
 import { Label, OPERATOR_CONNECT, operatorsWithArgSymbols, operatorSymbols, ruleMetaSymbols, SYMBOL_RULE_INSERTION, SYMBOL_RULE_META, SYMBOL_RULE_NEGATIVE, SYMBOL_RULE_OUTSIDE, SYMBOL_RULE_PATTERN } from "../semantics/symbols";
 import { defaultNodeData, RuleBoxState, UiNodeData } from "./state";
 
@@ -73,6 +77,10 @@ type VirtualGraphEmbedding = {
     boxMapping: Map<RuleBoxState, VirtualBoxNodesMap>,
 }
 
+function getRealForVirtualNormal(vnode: VirtualNode & {kind: "normal"}, graph: Graph<UiNodeData>): GraphNode<UiNodeData> {
+    return ensured(graph.nodes[vnode.index])
+}
+
 export function makeVirtualGraphEmbedding(graph: Graph<UiNodeData>, ruleBoxes: RuleBoxState[]): VirtualGraphEmbedding {
     let normalNodesToVirtual = mapFromFunction<GraphNode<UiNodeData>, VirtualNode>(
         graph.nodes,
@@ -125,7 +133,7 @@ export function makeVirtualGraphEmbedding(graph: Graph<UiNodeData>, ruleBoxes: R
     let fingraph = makeFinGraphFromNodesEdges(nodes, edges)
     let lgraph = makeLabeledGraphFromFingraph(fingraph, node => {
         if (node.kind === "normal") {
-            return graph.nodes[node.index].data.label
+            return getRealForVirtualNormal(node, graph).data.label
         } else {
             return node.special
         }
@@ -137,22 +145,38 @@ export function makeVirtualGraphEmbedding(graph: Graph<UiNodeData>, ruleBoxes: R
     }
 }
 
-export function makeVirtualGraphToRealInserter(graph: Graph<UiNodeData>): ConnectingLabeledGraphInserter<GraphNode<UiNodeData>, Label, VirtualNode> {
+export function makeVirtualGraphToRealInserter(graph: Graph<UiNodeData>)
+: ConnectingLabeledGraphInserter<GraphNode<UiNodeData>, Label, VirtualNode, GraphEdge<UiNodeData>> {
     return {
         insertNode(label: string): GraphNode<UiNodeData> {
             return createNode(graph, { ...defaultNodeData, label });
         },
-        insertEdge: function (a: GraphNode<UiNodeData>, b: GraphNode<UiNodeData>): void {
-            createEdge(graph, a, b)
+        insertEdge(a: GraphNode<UiNodeData>, b: GraphNode<UiNodeData>): GraphEdge<UiNodeData> {
+            return createEdge(graph, a, b)
         },
         insertConnectingEdge(a: VirtualNode, b: GraphNode<UiNodeData>): void {
             if (a.kind === "box") {
                 throw new Error("rule that puts node inside existing box is not possible yet!!!");
             } else if (a.kind === "normal") {
-                createEdge(graph, graph.nodes[a.index], b);
+                createEdge(graph, getRealForVirtualNormal(a, graph), b);
             } else {
                 unreachable(a);
             }
         },
     }
+}
+
+// the mapping of VirtualNode in match.values must refer to nodes in graph.nodes
+export function applyRuleOnGraph(rule: RuleGraph<VirtualNode>, match: Map<VirtualNode, VirtualNode>, graph: Graph<UiNodeData>) {
+    let inserter = new GraphInsertionsCollector(makeVirtualGraphToRealInserter(graph))
+    applyRule(rule, match, inserter)
+    // TODO: placement inside boxes?
+    let normalExistingNodes =
+        match.values()
+            .filter(x => x.kind === "normal")
+            .map(vnode => getRealForVirtualNormal(vnode, graph))
+    // TODO: make length of edges at least the length in the pattern
+    // old placement logic: insert edges with length=dist(a,b)
+    placeNewNodesBetweenOld(inserter.newNodes, normalExistingNodes)
+    stretchEdgesToFit(inserter.edges)
 }

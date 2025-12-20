@@ -14,6 +14,7 @@ import { ContextDataMatcher, findSubgraphMatches, findSubgraphMatchesWithContext
 import { makeVariableMatcher, mapMatcher } from "./variables.js";
 import { CspController, makeMostConstrainedOrdering, makeMostConstraining as makeMostConstrainingOrdering, MultiConstraintPropagator, solveCsp, VariableOrdering, } from "./csp.js";
 import { DistinctnessPropagator, EdgePropagator, makeLabeledGraphDomains, VariablePropagator } from "./cspsubgraph.js";
+import { abstractifyGraph, abstractifyGraphSimple } from "../../graphrules/src/graphviewimpl.js";
 
 let undoButton = document.getElementById("undo") as HTMLButtonElement
 let redoButton = document.getElementById("redo") as HTMLButtonElement
@@ -77,19 +78,9 @@ function putNewWindow(bounds: Rect) {
     controller.requestFrame()
 }
 
-function abstractifyGraph<T,L>(graph: Graph<T>, getLabel: (data: T) => L): LabeledGraph<GraphNode<T>, L> {
-    let nodesWithLabel = invertMap(mapFromFunction(graph.nodes, v => getLabel(v.data)))
-    return {
-        allNodes: () => graph.nodes,
-        neighbors: (node: GraphNode<T>) => node.neighbors,
-        nodesWithLabel: (label: L): Set<GraphNode<T>> => new Set(nodesWithLabel.get(label)),
-        label: (node: GraphNode<T>) => getLabel(node.data)
-    }
-}
-
 function findSubgraphMatchesUsingCsp(host: Graph<NodeData>, pattern: Graph<NodeData>, vars: Set<string>) {
-    let p = abstractifyGraph(pattern, d => d.label)
-    let h = abstractifyGraph(host, d => d.label)
+    let p = abstractifyGraphSimple(pattern)
+    let h = abstractifyGraphSimple(host)
     let domains = makeLabeledGraphDomains(p, h, vars)
     let constraints = new MultiConstraintPropagator<GraphNode<NodeData>, GraphNode<NodeData>>([
         new EdgePropagator(p, h),

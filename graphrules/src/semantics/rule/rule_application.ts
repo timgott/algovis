@@ -9,6 +9,8 @@ import { RuleGraph } from "./rulegraph";
 // Vh: host matched vertex
 // Vh_i: host new inserted vertex
 export function applyRule<Vp,Vp_i=Vp,Vh=Vp,Vh_i=Vh>(rule: RuleGraph<Vp,Vp_i>, match: Map<Vp,Vh>, inserter: ConnectingLabeledGraphInserter<Vh_i,Label,Vh>) {
+    // TODO: variables
+
     let insertedMap = mapFromFunction(
         rule.insertion.allNodes(),
         node => inserter.insertNode(rule.insertion.label(node))
