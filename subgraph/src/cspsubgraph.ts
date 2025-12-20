@@ -77,13 +77,13 @@ export class NegativeEdgePropagator<V,W> implements BinaryCspPropagator<V,W> {
     }
 }
 
-export function makeLabeledGraphDomains<V,L,W>(patternGraph: LabeledGraph<V,L>, hostGraph: LabeledGraph<W,L>, variables: Set<L>) {
+export function makeLabeledGraphDomains<V,L,W>(patternGraph: LabeledGraph<V,L>, hostGraph: LabeledGraph<W,L>, variables: Set<L>): Map<V, Set<W>> {
     // O(n*m)
     let hostNodes = new Set(hostGraph.allNodes())
     return mapFromFunction(patternGraph.allNodes(), v => {
         let label = patternGraph.label(v)
         let isVar = variables.has(label)
-        let labeledNodes = isVar ? hostNodes : hostGraph.nodesWithLabel(label)
+        let labeledNodes = isVar ? hostNodes : new Set(hostGraph.nodesWithLabel(label))
         return labeledNodes.filter(w => hostGraph.neighbors(w).size >= patternGraph.neighbors(v).size)
     })
 }

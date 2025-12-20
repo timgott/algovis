@@ -1,12 +1,13 @@
 import { assert } from "../../../../shared/utils";
 import { CspController, makeMostConstrainedOrdering, MultiConstraintPropagator, solveCsp } from "../../../../subgraph/src/csp";
 import { DistinctnessPropagator, EdgePropagator, makeLabeledGraphDomains, NegativeEdgePropagator, VariablePropagator } from "../../../../subgraph/src/cspsubgraph";
-import { Label } from "../symbols";
+import { Label, WILDCARD_SYMBOL } from "../symbols";
 import { PatternGraph } from "./rulegraph";
 
 export function* findRuleMatches<V,W>(rule: PatternGraph<V>, host: LabeledGraph<W,Label>): Generator<Map<V, W>> {
     // use csp because it has a generic implementation
-    let domains = makeLabeledGraphDomains(rule.pattern, host, rule.freeVars)
+    let varsAndWildcard = new Set([...rule.freeVars, WILDCARD_SYMBOL])
+    let domains = makeLabeledGraphDomains(rule.pattern, host, varsAndWildcard)
     let constraints = new MultiConstraintPropagator<V, W>([
         new EdgePropagator(rule.pattern, host),
         new DistinctnessPropagator(),
