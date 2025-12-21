@@ -13,7 +13,7 @@ export const ruleCounters = [
     0, 0, 0, 0, 0, 0,
 ]
 
-export function applyExhaustiveReduction(state: DataState) {
+export function applyExhaustiveReduction(graph: Graph<UiNodeData>) {
     let rules = makeDefaultReductionRules()
     let changed: boolean
     do {
@@ -21,13 +21,13 @@ export function applyExhaustiveReduction(state: DataState) {
         for (let [i,rule] of rules.entries()) {
             let startTime = performance.now()
             // take the first match
-            let matchResult = findRuleMatches(rule.pattern, abstractifyGraphSimple(state.graph)).next()
+            let matchResult = findRuleMatches(rule.pattern, abstractifyGraphSimple(graph)).next()
             let endTime = performance.now()
             ruleTimers[i] += endTime - startTime
             ruleCounters[i] += 1
             if (!matchResult.done) {
                 let match = matchResult.value
-                rule.apply(state.graph, match)
+                rule.apply(graph, match)
                 changed = true
                 break
             }

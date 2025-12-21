@@ -4,7 +4,7 @@ import { WindowBounds } from "../../../localgraphs/src/interaction/windows"
 import { DefaultMap } from "../../../shared/defaultmap"
 import { ToolName } from "../tools"
 import { ZoomState } from "../zooming"
-import { VirtualNode } from "./boxsemantics"
+import { VirtualGraphEmbedding, VirtualNode } from "./boxsemantics"
 
 export type UiNodeData = {
     label: string,
@@ -21,15 +21,16 @@ export type DataState = {
     action: ActionState
 }
 
-type RuleMatch = Map<VirtualNode, GraphNode<UiNodeData>>
+export type RuleMatch = Map<VirtualNode, VirtualNode>
 
-type ActionStatePlayer = {
+export type ActionStatePlayer = {
     kind: "player",
     color: string,
+    virtualEmbedding: VirtualGraphEmbedding,
     matches: RuleMatch[],
-    matchesByNode: DefaultMap<GraphNode<UiNodeData>, RuleMatch[]>,
+    matchesByNode: DefaultMap<VirtualNode, RuleMatch[]>,
     stepIndex: number,
-    patternOrder: GraphNode<UiNodeData>[],
+    patternOrder: VirtualNode[],
     execute(match: RuleMatch): void,
 }
 

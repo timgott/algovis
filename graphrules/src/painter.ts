@@ -3,13 +3,14 @@ import { AnimationFrame } from "../../localgraphs/src/interaction/controller";
 import { drawResizableWindowWithTitle } from "../../localgraphs/src/interaction/windows";
 import { drawArrowTip } from "../../shared/canvas";
 import { DefaultMap } from "../../shared/defaultmap";
-import { randomUniform } from "../../shared/utils";
+import { ensured, randomUniform } from "../../shared/utils";
 import { Vector, vecdir } from "../../shared/vector";
 import { StatePainter } from "./interaction";
+import { computeChangingSet, computeIndexedStepSet } from "./player";
 import { isControlInSymbol, isControlOutSymbol } from "./semantics/controlflow";
 import { WILDCARD_SYMBOL, ruleMetaSymbols, SYMBOL_PROGRAM_POINTER, controlPortSymbols } from "./semantics/symbols";
-import { computeChangingSet, computeIndexedStepSet } from "./ui";
-import { DataState, UiNodeData } from "./viewmodel/state";
+import { getRealForVirtualNormal } from "./viewmodel/boxsemantics";
+import { ActionStatePlayer, DataState, UiNodeData } from "./viewmodel/state";
 
 function randomNodeColor() {
     //return `oklch(${Math.random() * 0.5 + 0.5} ${Math.random() * 0.25} ${Math.random() * 360})`
@@ -166,15 +167,17 @@ export class MainPainter implements StatePainter<DataState> {
     drawMatches(ctx: CanvasRenderingContext2D, state: ActionStatePlayer, graph: Graph<UiNodeData>) {
         let radius = this.nodeRadius * 2;
         let changingSet = computeChangingSet(state);
-        let singletons = new Set(changingSet.keys());
+        let singletons = new Set(changingSet.keys().filter(vnode => vnode.kind === "normal").map(vnode => getRealForVirtualNormal(vnode, graph)));
         let color = `color-mix(in srgb, ${this.labelColors.get(state.color)} 20%, transparent)`;
         let colorStrong = `color-mix(in srgb, ${this.labelColors.get(state.color)} 40%, transparent)`;
         ctx.save();
         ctx.beginPath();
         for (let edge of graph.edges) {
-            if (changingSet.has(edge.a) && changingSet.has(edge.b)) {
-                let setA = new Set(state.matchesByNode.get(edge.a));
-                let setB = new Set(state.matchesByNode.get(edge.b));
+            let embA = ensured(state.virtualEmbedding.nodeMapping.get(edge.a))
+            let embB = ensured(state.virtualEmbedding.nodeMapping.get(edge.b))
+            if (changingSet.has(embA) && changingSet.has(embB)) {
+                let setA = new Set(state.matchesByNode.get(embA));
+                let setB = new Set(state.matchesByNode.get(embB));
                 if (!setA.isDisjointFrom(setB)) {
                     singletons.delete(edge.a);
                     singletons.delete(edge.b);
@@ -196,10 +199,13 @@ export class MainPainter implements StatePainter<DataState> {
         }
         let indexedSet = computeIndexedStepSet(state);
         ctx.fillStyle = colorStrong;
-        for (let node of indexedSet.keys()) {
-            ctx.beginPath();
-            ctx.circle(node.x, node.y, radius);
-            ctx.fill();
+        for (let vnode of indexedSet.keys()) {
+            if (vnode.kind === "normal") {
+                let node = getRealForVirtualNormal(vnode, graph)
+                ctx.beginPath();
+                ctx.circle(node.x, node.y, radius);
+                ctx.fill();
+            }
         }
         ctx.restore();
     }

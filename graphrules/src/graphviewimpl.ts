@@ -1,8 +1,8 @@
 // default implementations
 
 import { Graph, GraphNode } from "../../localgraphs/src/graph"
-import { collectBins, collectBinsSets } from "../../shared/defaultmap"
-import { edgesFromSymmNeighborMap, ensured, invertMap, mapFromFunction, neighborMapFromEdges, sum } from "../../shared/utils"
+import { collectBinsSets } from "../../shared/defaultmap"
+import { edgesFromSymmNeighborMap, ensured, mapFromFunction, neighborMapFromEdges } from "../../shared/utils"
 import { GraphWithParserAccess } from "./semantics/rule/parse_rulegraph"
 
 export function extractBetweenEdges<V, W>(graph: FinGraph<V | W>, setA: ReadonlySet<V>, setB: ReadonlySet<W>): Map<V, Set<W>> {
@@ -36,6 +36,12 @@ export function makeLabeledGraphFromFingraph<V,L>(fingraph: FinGraph<V>, labelFu
     ...fingraph,
         nodesWithLabel: (label: L) => nodesByLabel.get(label),
         label: (node: V) => ensured(labelByNode.get(node))
+    }
+}
+
+export function makeInfiniteUnconnectedGraph<V>(): BasicGraph<V> {
+    return {
+        neighbors: () => new Set(),
     }
 }
 
@@ -78,29 +84,6 @@ export function makeParserGraphAccessor<V,L>(graph: LabeledGraph<V,L>): GraphWit
     }
 }
 
-export class CollectInsertions<V,L,C,E> implements ConnectingLabeledGraphInserter<V,L,C,E> {
-    public newNodes: V[] = []
-    public edges: E[] = []
-    public connectors: C[] = []
-
-    constructor(private actualInserter: ConnectingLabeledGraphInserter<V,L,C,E>) {}
-
-    insertNode(label: L): V {
-        let v = this.actualInserter.insertNode(label)
-        this.newNodes.push(v)
-        return v
-    }
-    insertEdge(a: V, b: V): E {
-        let e = this.actualInserter.insertEdge(a, b)
-        this.edges.push(e)
-        return e
-    }
-    insertConnectingEdge(a: C, b: V): void {
-        let e = this.actualInserter.insertConnectingEdge(a, b)
-        this.connectors.push(a)
-    }
-}
-
 export function abstractifyGraph<T,L>(graph: Graph<T>, getLabel: (data: T) => L): LabeledGraph<GraphNode<T>, L> {
     return makeLabeledGraphFromFingraph(
         makeFinGraphFromNodesEdges(graph.nodes, graph.edges.map(edge => [edge.a, edge.b])),
@@ -110,27 +93,4 @@ export function abstractifyGraph<T,L>(graph: Graph<T>, getLabel: (data: T) => L)
 
 export function abstractifyGraphSimple<L, T extends { label: L }>(graph: Graph<T>): LabeledGraph<GraphNode<T>, L> {
     return abstractifyGraph(graph, data => data.label)
-}
-
-export function makeInfiniteUnconnectedGraph<V>(): BasicGraph<V> {
-    return {
-        neighbors: () => new Set(),
-    }
-}
-
-// not exported because not useful
-function makeEmptyGraph<V,L>(): LabeledGraph<V,L> {
-    const emptySet = new Set<V>()
-    return {
-        allNodes: () => emptySet,
-        countEdges: () => 0,
-        enumerateEdges: () => [],
-        neighbors(node: V): ReadonlySet<V> {
-            throw new Error("empty graph, does not contain nodes")
-        },
-        label(node) {
-            throw new Error("empty graph, does not contain nodes")
-        },
-        nodesWithLabel: () => emptySet,
-    }
 }

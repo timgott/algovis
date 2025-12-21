@@ -7,7 +7,8 @@ import { satisfyMinBounds, calcWindowTitleArea } from "../../localgraphs/src/int
 import { Rect } from "../../shared/rectangle";
 import { isDistanceLess, vec } from "../../shared/vector";
 import { MouseClickResponse, MouseInteraction, mapTool, wrapToolWithHistory, nestedGraphTool, stealToolClick, withToolClick, MultiClickDetector, noopTool, makeSpanWindowTool, multiplexTool, makeWindowMovingTool } from "./interaction";
-import { playerClickNode, pushToHistory } from "./ui";
+import { playerClickNode } from "./player";
+import { pushToHistory } from "./ui";
 import { DataState, UiNodeData, MainState, defaultNodeData } from "./viewmodel/state";
 
 function playerTool(state: DataState, mouseX: number, mouseY: number): MouseClickResponse {

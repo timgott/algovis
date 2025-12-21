@@ -5,7 +5,7 @@ import { initRepaintOnResize } from "../../shared/canvas";
 import { ensured, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController, wrapActionAfterRelease } from "./interaction";
 import { flattenState, unflattenState } from "./storage";
-import { cloneDataState, createClearedState, layoutStyle, pushToHistory, runSelectedRule, wrapSettleNewNodes, runSmallStepWithControlFlow, setLabelOnSelected, RuleRunner, runStepWithControlFlow, toggleRunning } from "./ui";
+import { cloneDataState, createClearedState, layoutStyle, pushToHistory, runSelectedRule, wrapSettleNewNodes, setLabelOnSelected, RuleRunner, toggleRunning } from "./ui";
 import { applyArrowAlignmentForces, applyDirectionAlignmentForces, SYMBOL_ARROW_DOWN, SYMBOL_ARROW_LEFT, SYMBOL_ARROW_RIGHT, SYMBOL_ARROW_UP } from "./specialforces";
 import { metaEditingTool, metaWindowTool, selectTool, ToolName, getSelectedSubgraph } from "./tools";
 import { MainPainter } from "./painter";
@@ -171,7 +171,7 @@ requireHtmlElement("btn_apply").addEventListener("click", () => {
     runGlobalUndoableAction(g => {
         wrapSettleNewNodes(g.data, () => {
             runSelectedRule(g.data);
-            applyExhaustiveReduction(g.data)
+            applyExhaustiveReduction(g.data.graph)
         })
     })
 })
@@ -181,7 +181,7 @@ requireHtmlElement("btn_apply_repeat").addEventListener("click", () => {
         wrapSettleNewNodes(g.data, () => {
             for (let i = 0; i < 10; i++) {
                 runSelectedRule(g.data);
-                applyExhaustiveReduction(g.data)
+                applyExhaustiveReduction(g.data.graph)
             }
         })
     })

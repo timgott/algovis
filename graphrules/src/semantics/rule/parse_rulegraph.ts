@@ -1,6 +1,6 @@
 import { allDistinctPairs, mapFromFunction } from "../../../../shared/utils";
 import { extractBetweenEdges, makeFinGraphFromNodesEdges } from "../../graphviewimpl";
-import { Label, SYMBOL_RULE_INSERTION, SYMBOL_RULE_NEGATIVE, SYMBOL_RULE_PATTERN } from "../symbols";
+import { Label, SYMBOL_RULE_INSERTION, SYMBOL_RULE_META, SYMBOL_RULE_NEGATIVE, SYMBOL_RULE_OUTSIDE, SYMBOL_RULE_PATTERN } from "../symbols";
 import { RuleGraph } from "./rulegraph";
 
 export type GraphWithParserAccess<V,L=Label> =
@@ -53,5 +53,15 @@ export function parseRule<V>(graph: GraphWithParserAccess<V>, ruleRoot: V): Rule
         connectingEdges,
         negativeEdges,
         freeVars: vars
+    }
+}
+
+export function* findRuleRootsForControlNode<V>(graph: GraphWithParserAccess<V,Label>, node: V): Generator<V> {
+    // simple depth 2 bfs
+    let parents = graph.neighborsWithLabel(node, SYMBOL_RULE_META)
+    for (let parent of parents) {
+        for (let root of graph.neighborsWithLabel(parent, SYMBOL_RULE_OUTSIDE)) {
+            yield root
+        }
     }
 }

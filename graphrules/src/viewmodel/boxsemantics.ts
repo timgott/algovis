@@ -1,10 +1,11 @@
-import { createEdge, createNode, Graph, GraphEdge, GraphNode } from "../../../localgraphs/src/graph";
+import { createEdge, createNode, deleteEdge, Graph, GraphEdge, GraphNode } from "../../../localgraphs/src/graph";
 import { stretchEdgesToFit, stretchEdgesToRelax } from "../../../localgraphs/src/interaction/physics";
 import { WindowBounds } from "../../../localgraphs/src/interaction/windows";
 import { collectBins } from "../../../shared/defaultmap";
 import { Rect } from "../../../shared/rectangle";
-import { ensured, invertMap, invertMultiMap, mapFromFunction, mapObject, mapToIndex, neighborMapFromEdges, range, unreachable, ValueOf } from "../../../shared/utils";
-import { CollectInsertions as GraphInsertionsCollector, makeFinGraphFromNodesEdges, makeLabeledGraphFromFingraph, makeParserGraphAccessor } from "../graphviewimpl";
+import { assert, ensured, invertMap, invertMultiMap, mapFromFunction, mapObject, mapToIndex, neighborMapFromEdges, range, unreachable, ValueOf } from "../../../shared/utils";
+import { makeFinGraphFromNodesEdges, makeLabeledGraphFromFingraph, makeParserGraphAccessor } from "../graphviewimpl";
+import { CollectInsertions as GraphInsertionsCollector } from "../grapheditorimpl";
 import { placeNewNodesBetweenOld } from "../semantics/placement";
 import { GraphWithParserAccess } from "../semantics/rule/parse_rulegraph";
 import { applyRule } from "../semantics/rule/rule_application";
@@ -29,14 +30,17 @@ type BoxConnectorSymbol = typeof boxConnectorLabels.root | BoxSubConnectorSymbol
 
 const boxSubConnectorSymbols: BoxSubConnectorSymbol[] = Object.values(boxConnectorLabels.children)
 
-export type VirtualNode = {
+export type VirtualNodeNormal = {
     kind: "normal",
     index: number
-} | {
+    _debug_source: unknown
+}
+type VirtualNodeBox =  {
     kind: "box",
     special: BoxConnectorSymbol
     box: RuleBoxState
 }
+export type VirtualNode = VirtualNodeNormal | VirtualNodeBox
 
 // default UI semantics (can later implement inside the language if needed)
 function getNodeTypesForNode(node: GraphNode<UiNodeData>): BoxSubConnectorSymbol[] {
@@ -71,20 +75,24 @@ type VirtualBoxNodesMap = {
     children: Map<BoxSubConnectorSymbol, VirtualNode>
 }
 
-type VirtualGraphEmbedding = {
+export type VirtualGraphEmbedding = {
     virtualGraph: GraphWithParserAccess<VirtualNode>,
     nodeMapping: Map<GraphNode<UiNodeData>, VirtualNode>,
     boxMapping: Map<RuleBoxState, VirtualBoxNodesMap>,
 }
 
-function getRealForVirtualNormal(vnode: VirtualNode & {kind: "normal"}, graph: Graph<UiNodeData>): GraphNode<UiNodeData> {
+export function getRealForVirtualNormal(vnode: VirtualNodeNormal, graph: Graph<UiNodeData>): GraphNode<UiNodeData> {
     return ensured(graph.nodes[vnode.index])
+}
+
+export function getVirtualForReal(emb: VirtualGraphEmbedding, graphNode: GraphNode<UiNodeData>): VirtualNode {
+    return ensured(emb.nodeMapping.get(graphNode))
 }
 
 export function makeVirtualGraphEmbedding(graph: Graph<UiNodeData>, ruleBoxes: RuleBoxState[]): VirtualGraphEmbedding {
     let normalNodesToVirtual = mapFromFunction<GraphNode<UiNodeData>, VirtualNode>(
         graph.nodes,
-        (x, index) => ({ kind: "normal", index })
+        (x, index) => ({ kind: "normal", index, _debug_source: x.data.label })
     )
     let boxesToVirtual = mapFromFunction<RuleBoxState, VirtualBoxNodesMap>(
         ruleBoxes,

@@ -38,14 +38,3 @@ interface LabeledNeighborAccessor<V, L> {
     // Can be implemented faster than iterating through neighbors
     neighborsWithLabel(node: V, label: L): ReadonlySet<V>
 }
-
-// Writable graph
-
-interface LabeledGraphInserter<V, L, E> {
-    insertNode(label: L): V
-    insertEdge(a: V, b: V): E
-}
-
-interface ConnectingLabeledGraphInserter<V, L, C=V, E=unknown> extends LabeledGraphInserter<V,L,E> {
-    insertConnectingEdge(a: C, b: V): void
-}

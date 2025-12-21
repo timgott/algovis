@@ -1,13 +1,12 @@
-import { describe, expect, test, jest, beforeEach } from '@jest/globals';
-import { applyRuleEverywhere, findAllRuleMatches, makeNegativeEdgesRuleFromGraph, makeSimpleRuleFromGraph } from './rule';
-import { createGraphFromEdges, createPathGraph } from '../../../localgraphs/src/interaction/examplegraph';
-import { copyGraph, createEdge, createNode, Graph, GraphNode } from '../../../localgraphs/src/graph';
+import { describe, expect, test, jest } from '@jest/globals';
+import { createPathGraph } from '../../../localgraphs/src/interaction/examplegraph';
+import { Graph, GraphNode } from '../../../localgraphs/src/graph';
 import { defaultNodeData, RuleBoxState, UiNodeData } from './state';
 import { Label, OPERATOR_CONNECT, OPERATOR_NEW, SYMBOL_RULE_INSERTION, SYMBOL_RULE_NEGATIVE, SYMBOL_RULE_PATTERN } from '../semantics/symbols';
 import { Rect } from '../../../shared/rectangle';
 import { makeVirtualGraphEmbedding, makeVirtualGraphToRealInserter, VirtualNode } from './boxsemantics';
-import { assert, ensured } from '../../../shared/utils';
-import { findRuleMatches } from '../semantics/rule/matching';
+import { ensured } from '../../../shared/utils';
+import { findRuleMatches } from '../semantics/rule/patternmatching';
 import { parseRule } from '../semantics/rule/parse_rulegraph';
 import { applyRule } from '../semantics/rule/rule_application';
 
@@ -145,7 +144,7 @@ describe("test new-operator semantics", () => {
             insertConnectingEdge: jest.fn(),
         }
         expect(testGraph.nodes.map(v => v.data.label).toSorted()).toEqual(["a"].toSorted())
-        applyRule(rule, match, inserter)
+        applyRule(rule, match, testEmb.virtualGraph.label, inserter)
         expect(inserter.insertNode).toHaveBeenCalledTimes(2)
         expect(inserter.insertNode).toHaveBeenCalledWith("b")
         expect(inserter.insertNode).toHaveBeenCalledWith(OPERATOR_NEW)
@@ -162,7 +161,7 @@ describe("test new-operator semantics", () => {
         let match = new Map([[ruleNodeA, testNodeA]])
         let inserter = makeVirtualGraphToRealInserter(testGraph)
         expect(testGraph.nodes.map(v => v.data.label).toSorted()).toEqual(["a"].toSorted())
-        applyRule(rule, match, inserter)
+        applyRule(rule, match, testEmb.virtualGraph.label, inserter)
         expect(testGraph.nodes).toHaveLength(3)
         expect(testGraph.nodes.map(v => v.data.label).toSorted()).toEqual(["a", "b", OPERATOR_NEW].toSorted())
         expect(testGraph.edges).toHaveLength(2)
