@@ -2,7 +2,7 @@
 
 import { Graph, GraphNode } from "../../localgraphs/src/graph"
 import { collectBinsSets } from "../../shared/defaultmap"
-import { edgesFromSymmNeighborMap, ensured, mapFromFunction, neighborMapFromEdges } from "../../shared/utils"
+import { edgesFromSymmNeighborMap, ensured, mapFromFunction, neighborMapFromEdges, unionAll } from "../../shared/utils"
 import { GraphWithParserAccess } from "./semantics/rule/parse_rulegraph"
 
 export function extractBetweenEdges<V, W>(graph: FinGraph<V | W>, setA: ReadonlySet<V>, setB: ReadonlySet<W>): Map<V, Set<W>> {
@@ -76,11 +76,65 @@ export function makeLabeledNeighborAccessor<V,L>(graph: LabeledGraph<V,L>): Labe
     }
 }
 
+function collectDirectedSubgraphNodes<V,L>(graph: LabeledGraph<V,L>, root: V, labelCycle: Set<L>[]): Set<V> {
+    let nodes = new Set<V>()
+    let currentLayer: V[] = [root]
+    let i = 0
+    let orderLabels = unionAll(labelCycle)
+    while (currentLayer.length > 0) {
+        let nextLayer: V[] = []
+        for (let layerNode of currentLayer) {
+            for (let neighbor of graph.neighbors(layerNode)) {
+                let label = graph.label(neighbor)
+                if (!orderLabels.has(label)) {
+                    // normal node, does not recurse to next layer
+                    nodes.add(neighbor)
+                } else if (labelCycle[i].has(label)) {
+                    // continue along cycle
+                    nextLayer.push(neighbor)
+                }
+            }
+        }
+        for (let node of nextLayer) {
+            nodes.add(node)
+        }
+        currentLayer = nextLayer
+        i += 1
+        i %= labelCycle.length
+    }
+    return nodes
+}
+
+function insertNode<V>(graph: FinGraph<V>, node: V, neighbors: V[]): FinGraph<V> {
+    let nodes = new Set(graph.allNodes())
+    nodes.add(node)
+    let edges = [...graph.enumerateEdges(), ...neighbors.map(nb => [node, nb] as [V,V])]
+    return makeFinGraphFromNodesEdges(nodes, edges)
+}
+
+// TODO: neighbors in set accessor
+export function makeDirectedSubgraphAccessor<V,L>(graph: LabeledGraph<V,L>): DirectedSubgraphAccessor<V, L, LabeledGraph<V,L>> {
+    return {
+        getDirectedSubgraph(root: V, labelCycle: Set<L>[], replaceRoot?: V | undefined): LabeledGraph<V, L> {
+            let nodes = collectDirectedSubgraphNodes(graph, root, labelCycle)
+            let subgraph = inducedSubgraph(nodes, graph)
+            if (replaceRoot !== undefined) {
+                subgraph = insertNode(subgraph, replaceRoot, [...graph.neighbors(root).intersection(nodes)])
+            }
+            return makeLabeledGraphFromFingraph(subgraph, graph.label)
+        }
+    }
+}
+
 export function makeParserGraphAccessor<V,L>(graph: LabeledGraph<V,L>): GraphWithParserAccess<V,L> {
+    let cg = makeContainerGraphAccessor(graph)
+    let ln = makeLabeledNeighborAccessor(graph)
+    let ds = makeDirectedSubgraphAccessor(graph)
     return {
         ...graph,
-        ...makeContainerGraphAccessor(graph),
-        ...makeLabeledNeighborAccessor(graph)
+        ...ln,
+        ...cg,
+        ...ds
     }
 }
 

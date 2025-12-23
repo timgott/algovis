@@ -1,7 +1,8 @@
-import { Graph } from "../../../localgraphs/src/graph"
+import { Graph, GraphNode } from "../../../localgraphs/src/graph"
 import { randomChoice } from "../../../shared/utils"
 import { abstractifyGraphSimple } from "../graphviewimpl"
-import { DataState, UiNodeData } from "../viewmodel/state"
+import { getRealForVirtualNormal, makeVirtualGraphEmbedding, VirtualGraphEmbedding, VirtualNode } from "../viewmodel/boxsemantics"
+import { DataState, RuleBoxState, UiNodeData } from "../viewmodel/state"
 import { makeDefaultReductionRules, ReductionRule } from "./reductions"
 import { findRuleMatches } from "./rule/patternmatching"
 
@@ -13,20 +14,35 @@ export const ruleCounters = [
     0, 0, 0, 0, 0, 0,
 ]
 
-export function applyExhaustiveReduction(graph: Graph<UiNodeData>) {
+function decodeReductionMatch<V>(graph: Graph<UiNodeData>, match: Map<V, VirtualNode>): Map<V, GraphNode<UiNodeData>> {
+    let entriesMapped = match.entries().map(([a, mapped]) => {
+        if (mapped.kind === "normal") {
+            return [a, getRealForVirtualNormal(mapped, graph)] satisfies [V, GraphNode<UiNodeData>]
+        } else if (mapped.kind === "root") {
+            return null
+        } else {
+            throw new Error("box reductions unsupported")
+        }
+    })
+    return new Map(entriesMapped.filter(e => e != null))
+}
+
+export function applyExhaustiveReduction(graph: Graph<UiNodeData>, ruleBoxes: RuleBoxState[]) {
     let rules = makeDefaultReductionRules()
     let changed: boolean
     do {
         changed = false
         for (let [i,rule] of rules.entries()) {
             let startTime = performance.now()
+            // use vgraph so that e.g. it is possible to match nodes only outside rule boxes
+            let vgraph = makeVirtualGraphEmbedding(graph, ruleBoxes)
             // take the first match
-            let matchResult = findRuleMatches(rule.pattern, abstractifyGraphSimple(graph)).next()
+            let matchResult = findRuleMatches(rule.pattern, vgraph.virtualGraph).next()
             let endTime = performance.now()
             ruleTimers[i] += endTime - startTime
             ruleCounters[i] += 1
             if (!matchResult.done) {
-                let match = matchResult.value
+                let match = decodeReductionMatch(graph, matchResult.value)
                 rule.apply(graph, match)
                 changed = true
                 break

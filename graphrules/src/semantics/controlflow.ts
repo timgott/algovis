@@ -1,13 +1,13 @@
 import { createEdge, createNode, deleteEdge, Graph, GraphNode } from "../../../localgraphs/src/graph"
 import { assert, randomChoice } from "../../../shared/utils"
 import { applyRuleOnGraph, getRealForVirtualNormal, VirtualGraphEmbedding, VirtualNode, VirtualNodeNormal } from "../viewmodel/boxsemantics"
-import { RuleMatch, UiNodeData } from "../viewmodel/state"
+import { RuleBoxState, RuleMatch, UiNodeData } from "../viewmodel/state"
 import { placeInCenterOf } from "./placement"
 import { applyExhaustiveReduction } from "./reductionapply"
 import { GraphWithParserAccess, parseRule } from "./rule/parse_rulegraph"
 import { findRuleMatches } from "./rule/patternmatching"
 import { RuleGraph } from "./rule/rulegraph"
-import { controlOutSymbols, Label, SYMBOL_ERROR, SYMBOL_IN, SYMBOL_OUT_EXHAUSTED, SYMBOL_OUT_STEP, SYMBOL_PROGRAM_POINTER, SYMBOL_RULE_META, SYMBOL_RULE_ROOT } from "./symbols"
+import { controlOutSymbols, Label, SYMBOL_ERROR, SYMBOL_IN, SYMBOL_OUT_EXHAUSTED, SYMBOL_OUT_STEP, SYMBOL_PROGRAM_POINTER, SYMBOL_RULE_META, SYMBOL_BOX_ROOT } from "./symbols"
 
 export function isControlInSymbol(s: string): boolean {
     return s === SYMBOL_IN
@@ -148,7 +148,7 @@ export function findPossibleActions(graph: GraphWithParserAccess<VirtualNode>): 
     for (let pc of pcNodes) {
         for (let inNode of filterNormalNodes(graph.neighbors(pc)).filter(n => isControlInSymbol(graph.label(n)))) {
             for (let metaNode of graph.neighborsWithLabel(inNode, SYMBOL_RULE_META)) {
-                for (let ruleRoot of graph.neighborsWithLabel(metaNode, SYMBOL_RULE_ROOT)) {
+                for (let ruleRoot of graph.neighborsWithLabel(metaNode, SYMBOL_BOX_ROOT)) {
                     let rule = parseRule(graph, ruleRoot)
                     let matches = [...findRuleMatches(rule, graph)]
                     let action = makeActionToken(matches, rule, graph, pc, inNode, metaNode)
@@ -181,8 +181,8 @@ export function executeActionExhausted(action: RuleActionTokenExhausted, graph: 
     executePointerControl(graph, emb, action.control)
 }
 
-export function executeActionStep(action: RuleActionTokenStep, match: RuleMatch, graph: Graph<UiNodeData>, virtualEmb: VirtualGraphEmbedding) {
+export function executeActionStep(action: RuleActionTokenStep, match: RuleMatch, graph: Graph<UiNodeData>, ruleBoxes: RuleBoxState[], virtualEmb: VirtualGraphEmbedding) {
     applyRuleOnGraph(action.rule, match, virtualEmb, graph)
-    applyExhaustiveReduction(graph)
+    applyExhaustiveReduction(graph, ruleBoxes)
     executePointerControl(graph, virtualEmb, action.control)
 }

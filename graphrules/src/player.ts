@@ -30,8 +30,8 @@ export function computeIndexedStepSet(actionState: ActionStatePlayer): Map<Virtu
     }
 }
 
-export function getControllingPlayer<V>(graph: LabeledGraph<V,Label>, marker: V): string | null {
-    let players = [...graph.neighbors(marker)].map(graph.label).filter(x => !metaSymbols.has(x))
+export function getControllingPlayer<V>(marker: GraphNode<UiNodeData>): string | null {
+    let players = [...marker.neighbors].map(n => n.data.label).filter(x => !metaSymbols.has(x))
     if (players.length === 0) {
         return null
     }

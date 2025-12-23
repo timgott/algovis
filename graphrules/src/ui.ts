@@ -132,12 +132,12 @@ export class RuleRunner implements InteractiveSystem {
                     state.action = { kind: "auto" }
                     executeActionExhausted(action, state.graph, virtualEmb)
                 } else {
-                    let player = getControllingPlayer(vgraph, action.control.inNode)
+                    let player = getControllingPlayer(action.control.inNode)
                     if (player === null) {
                         // execute on random match
                         state.action = { kind: "auto" }
                         let match = randomChoice(action.matches)
-                        executeActionStep(action, match, state.graph, virtualEmb)
+                        executeActionStep(action, match, state.graph, state.ruleBoxes, virtualEmb)
                     } else {
                         // order nodes arbitrarily (i.e. in the order they were built)
                         let patternOrder = [...action.rule.pattern.allNodes()]
@@ -152,7 +152,7 @@ export class RuleRunner implements InteractiveSystem {
                             execute(match) {
                                 state.action = { kind: "auto" }
                                 wrapSettleNewNodes(state, (data) => {
-                                    executeActionStep(action, match, data.graph, virtualEmb)
+                                    executeActionStep(action, match, data.graph, data.ruleBoxes, virtualEmb)
                                 })
                             },
                         }

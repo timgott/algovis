@@ -171,7 +171,7 @@ requireHtmlElement("btn_apply").addEventListener("click", () => {
     runGlobalUndoableAction(g => {
         wrapSettleNewNodes(g.data, () => {
             runSelectedRule(g.data);
-            applyExhaustiveReduction(g.data.graph)
+            applyExhaustiveReduction(g.data.graph, g.data.ruleBoxes)
         })
     })
 })
@@ -181,7 +181,7 @@ requireHtmlElement("btn_apply_repeat").addEventListener("click", () => {
         wrapSettleNewNodes(g.data, () => {
             for (let i = 0; i < 10; i++) {
                 runSelectedRule(g.data);
-                applyExhaustiveReduction(g.data.graph)
+                applyExhaustiveReduction(g.data.graph, g.data.ruleBoxes)
             }
         })
     })
@@ -190,7 +190,7 @@ requireHtmlElement("btn_apply_repeat").addEventListener("click", () => {
 requireHtmlElement("btn_step").addEventListener("click", () => {
     runGlobalUndoableAction(g => {
         wrapSettleNewNodes(g.data, () => {
-            runSmallStepWithControlFlow(g.data)
+            runSmallStepWithControlFlow(g.data, g.data.ruleBoxes)
         })
     })
 })
@@ -206,7 +206,7 @@ goButton.addEventListener("click", () => {
 requireHtmlElement("btn_benchmark").addEventListener("click", () => {
     runGlobalUndoableAction(g => {
         let startTime = performance.now()
-        while (runStepWithControlFlow(g.data)) {}
+        while (runStepWithControlFlow(g.data, g.data.ruleBoxes)) {}
         let endTime = performance.now()
         console.log("Benchmark time:", endTime-startTime)
         alert(`Benchmark time: ${endTime-startTime} ms`)

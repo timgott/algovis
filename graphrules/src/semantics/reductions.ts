@@ -3,7 +3,7 @@ import { ensured } from "../../../shared/utils"
 import { abstractifyGraphSimple, makeFinGraphFromNodesEdges, makeInfiniteUnconnectedGraph } from "../graphviewimpl"
 import { UiNodeData } from "../viewmodel/state"
 import { PatternGraph } from "./rule/rulegraph"
-import { OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, WILDCARD_SYMBOL } from "./symbols"
+import { OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, SYMBOL_GLOBAL_ROOT, WILDCARD_SYMBOL } from "./symbols"
 
 export function createLabeledPathGraph(labels: string[]): [Graph<UiNodeData>, GraphNode<UiNodeData>[]] {
     let graph = createEmptyGraph<UiNodeData>()
@@ -29,8 +29,9 @@ type BasicReductionRuleSource = {
     pattern: Graph<UiNodeData>,
     apply(graph: Graph<UiNodeData>, embedding: Map<GraphNode<UiNodeData>,GraphNode<UiNodeData>>): void,
     freeVars?: string[],
-    negativeEdges?: [GraphNode<UiNodeData>, GraphNode<UiNodeData>][]
+    negativeEdges?: [GraphNode<UiNodeData>, GraphNode<UiNodeData>][],
 }
+
 function makeSimpleReductionRule(source: BasicReductionRuleSource): ReductionRule {
     return {
         pattern: {
@@ -45,8 +46,17 @@ function makeSimpleReductionRule(source: BasicReductionRuleSource): ReductionRul
     }
 }
 
+// forces operators to be outside of rule boxes
+function makeGlobalRootWithConnection(graph: Graph<UiNodeData>, operators: Iterable<GraphNode<UiNodeData>>) {
+    let globalRoot = createNode(graph, { label: SYMBOL_GLOBAL_ROOT })
+    for (let op of operators) {
+        createEdge(graph, op, globalRoot)
+    }
+}
+
 export function makeReductionRuleAssign(): ReductionRule {
     let [patternGraph, [opNode, argNode, targetNode]] = createLabeledPathGraph([OPERATOR_SET, "val", "target"])
+    makeGlobalRootWithConnection(patternGraph, [opNode])
     return makeSimpleReductionRule({
         pattern: patternGraph,
         freeVars: ["val", "target"],
@@ -60,6 +70,7 @@ export function makeReductionRuleAssign(): ReductionRule {
 
 export function makeReductionRuleDel(): ReductionRule {
     let [pattern, [opNode, argNode]] = createLabeledPathGraph([OPERATOR_DEL, ANY])
+    makeGlobalRootWithConnection(pattern, [opNode])
     return makeSimpleReductionRule({
         pattern: pattern,
         apply(graph, embedding) {
@@ -71,6 +82,7 @@ export function makeReductionRuleDel(): ReductionRule {
 
 export function makeReductionRuleNew(): ReductionRule {
     let [pattern, [opNode]] = createLabeledPathGraph([OPERATOR_NEW])
+    makeGlobalRootWithConnection(pattern, [opNode])
     return makeSimpleReductionRule({
         pattern: pattern,
         apply(graph, embedding) {
@@ -81,6 +93,7 @@ export function makeReductionRuleNew(): ReductionRule {
 
 export function makeReductionRuleDisconnect(): ReductionRule {
     let [pattern, [argA, opNode, argB]] = createLabeledPathGraph([ANY, OPERATOR_DISCONNECT, ANY])
+    makeGlobalRootWithConnection(pattern, [opNode])
     createEdge(pattern, argA, argB) // complete triangle
     return makeSimpleReductionRule({
         pattern: pattern,
@@ -93,6 +106,7 @@ export function makeReductionRuleDisconnect(): ReductionRule {
 
 export function makeReductionRuleConnect(): ReductionRule {
     let [pattern, [argA, opNode, argB]] = createLabeledPathGraph([ANY, OPERATOR_CONNECT, ANY])
+    makeGlobalRootWithConnection(pattern, [opNode])
     return makeSimpleReductionRule({
         pattern,
         negativeEdges: [[argA, argB]],
