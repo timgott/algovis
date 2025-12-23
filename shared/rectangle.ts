@@ -77,6 +77,10 @@ export const Rect = {
         return Rect.contains(rect, pos.x, pos.y)
     },
 
+    containsRect(rect: Rect, other: Rect): boolean {
+        return rect.left <= other.left && rect.top <= other.top && rect.right >= other.right && rect.bottom >= other.bottom
+    },
+
     splitVertical(rect: Rect, percent: number): [Rect, Rect] {
         let splitY = rect.top + (rect.bottom - rect.top) * percent
         return [
@@ -100,5 +104,9 @@ export const Rect = {
             right: rect.right + padding,
             bottom: rect.bottom + padding
         }
+    },
+
+    area(rect: Rect): number {
+        return Rect.width(rect) * Rect.height(rect)
     }
 }

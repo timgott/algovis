@@ -1,14 +1,13 @@
 import { createEdge, createNode, deleteEdge, Graph, GraphNode } from "../../../localgraphs/src/graph"
-import { assert, randomChoice, unreachable } from "../../../shared/utils"
-import { abstractifyGraphSimple } from "../graphviewimpl"
+import { assert, randomChoice } from "../../../shared/utils"
 import { applyRuleOnGraph, getRealForVirtualNormal, VirtualGraphEmbedding, VirtualNode, VirtualNodeNormal } from "../viewmodel/boxsemantics"
-import { DataState, RuleMatch, UiNodeData } from "../viewmodel/state"
+import { RuleMatch, UiNodeData } from "../viewmodel/state"
 import { placeInCenterOf } from "./placement"
 import { applyExhaustiveReduction } from "./reductionapply"
-import { findRuleRootsForControlNode, GraphWithParserAccess, parseRule } from "./rule/parse_rulegraph"
+import { GraphWithParserAccess, parseRule } from "./rule/parse_rulegraph"
 import { findRuleMatches } from "./rule/patternmatching"
 import { RuleGraph } from "./rule/rulegraph"
-import { controlOutSymbols, Label, SYMBOL_ERROR, SYMBOL_IN, SYMBOL_OUT_EXHAUSTED, SYMBOL_OUT_STEP, SYMBOL_PROGRAM_POINTER, SYMBOL_RULE_META, SYMBOL_RULE_OUTSIDE } from "./symbols"
+import { controlOutSymbols, Label, SYMBOL_ERROR, SYMBOL_IN, SYMBOL_OUT_EXHAUSTED, SYMBOL_OUT_STEP, SYMBOL_PROGRAM_POINTER, SYMBOL_RULE_META, SYMBOL_RULE_ROOT } from "./symbols"
 
 export function isControlInSymbol(s: string): boolean {
     return s === SYMBOL_IN
@@ -58,9 +57,9 @@ export function advanceControlFlow<V>(graph: Graph<UiNodeData>): boolean {
 }
 
 type PointerControlInfo = {
-    pointer: VirtualNodeNormal,
-    inNode: VirtualNodeNormal,
-    outNode: VirtualNodeNormal,
+    pointer: GraphNode<UiNodeData>,
+    inNode: GraphNode<UiNodeData>,
+    outNode: GraphNode<UiNodeData>,
 }
 
 export type RuleActionTokenExhausted = {
@@ -89,9 +88,9 @@ function makePointerControl(
         if (outNodes.length > 1) { console.warn(`More than 1 ${exitLabel}-node:`, outNodes.length) }
         let outNode = randomChoice(outNodes)
         return {
-            outNode,
-            inNode,
-            pointer
+            outNode: outNode.sourceNode,
+            inNode: inNode.sourceNode,
+            pointer: pointer.sourceNode
         }
     } else {
         // FIXME
@@ -149,7 +148,7 @@ export function findPossibleActions(graph: GraphWithParserAccess<VirtualNode>): 
     for (let pc of pcNodes) {
         for (let inNode of filterNormalNodes(graph.neighbors(pc)).filter(n => isControlInSymbol(graph.label(n)))) {
             for (let metaNode of graph.neighborsWithLabel(inNode, SYMBOL_RULE_META)) {
-                for (let ruleRoot of graph.neighborsWithLabel(metaNode, SYMBOL_RULE_OUTSIDE)) {
+                for (let ruleRoot of graph.neighborsWithLabel(metaNode, SYMBOL_RULE_ROOT)) {
                     let rule = parseRule(graph, ruleRoot)
                     let matches = [...findRuleMatches(rule, graph)]
                     let action = makeActionToken(matches, rule, graph, pc, inNode, metaNode)
@@ -172,9 +171,9 @@ function moveEdgeEndpoint(graph: Graph<unknown>, start: GraphNode<unknown>, from
 
 function executePointerControl(graph: Graph<UiNodeData>, emb: VirtualGraphEmbedding, control: PointerControlInfo): void {
     moveEdgeEndpoint(graph,
-        getRealForVirtualNormal(control.pointer, graph),
-        getRealForVirtualNormal(control.inNode, graph),
-        getRealForVirtualNormal(control.outNode, graph),
+        control.pointer,
+        control.inNode,
+        control.outNode,
     )
 }
 

@@ -12,7 +12,8 @@ export const SYMBOL_OUT_STEP = "step" // ✔
 export const SYMBOL_OUT_EXHAUSTED = "ex" // ✗
 export const SYMBOL_ERROR = "ERR"
 
-export const SYMBOL_RULE_OUTSIDE = "RULE_OUTSIDE"
+export const SYMBOL_GLOBAL_ROOT = "GLOBAL_ROOT"
+export const SYMBOL_RULE_ROOT = "RULE_OUTSIDE"
 export const SYMBOL_RULE_PATTERN = "RULE_PATTERN"
 export const SYMBOL_RULE_META = "RULE_META"
 export const SYMBOL_RULE_INSERTION = "RULE_INSERTION"
