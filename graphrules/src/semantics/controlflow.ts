@@ -4,7 +4,7 @@ import { applyRuleOnGraph, getRealForVirtualNormal, VirtualGraphEmbedding, Virtu
 import { RuleBoxState, RuleMatch, UiNodeData } from "./state"
 import { placeInCenterOf } from "./placement"
 import { applyExhaustiveReduction } from "./reductionapply"
-import { GraphWithParserAccess, parseRule } from "./rule/parse_rulegraph"
+import { GraphWithParserAccess, parseRule, RuleSyntaxError } from "./rule/parse_rulegraph"
 import { findRuleMatches } from "./rule/patternmatching"
 import { RuleGraph } from "./rule/rulegraph"
 import { controlOutSymbols, Label, SYMBOL_ERROR, SYMBOL_IN, SYMBOL_OUT_EXHAUSTED, SYMBOL_OUT_STEP, SYMBOL_PROGRAM_POINTER, SYMBOL_RULE_META, SYMBOL_BOX_ROOT, SYMBOL_BOX_INSIDE } from "./symbols"
@@ -33,6 +33,11 @@ export function hasError<V>(graph: LabeledGraph<V,string>): boolean {
     return graph.nodesWithLabel(SYMBOL_ERROR).size > 0
 }
 
+export class ControlSyntaxError {
+    constructor(public message: string, public locations: GraphNode<UiNodeData>[]) {
+    }
+}
+
 export function advanceControlFlow<V>(graph: Graph<UiNodeData>): boolean {
     // do not use immutable graph views because this mutates the graph heavily
     // move all pc nodes from an out-node to an in-node.
@@ -42,9 +47,7 @@ export function advanceControlFlow<V>(graph: Graph<UiNodeData>): boolean {
         for (let currentOut of [...pc.neighbors].filter(n => isControlOutSymbol(n.data.label))) {
             let nextIns = [...currentOut.neighbors].filter(n => isControlInSymbol(n.data.label));
             if (nextIns.length > 1) {
-                //FIXME: putError
-                throw new Error("make putError work")
-                //putError(graph, [currentOut], "multiple outgoing connections")
+                throw new ControlSyntaxError("multiple outgoing connections", [currentOut])
             }
             else if (nextIns.length === 1) {
                 let [nextIn] = nextIns
@@ -93,10 +96,7 @@ function makePointerControl(
             pointer: pointer.sourceNode
         }
     } else {
-        // FIXME
-        throw new Error("fix putError")
-        //putError(graph, [inNode], `cannot continue, no ${exitLabel}-node`)
-        return null
+        throw new RuleSyntaxError<VirtualNodeNormal>(`cannot continue, no ${exitLabel}-node`, [inNode])
     }
 }
 

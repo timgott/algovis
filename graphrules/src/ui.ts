@@ -48,8 +48,8 @@ export function runSelectedRule(state: DataState) {
         return
     }
     let virtual = makeVirtualGraphEmbedding(state.graph, state.ruleBoxes)
-    let ruleRoot = ensured(virtual.boxMapping.get(state.selectedRule)).root
-    let rule = parseRule(virtual.virtualGraph, ruleRoot)
+    let ruleInside = ensured(virtual.boxMapping.get(state.selectedRule)).inside
+    let rule = parseRule(virtual.virtualGraph, ruleInside)
     // applyRuleEverywhere also modifies the rule itself, don't use here
     let matches = [...findRuleMatches(rule, virtual.virtualGraph)]
     if (matches.length == 0) {

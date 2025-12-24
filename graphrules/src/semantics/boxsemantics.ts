@@ -48,10 +48,6 @@ export type VirtualNode = VirtualNodeNormal | VirtualNodeBox | VirtualNodeGlobal
 
 // default UI semantics (can later implement inside the language if needed)
 function getNodeTypesForNode(node: GraphNode<UiNodeData>): BoxSubConnectorSymbol[] {
-    if (ruleMetaSymbols.has(node.data.label)) {
-        // meta nodes are treated separately
-        return [SYMBOL_RULE_META]
-    }
     if (node.data.label === OPERATOR_CONNECT) {
         // special case: connect operator causes negative pattern edges
         return [SYMBOL_RULE_INSERTION, SYMBOL_RULE_NEGATIVE]
@@ -61,6 +57,10 @@ function getNodeTypesForNode(node: GraphNode<UiNodeData>): BoxSubConnectorSymbol
     } else if (node.neighbors.find(x => operatorsWithArgSymbols.has(x.data.label))) {
         // arguments are also inserted into graph
         return [SYMBOL_RULE_INSERTION]
+    } else if (ruleMetaSymbols.has(node.data.label)) {
+        // meta nodes are not part of pattern
+        // lower priority than arguments! so that meta symbols can be inserted and modified
+        return [SYMBOL_RULE_META]
     } else {
         // normal nodes describe pattern
         return [SYMBOL_RULE_PATTERN]
