@@ -1,8 +1,8 @@
 import { Graph, GraphNode } from "../../../localgraphs/src/graph"
 import { randomChoice } from "../../../shared/utils"
 import { abstractifyGraphSimple } from "../graphviewimpl"
-import { getRealForVirtualNormal, makeVirtualGraphEmbedding, VirtualGraphEmbedding, VirtualNode } from "../viewmodel/boxsemantics"
-import { DataState, RuleBoxState, UiNodeData } from "../viewmodel/state"
+import { getRealForVirtualNormal, makeVirtualGraphEmbedding, VirtualGraphEmbedding, VirtualNode } from "./boxsemantics"
+import { DataState, RuleBoxState, UiNodeData } from "./state"
 import { makeDefaultReductionRules, ReductionRule } from "./reductions"
 import { findRuleMatches } from "./rule/patternmatching"
 

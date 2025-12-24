@@ -9,7 +9,7 @@ import { isDistanceLess, vec } from "../../shared/vector";
 import { MouseClickResponse, MouseInteraction, mapTool, wrapToolWithHistory, nestedGraphTool, stealToolClick, withToolClick, MultiClickDetector, noopTool, makeSpanWindowTool, multiplexTool, makeWindowMovingTool } from "./interaction";
 import { playerClickNode } from "./player";
 import { pushToHistory } from "./ui";
-import { DataState, UiNodeData, MainState, defaultNodeData } from "./viewmodel/state";
+import { DataState, UiNodeData, MainState, defaultNodeData } from "./semantics/state";
 
 function playerTool(state: DataState, mouseX: number, mouseY: number): MouseClickResponse {
     // TODO: if action = null, place new program pointer!!!!!!

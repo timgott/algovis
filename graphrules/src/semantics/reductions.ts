@@ -1,7 +1,7 @@
 import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, Graph, GraphNode } from "../../../localgraphs/src/graph"
 import { ensured } from "../../../shared/utils"
 import { abstractifyGraphSimple, makeFinGraphFromNodesEdges, makeInfiniteUnconnectedGraph } from "../graphviewimpl"
-import { UiNodeData } from "../viewmodel/state"
+import { UiNodeData } from "./state"
 import { PatternGraph } from "./rule/rulegraph"
 import { OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, SYMBOL_GLOBAL_ROOT, WILDCARD_SYMBOL } from "./symbols"
 

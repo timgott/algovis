@@ -4,7 +4,7 @@ import { Graph, GraphNode } from '../../../localgraphs/src/graph';
 import { defaultNodeData, RuleBoxState, UiNodeData } from './state';
 import { Label, OPERATOR_CONNECT, OPERATOR_NEW, SYMBOL_BOX_INSIDE, SYMBOL_GLOBAL_ROOT, SYMBOL_RULE_INSERTION, SYMBOL_RULE_META, SYMBOL_RULE_NEGATIVE, SYMBOL_RULE_PATTERN, SYMBOL_BOX_ROOT } from '../semantics/symbols';
 import { Rect } from '../../../shared/rectangle';
-import { makeVirtualGraphEmbedding, makeVirtualGraphToRealInserter, VirtualNode } from './boxsemantics';
+import { makeVirtualGraphEmbedding, makeVirtualGraphToRealInserter, VirtualNode } from '../semantics/boxsemantics';
 import { ensured } from '../../../shared/utils';
 import { findRuleMatches } from '../semantics/rule/patternmatching';
 import { parseRule } from '../semantics/rule/parse_rulegraph';

@@ -1,6 +1,6 @@
 import { Graph } from "../../localgraphs/src/graph";
 import { vec, Vector } from "../../shared/vector";
-import { UiNodeData } from "./viewmodel/state";
+import { UiNodeData } from "./semantics/state";
 
 
 export const SYMBOL_HORIZONTAL_ALIGN = "—";

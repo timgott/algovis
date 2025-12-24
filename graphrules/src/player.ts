@@ -3,8 +3,8 @@ import { collectBins, DefaultMap } from "../../shared/defaultmap"
 import { assert, ensured, randomChoice } from "../../shared/utils"
 import { VirtualGraph } from "../../socialchoice/src/virtualgraph"
 import { Label, metaSymbols } from "./semantics/symbols"
-import { VirtualNode } from "./viewmodel/boxsemantics"
-import { ActionStatePlayer, RuleMatch, UiNodeData } from "./viewmodel/state"
+import { VirtualNode } from "./semantics/boxsemantics"
+import { ActionStatePlayer, RuleMatch, UiNodeData } from "./semantics/state"
 
 export function computeChangingSet(actionState: ActionStatePlayer): Map<VirtualNode, RuleMatch[]> {
     return actionState.matchesByNode.toMap()

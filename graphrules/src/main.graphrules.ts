@@ -14,7 +14,7 @@ import { PanZoomController } from "./zooming";
 import { Vector } from "../../shared/vector";
 import { LibraryController } from "./library";
 import { OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, SYMBOL_FORALL, SYMBOL_IN, SYMBOL_OUT_EXHAUSTED, SYMBOL_OUT_STEP, SYMBOL_PROGRAM_POINTER, WILDCARD_SYMBOL } from "./semantics/symbols";
-import { DataState, MainState } from "./viewmodel/state";
+import { DataState, MainState } from "./semantics/state";
 import { applyExhaustiveReduction, applyReductionOnceRandomly, ruleCounters, ruleTimers } from "./semantics/reductionapply";
 
 function tryLoadState(): DataState | null {

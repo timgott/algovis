@@ -1,7 +1,7 @@
 import { Graph } from "../../localgraphs/src/graph";
 import { VirtualGraph } from "../../socialchoice/src/virtualgraph";
-import { VirtualGraphEmbedding, VirtualNode } from "./viewmodel/boxsemantics";
-import { UiNodeData } from "./viewmodel/state";
+import { VirtualGraphEmbedding, VirtualNode } from "./semantics/boxsemantics";
+import { UiNodeData } from "./semantics/state";
 
 export class CollectInsertions<V, L, C, E> implements ConnectingLabeledGraphInserter<V, L, C, E> {
     public newNodes: V[] = [];

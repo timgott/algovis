@@ -6,11 +6,11 @@ import { Rect } from "../../../shared/rectangle";
 import { assert, ensured, invertMap, invertMultiMap, mapFromFunction, mapObject, mapToIndex, min, neighborMapFromEdges, range, unreachable, ValueOf } from "../../../shared/utils";
 import { makeFinGraphFromNodesEdges, makeLabeledGraphFromFingraph, makeParserGraphAccessor } from "../graphviewimpl";
 import { CollectInsertions as GraphInsertionsCollector } from "../grapheditorimpl";
-import { placeNewNodesBetweenOld } from "../semantics/placement";
-import { GraphWithParserAccess } from "../semantics/rule/parse_rulegraph";
-import { applyRule } from "../semantics/rule/rule_application";
-import { RuleGraph } from "../semantics/rule/rulegraph";
-import { Label, OPERATOR_CONNECT, operatorsWithArgSymbols, operatorSymbols, ruleMetaSymbols, SYMBOL_RULE_INSERTION, SYMBOL_RULE_META, SYMBOL_RULE_NEGATIVE, SYMBOL_BOX_ROOT, SYMBOL_RULE_PATTERN, SYMBOL_GLOBAL_ROOT, SYMBOL_BOX_INSIDE } from "../semantics/symbols";
+import { placeNewNodesBetweenOld } from "./placement";
+import { GraphWithParserAccess } from "./rule/parse_rulegraph";
+import { applyRule } from "./rule/rule_application";
+import { RuleGraph } from "./rule/rulegraph";
+import { Label, OPERATOR_CONNECT, operatorsWithArgSymbols, operatorSymbols, ruleMetaSymbols, SYMBOL_RULE_INSERTION, SYMBOL_RULE_META, SYMBOL_RULE_NEGATIVE, SYMBOL_BOX_ROOT, SYMBOL_RULE_PATTERN, SYMBOL_GLOBAL_ROOT, SYMBOL_BOX_INSIDE } from "./symbols";
 import { defaultNodeData, RuleBoxState, UiNodeData } from "./state";
 
 // VirtualGraph: underlying graph of the node and boxes hierarchy

@@ -9,8 +9,8 @@ import { StatePainter } from "./interaction";
 import { computeChangingSet, computeIndexedStepSet } from "./player";
 import { isControlInSymbol, isControlOutSymbol } from "./semantics/controlflow";
 import { WILDCARD_SYMBOL, ruleMetaSymbols, SYMBOL_PROGRAM_POINTER, controlPortSymbols } from "./semantics/symbols";
-import { getRealForVirtualNormal } from "./viewmodel/boxsemantics";
-import { ActionStatePlayer, DataState, UiNodeData } from "./viewmodel/state";
+import { getRealForVirtualNormal } from "./semantics/boxsemantics";
+import { ActionStatePlayer, DataState, UiNodeData } from "./semantics/state";
 
 function randomNodeColor() {
     //return `oklch(${Math.random() * 0.5 + 0.5} ${Math.random() * 0.25} ${Math.random() * 360})`
