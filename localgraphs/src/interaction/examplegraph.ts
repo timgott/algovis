@@ -60,15 +60,20 @@ export function createGraphFromEdges<V>(edges: [V,V][]): Graph<V> {
     return graph
 }
 
-export function createPathGraph<T>(datas: T[]): [Graph<T>, GraphNode<T>[]] {
-    let graph = createEmptyGraph<T>()
-    let last: GraphNode<T> | null = null
+export function insertPathIntoGraph<T>(graph: Graph<T>, datas: T[]): GraphNode<T>[] {
+    let nodes: GraphNode<T>[] = []
     for (let v of datas) {
         let node = createNode(graph, v)
-        if (last !== null) {
+        if (nodes.length > 0) {
+            let last = nodes[nodes.length-1]
             createEdge(graph, node, last)
         }
-        last = node
+        nodes.push(node)
     }
-    return [graph, graph.nodes]
+    return nodes
+}
+
+export function createPathGraph<T>(datas: T[]): [Graph<T>, GraphNode<T>[]] {
+    let graph = createEmptyGraph<T>()
+    return [graph, insertPathIntoGraph(graph, datas)]
 }

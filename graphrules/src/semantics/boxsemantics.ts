@@ -36,7 +36,7 @@ export type VirtualNodeNormal = {
     index: number,
     sourceNode: GraphNode<UiNodeData>
 }
-type VirtualNodeBox =  {
+export type VirtualNodeBox =  {
     kind: "box",
     special: BoxConnectorSymbol
     box: RuleBoxState

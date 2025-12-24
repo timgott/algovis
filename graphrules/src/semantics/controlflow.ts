@@ -7,7 +7,7 @@ import { applyExhaustiveReduction } from "./reductionapply"
 import { GraphWithParserAccess, parseRule } from "./rule/parse_rulegraph"
 import { findRuleMatches } from "./rule/patternmatching"
 import { RuleGraph } from "./rule/rulegraph"
-import { controlOutSymbols, Label, SYMBOL_ERROR, SYMBOL_IN, SYMBOL_OUT_EXHAUSTED, SYMBOL_OUT_STEP, SYMBOL_PROGRAM_POINTER, SYMBOL_RULE_META, SYMBOL_BOX_ROOT } from "./symbols"
+import { controlOutSymbols, Label, SYMBOL_ERROR, SYMBOL_IN, SYMBOL_OUT_EXHAUSTED, SYMBOL_OUT_STEP, SYMBOL_PROGRAM_POINTER, SYMBOL_RULE_META, SYMBOL_BOX_ROOT, SYMBOL_BOX_INSIDE } from "./symbols"
 
 export function isControlInSymbol(s: string): boolean {
     return s === SYMBOL_IN
@@ -125,7 +125,7 @@ function makeActionToken(
     }
 }
 
-function filterNormalNodes(bla: Iterable<VirtualNode>): VirtualNodeNormal[] {
+export function filterNormalNodes(bla: Iterable<VirtualNode>): VirtualNodeNormal[] {
     return [...bla].filter(n => n.kind === "normal")
 }
 
@@ -137,7 +137,17 @@ function normalNeighborsWithLabel(graph: GraphWithParserAccess<VirtualNode>, nod
     return filterNormalNodes(graph.neighborsWithLabel(node, label))
 }
 
-// CONTINUE HERE: replace Graph with an abstract AGraph
+type PointedRuleMetadata = { inNode: VirtualNodeNormal, metaNode: VirtualNode, ruleRoot: VirtualNode }
+export function* iterPointedRules(graph: GraphWithParserAccess<VirtualNode>, pointer: VirtualNode): Generator<PointedRuleMetadata> {
+    for (let inNode of filterNormalNodes(graph.neighbors(pointer)).filter(n => isControlInSymbol(graph.label(n)))) {
+        for (let metaNode of graph.neighborsWithLabel(inNode, SYMBOL_RULE_META)) {
+            for (let ruleRoot of graph.neighborsWithLabel(metaNode, SYMBOL_BOX_INSIDE)) {
+                yield { inNode, metaNode, ruleRoot }
+            }
+        }
+    }
+}
+
 export function findPossibleActions(graph: GraphWithParserAccess<VirtualNode>): RuleActionToken[] {
     if (hasError(graph)) {
         return []
@@ -146,16 +156,12 @@ export function findPossibleActions(graph: GraphWithParserAccess<VirtualNode>): 
     let actions: RuleActionToken[] = []
     let pcNodes = normalAllNodesWithLabel(graph, SYMBOL_PROGRAM_POINTER)
     for (let pc of pcNodes) {
-        for (let inNode of filterNormalNodes(graph.neighbors(pc)).filter(n => isControlInSymbol(graph.label(n)))) {
-            for (let metaNode of graph.neighborsWithLabel(inNode, SYMBOL_RULE_META)) {
-                for (let ruleRoot of graph.neighborsWithLabel(metaNode, SYMBOL_BOX_ROOT)) {
-                    let rule = parseRule(graph, ruleRoot)
-                    let matches = [...findRuleMatches(rule, graph)]
-                    let action = makeActionToken(matches, rule, graph, pc, inNode, metaNode)
-                    if (action !== null) {
-                        actions.push(action)
-                    }
-                }
+        for (let {inNode, metaNode, ruleRoot} of iterPointedRules(graph, pc)) {
+            let rule = parseRule(graph, ruleRoot)
+            let matches = [...findRuleMatches(rule, graph)]
+            let action = makeActionToken(matches, rule, graph, pc, inNode, metaNode)
+            if (action !== null) {
+                actions.push(action)
             }
         }
     }
@@ -169,7 +175,7 @@ function moveEdgeEndpoint(graph: Graph<unknown>, start: GraphNode<unknown>, from
     createEdge(graph, start, to)
 }
 
-function executePointerControl(graph: Graph<UiNodeData>, emb: VirtualGraphEmbedding, control: PointerControlInfo): void {
+function executePointerControl(graph: Graph<UiNodeData>, control: PointerControlInfo): void {
     moveEdgeEndpoint(graph,
         control.pointer,
         control.inNode,
@@ -177,12 +183,12 @@ function executePointerControl(graph: Graph<UiNodeData>, emb: VirtualGraphEmbedd
     )
 }
 
-export function executeActionExhausted(action: RuleActionTokenExhausted, graph: Graph<UiNodeData>, emb: VirtualGraphEmbedding) {
-    executePointerControl(graph, emb, action.control)
+export function executeActionExhausted(action: RuleActionTokenExhausted, graph: Graph<UiNodeData>) {
+    executePointerControl(graph, action.control)
 }
 
 export function executeActionStep(action: RuleActionTokenStep, match: RuleMatch, graph: Graph<UiNodeData>, ruleBoxes: RuleBoxState[], virtualEmb: VirtualGraphEmbedding) {
     applyRuleOnGraph(action.rule, match, virtualEmb, graph)
     applyExhaustiveReduction(graph, ruleBoxes)
-    executePointerControl(graph, virtualEmb, action.control)
+    executePointerControl(graph, action.control)
 }

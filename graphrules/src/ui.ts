@@ -130,7 +130,7 @@ export class RuleRunner implements InteractiveSystem {
 
                 if (action.kind === "exhausted") {
                     state.action = { kind: "auto" }
-                    executeActionExhausted(action, state.graph, virtualEmb)
+                    executeActionExhausted(action, state.graph)
                 } else {
                     let player = getControllingPlayer(action.control.inNode)
                     if (player === null) {

@@ -110,7 +110,7 @@ describe("test new-operator semantics", () => {
     const [ruleGraph, ruleGraphNodes] = createPathGraphFromLabels(["a", "b", OPERATOR_NEW])
     const ruleBox = createTestBoxForGraph(ruleGraph)
     const ruleEmb = makeVirtualGraphEmbedding(ruleGraph, [ruleBox])
-    const rule = parseRule(ruleEmb.virtualGraph, ensured(ruleEmb.boxMapping.get(ruleBox)).root)
+    const rule = parseRule(ruleEmb.virtualGraph, ensured(ruleEmb.boxMapping.get(ruleBox)).inside)
     const [ruleNodeA, ruleNodeB, ruleNodeOpNew]: VirtualNode[] = ruleGraphNodes.map(v => ensured(ruleEmb.nodeMapping.get(v)))
 
     test("parse rule", () => {

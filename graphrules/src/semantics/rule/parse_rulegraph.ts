@@ -74,19 +74,16 @@ function parseGlobalRoot<V>(graph: GraphWithParserAccess<V>): V {
     )
 }
 
-export function parseRule<V>(graph: GraphWithParserAccess<V>, ruleRoot: V): RuleGraph<V> {
-    let ruleInside = expectExactlyOneNode(
-        graph.neighborsWithLabel(ruleRoot, SYMBOL_BOX_INSIDE),
-        `There must be exactly one {SYMBOL_BOX_INSIDE} node for every rule`, [ruleRoot]
-    )
+export function parseRule<V>(graph: GraphWithParserAccess<V>, ruleInside: V): RuleGraph<V> {
+    syntaxAssert(graph.label(ruleInside) === SYMBOL_BOX_INSIDE, "incorrect inside node of rule", [ruleInside])
     let globalRoot = parseGlobalRoot(graph)
     let pattern = parsePatternSubgraph(graph, ruleInside, globalRoot)
     let insertion = parseBoxSubgraph(graph, ruleInside, SYMBOL_RULE_INSERTION, "insertion")
     let connectingEdges = extractBetweenEdges(graph, pattern.allNodes(), insertion.allNodes())
     let negativeEdges = parseNegativeSubgraph(graph, ruleInside, pattern)
     let vars = new Set<Label>() // TODO!!!!!!!!!!!!!!!!
-    syntaxAssert(pattern.allNodes().size > 0, "must have nodes in pattern", [ruleRoot])
-    syntaxAssert(insertion.allNodes().size > 0, "rule must have insertion", [ruleRoot])
+    syntaxAssert(pattern.allNodes().size > 0, "must have nodes in pattern", [ruleInside])
+    syntaxAssert(insertion.allNodes().size > 0, "rule must have insertion", [ruleInside])
     return {
         pattern,
         insertion,
