@@ -5,6 +5,7 @@ import { Label, WILDCARD_SYMBOL } from "../symbols";
 import { PatternGraph } from "./rulegraph";
 
 export function* findRuleMatches<V,W>(rule: PatternGraph<V>, host: LabeledGraph<W,Label>): Generator<Map<V, W>> {
+    // TODO: need to think of proper semantics for variables. It shouldn't match rule boxes, global root, special symbols
     // use csp because it has a generic implementation
     let varsAndWildcard = new Set([...rule.freeVars, WILDCARD_SYMBOL])
     let domains = makeLabeledGraphDomains(rule.pattern, host, varsAndWildcard)
