@@ -35,14 +35,14 @@ interface ContainerSubgraphAccessor<V, G> {
 }
 
 interface DirectedSubgraphAccessor<V, L, G> {
-    // Follow "directed" edges marked by cyclic labels.
+    // Follow "directed" edges marked by cyclic labels, skipping or replacing root.
     // Nodes that have different labels and do not occur in cycle labels are leafs.
     // Example matched structure:
     // root - label[0] - label[1] - bla
     //      \ foo                 \ label[2] - label[0]
     //      \ bar
     //
-    // If replaceRoot is given, it replaces root in the output. If not given, start is removed.
+    // If replaceRoot is given, it replaces root in the output. If not given, root is removed.
     // Output is an induced subgraph containing all nodes that follow this pattern, starting from the node start.
     // If replaceRoot is given,
     getDirectedSubgraph(root: V, labelCycle: Set<L>[], replaceRoot?: V | undefined): G

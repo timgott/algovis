@@ -36,7 +36,7 @@ function parseBoxSubgraph<V>(graph: GraphWithParserAccess<V>, ruleInside: V, inn
     return graph.getContainerSubgraph({ outside: ruleInside, inside: patternRoot })
 }
 
-const boxDirectedLayers = [
+export const boxDirectedLayers = [
     new Set([SYMBOL_BOX_ROOT]),
     new Set([SYMBOL_BOX_INSIDE]),
     new Set([SYMBOL_RULE_META, SYMBOL_RULE_PATTERN, SYMBOL_RULE_INSERTION, SYMBOL_RULE_NEGATIVE]),

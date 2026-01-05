@@ -14,7 +14,7 @@ export const ruleCounters = [
     0, 0, 0, 0, 0, 0,
 ]
 
-function decodeReductionMatch<V>(graph: Graph<UiNodeData>, match: Map<V, VirtualNode>): Map<V, GraphNode<UiNodeData>> {
+function decodeVirtualReductionMatch<V>(graph: Graph<UiNodeData>, match: Map<V, VirtualNode>): Map<V, GraphNode<UiNodeData>> {
     let entriesMapped = match.entries().map(([a, mapped]) => {
         if (mapped.kind === "normal") {
             return [a, getRealForVirtualNormal(mapped, graph)] satisfies [V, GraphNode<UiNodeData>]
@@ -42,7 +42,7 @@ export function applyExhaustiveReduction(graph: Graph<UiNodeData>, ruleBoxes: Ru
             ruleTimers[i] += endTime - startTime
             ruleCounters[i] += 1
             if (!matchResult.done) {
-                let match = decodeReductionMatch(graph, matchResult.value)
+                let match = decodeVirtualReductionMatch(graph, matchResult.value)
                 rule.apply(graph, match)
                 changed = true
                 break
@@ -57,12 +57,16 @@ export function applyExhaustiveReduction(graph: Graph<UiNodeData>, ruleBoxes: Ru
     // implementation of the reduction rules anyways.
 }
 
-export function applyReductionOnceRandomly(graph: Graph<UiNodeData>): boolean {
+export function applyReductionOnceRandomly(graph: Graph<UiNodeData>, ruleBoxes: RuleBoxState[]): boolean {
     let rules = makeDefaultReductionRules()
     for (let rule of rules) {
-        let matches = [...findRuleMatches(rule.pattern, abstractifyGraphSimple(graph))]
+        // use vgraph so that e.g. it is possible to match nodes only outside rule boxes
+        let vgraph = makeVirtualGraphEmbedding(graph, ruleBoxes)
+        // take the first match
+        let matches = [...findRuleMatches(rule.pattern, vgraph.virtualGraph)]
         if (matches.length > 0) {
-            let match = randomChoice(matches)
+            let virtualMatch = randomChoice(matches)
+            let match = decodeVirtualReductionMatch(graph, virtualMatch)
             rule.apply(graph, match)
             return true
         }

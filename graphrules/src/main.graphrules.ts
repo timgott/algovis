@@ -2,7 +2,7 @@ import { InteractionController, UiStack } from "../../localgraphs/src/interactio
 import { GraphLayoutPhysics } from "../../localgraphs/src/interaction/physics";
 import { UndoHistory } from "../../localgraphs/src/interaction/undo";
 import { initRepaintOnResize } from "../../shared/canvas";
-import { ensured, requireHtmlElement } from "../../shared/utils";
+import { ensured, mapFromFunction, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController, wrapActionAfterRelease } from "./interaction";
 import { flattenState, unflattenState } from "./storage";
 import { cloneDataState, createClearedState, layoutStyle, pushToHistory, runSelectedRule, wrapSettleNewNodes, setLabelOnSelected, RuleRunner, toggleRunning } from "./ui";
@@ -14,8 +14,10 @@ import { PanZoomController } from "./zooming";
 import { Vector } from "../../shared/vector";
 import { LibraryController } from "./library";
 import { OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, SYMBOL_FORALL, SYMBOL_IN, SYMBOL_OUT_EXHAUSTED, SYMBOL_OUT_STEP, SYMBOL_PROGRAM_POINTER, WILDCARD_SYMBOL } from "./semantics/symbols";
-import { DataState, MainState } from "./semantics/state";
+import { DataState, MainState, UiNodeData } from "./semantics/state";
 import { applyExhaustiveReduction, applyReductionOnceRandomly, ruleCounters, ruleTimers } from "./semantics/reductionapply";
+import { makeVirtualGraphEmbedding } from "./semantics/boxsemantics";
+import { createEdge, createEmptyGraph, createNode, Graph } from "../../localgraphs/src/graph";
 
 function tryLoadState(): DataState | null {
     let hash = window.location.hash
@@ -163,7 +165,7 @@ requireHtmlElement("btn_test").addEventListener("click", () => {
 
 requireHtmlElement("btn_reduce").addEventListener("click", () => {
     runGlobalUndoableAction(g => {
-        applyReductionOnceRandomly(g.data.graph);
+        applyReductionOnceRandomly(g.data.graph, g.data.ruleBoxes);
     })
 })
 
@@ -213,6 +215,31 @@ requireHtmlElement("btn_benchmark").addEventListener("click", () => {
         console.log("Rule timers", ruleTimers)
         console.log("Rule counters", ruleCounters)
         controller.requestFrame()
+    })
+})
+
+// debug
+function realizeLabeledGraph<V>(lgraph: LabeledGraph<V,string>, intoGraph: Graph<UiNodeData>): Graph<UiNodeData> {
+    let result = intoGraph
+    let nodeMap = mapFromFunction(lgraph.allNodes(),
+        node => createNode(result, { label: lgraph.label(node) }, Math.random() * 500, Math.random() * 500)
+    )
+    for (let [a,b] of lgraph.enumerateEdges()) {
+        createEdge(result, ensured(nodeMap.get(a)), ensured(nodeMap.get(b)))
+    }
+    return result
+}
+
+function debugRealizeVirtualGraph(state: DataState) {
+    let virtualEmb = makeVirtualGraphEmbedding(state.graph, state.ruleBoxes)
+    state.graph = realizeLabeledGraph(virtualEmb.virtualGraph, state.graph)
+}
+
+requireHtmlElement("btn_debug_vgraph").addEventListener("click", () => {
+    runGlobalUndoableAction(g => {
+        wrapSettleNewNodes(g.data, () => {
+            debugRealizeVirtualGraph(g.data)
+        })
     })
 })
 

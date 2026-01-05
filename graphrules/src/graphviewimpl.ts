@@ -39,6 +39,11 @@ export function makeLabeledGraphFromFingraph<V,L>(fingraph: FinGraph<V>, labelFu
     }
 }
 
+// shortcut
+export function makeLabeledGraphFromEdges<V,L>(nodes: Iterable<V>, edges: Iterable<[V,V]>, labelFun: (node: V) => L): LabeledGraph<V,L> {
+    return makeLabeledGraphFromFingraph(makeFinGraphFromNodesEdges(nodes, edges), labelFun)
+}
+
 export function makeInfiniteUnconnectedGraph<V>(): BasicGraph<V> {
     return {
         neighbors: () => new Set(),
@@ -76,9 +81,9 @@ export function makeLabeledNeighborAccessor<V,L>(graph: LabeledGraph<V,L>): Labe
     }
 }
 
-function collectDirectedSubgraphNodes<V,L>(graph: LabeledGraph<V,L>, root: V, labelCycle: Set<L>[]): Set<V> {
+export function collectDirectedSubgraphNodes<V,L>(graph: LabeledGraph<V,L>, roots: Iterable<V>, labelCycle: readonly Set<L>[]): Set<V> {
     let nodes = new Set<V>()
-    let currentLayer: V[] = [root]
+    let currentLayer: V[] = [...roots]
     let i = 0
     let orderLabels = unionAll(labelCycle)
     while (currentLayer.length > 0) {
@@ -116,7 +121,7 @@ function insertNode<V>(graph: FinGraph<V>, node: V, neighbors: V[]): FinGraph<V>
 export function makeDirectedSubgraphAccessor<V,L>(graph: LabeledGraph<V,L>): DirectedSubgraphAccessor<V, L, LabeledGraph<V,L>> {
     return {
         getDirectedSubgraph(root: V, labelCycle: Set<L>[], replaceRoot?: V | undefined): LabeledGraph<V, L> {
-            let nodes = collectDirectedSubgraphNodes(graph, root, labelCycle)
+            let nodes = collectDirectedSubgraphNodes(graph, [root], labelCycle)
             let subgraph = inducedSubgraph(nodes, graph)
             if (replaceRoot !== undefined) {
                 subgraph = insertNode(subgraph, replaceRoot, [...graph.neighbors(root).intersection(nodes)])
