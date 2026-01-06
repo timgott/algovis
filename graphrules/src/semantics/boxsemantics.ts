@@ -7,10 +7,10 @@ import { assert, ensured, invertMap, invertMultiMap, mapFromFunction, mapObject,
 import { abstractifyGraph, abstractifyGraphSimple, collectDirectedSubgraphNodes, makeFinGraphFromNodesEdges, makeLabeledGraphFromEdges, makeLabeledGraphFromFingraph, makeParserGraphAccessor } from "../graphviewimpl";
 import { CollectInsertions as GraphInsertionsCollector } from "../grapheditorimpl";
 import { placeNewNodesBetweenOld } from "./placement";
-import { boxDirectedLayers, GraphWithParserAccess } from "./rule/parse_rulegraph";
+import { GraphWithParserAccess } from "./rule/parse_rulegraph";
 import { applyRule } from "./rule/rule_application";
 import { RuleGraph } from "./rule/rulegraph";
-import { Label, OPERATOR_CONNECT, operatorsWithArgSymbols, operatorSymbols, ruleMetaSymbols, SYMBOL_RULE_INSERTION, SYMBOL_RULE_META, SYMBOL_RULE_NEGATIVE, SYMBOL_BOX_ROOT, SYMBOL_RULE_PATTERN, SYMBOL_GLOBAL_ROOT, SYMBOL_BOX_INSIDE, SYMBOL_FORALL } from "./symbols";
+import { Label, OPERATOR_CONNECT, operatorsWithArgSymbols, operatorSymbols, ruleMetaSymbols, SYMBOL_RULE_INSERTION, SYMBOL_RULE_META, SYMBOL_RULE_NEGATIVE, SYMBOL_BOX_ROOT, SYMBOL_RULE_PATTERN, SYMBOL_GLOBAL_ROOT, SYMBOL_BOX_INSIDE, SYMBOL_FORALL, SYMBOL_PATTERN_ROOT } from "./symbols";
 import { defaultNodeData, RuleBoxState, UiNodeData } from "./state";
 import { Positioned } from "../../../shared/vector";
 import { sortedBy } from "../../../shared/sort";
@@ -20,6 +20,7 @@ import { sortedBy } from "../../../shared/sort";
 const boxConnectorLabels = {
     root: SYMBOL_BOX_ROOT,
     inside: SYMBOL_BOX_INSIDE,
+    patternRoot: SYMBOL_PATTERN_ROOT,
     children: {
         pattern: SYMBOL_RULE_PATTERN,
         meta: SYMBOL_RULE_META,
@@ -29,7 +30,11 @@ const boxConnectorLabels = {
 } as const
 
 type BoxSubConnectorSymbol = ValueOf<typeof boxConnectorLabels.children>
-type BoxConnectorSymbol = typeof boxConnectorLabels.root | typeof boxConnectorLabels.inside | BoxSubConnectorSymbol
+type BoxConnectorSymbol =
+    typeof boxConnectorLabels.root
+    | typeof boxConnectorLabels.inside
+    | typeof boxConnectorLabels.patternRoot
+    | BoxSubConnectorSymbol
 
 const boxSubConnectorSymbols = new Set(Object.values(boxConnectorLabels.children))
 
@@ -93,6 +98,7 @@ type VirtualBoxNodesMap = {
     root: VirtualNode,
     children: Map<BoxSubConnectorSymbol, VirtualNode>,
     inside: VirtualNode,
+    patternRoot: VirtualNode,
 }
 
 export type VirtualGraphEmbedding = {
@@ -110,6 +116,12 @@ export function getRealForVirtualNormal(vnode: VirtualNodeNormal, graph: Graph<U
 export function getVirtualForReal(emb: VirtualGraphEmbedding, graphNode: GraphNode<UiNodeData>): VirtualNode {
     return ensured(emb.nodeMapping.get(graphNode))
 }
+
+export const boxDirectedLayers = [
+    new Set([SYMBOL_BOX_ROOT]),
+    new Set([SYMBOL_BOX_INSIDE]),
+    new Set([SYMBOL_RULE_META, SYMBOL_RULE_PATTERN, SYMBOL_RULE_INSERTION, SYMBOL_RULE_NEGATIVE]),
+]
 
 // Returns all nodes that are connected to a global root or rule root.
 // Does not return the roots themselves unless they are rooted.
@@ -134,6 +146,7 @@ export function makeVirtualGraphEmbedding(graph: Graph<UiNodeData>, ruleBoxes: R
         box => ({
             root: { kind: "box", special: boxConnectorLabels.root, box } satisfies VirtualNode,
             inside: { kind: "box", special: boxConnectorLabels.inside, box },
+            patternRoot: { kind: "box", special: boxConnectorLabels.patternRoot, box },
             children: mapFromFunction(boxSubConnectorSymbols, symbol => (
                 {
                     kind: "box",
@@ -161,7 +174,7 @@ export function makeVirtualGraphEmbedding(graph: Graph<UiNodeData>, ruleBoxes: R
 
     let nodes = new Set([
         ...normalNodesToVirtual.values(),
-        ...boxesToVirtual.values().flatMap(boxNodes => [boxNodes.root, boxNodes.inside, ...boxNodes.children.values()]),
+        ...boxesToVirtual.values().flatMap(boxNodes => [boxNodes.root, boxNodes.inside, boxNodes.patternRoot, ...boxNodes.children.values()]),
         globalRootNode
     ])
 
@@ -183,11 +196,14 @@ export function makeVirtualGraphEmbedding(graph: Graph<UiNodeData>, ruleBoxes: R
             edges.push([boxNodes.inside, childNode])
         }
 
+        // connect the pattern root to the pattern node
+        edges.push([ensured(boxNodes.children.get(SYMBOL_RULE_PATTERN)), boxNodes.patternRoot])
+
         // connect box to its parent box
         let parentBox = findBoxContainingBox(box, ruleBoxes)
         if (parentBox !== undefined) {
             const parentBoxNodes = ensured(boxesToVirtual.get(parentBox))
-            edges.push([boxNodes.root, ensured(parentBoxNodes.children.get(SYMBOL_RULE_PATTERN))])
+            edges.push([boxNodes.root, ensured(parentBoxNodes.patternRoot)])
         } else {
             edges.push([boxNodes.root, globalRootNode])
         }
@@ -199,13 +215,16 @@ export function makeVirtualGraphEmbedding(graph: Graph<UiNodeData>, ruleBoxes: R
 
     // start with the smallest box and connect all contained unrooted nodes
     for (let box of sortedBy(ruleBoxes, box => Rect.area(box.bounds))) {
-        let contained = findNodesInBox(box, [...unrootedNodes])
-        for (let node of contained) {
+        let unrootedContained = findNodesInBox(box, [...unrootedNodes])
+        for (let node of unrootedContained) {
             let virtualNode = ensured(normalNodesToVirtual.get(node))
             const boxNodes = ensured(boxesToVirtual.get(box))
             let categories = getNodeTypesForNode(node)
             for (let category of categories) {
                 edges.push([ensured(boxNodes.children.get(category)), virtualNode])
+                if (category === "RULE_PATTERN") {
+                    edges.push([ensured(boxNodes.patternRoot), virtualNode])
+                }
             }
             // remove it from remaining unrooted nodes
             unrootedNodes.delete(node)

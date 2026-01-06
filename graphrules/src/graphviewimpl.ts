@@ -59,6 +59,17 @@ export function inducedSubgraphLabeled<V,L>(nodes: ReadonlySet<V>, graph: Labele
     return makeLabeledGraphFromFingraph(inducedSubgraph(nodes, graph), graph.label)
 }
 
+function insertNode<V>(graph: FinGraph<V>, node: V, neighbors: V[]): FinGraph<V> {
+    let nodes = new Set(graph.allNodes())
+    nodes.add(node)
+    let edges = [...graph.enumerateEdges(), ...neighbors.map(nb => [node, nb] as [V,V])]
+    return makeFinGraphFromNodesEdges(nodes, edges)
+}
+
+function insertNodeLabeled<V,L>(graph: LabeledGraph<V,L>, node: V, neighbors: V[]): LabeledGraph<V,L> {
+    return makeLabeledGraphFromFingraph(insertNode(graph, node, neighbors), graph.label)
+}
+
 export function makeContainerGraphAccessor<V,L>(graph: LabeledGraph<V,L>): ContainerSubgraphAccessor<V, LabeledGraph<V,L>> {
     return {
         getContainerSubgraph(container: ContainerEdge<V>): LabeledGraph<V,L> {
@@ -108,13 +119,6 @@ export function collectDirectedSubgraphNodes<V,L>(graph: LabeledGraph<V,L>, root
         i %= labelCycle.length
     }
     return nodes
-}
-
-function insertNode<V>(graph: FinGraph<V>, node: V, neighbors: V[]): FinGraph<V> {
-    let nodes = new Set(graph.allNodes())
-    nodes.add(node)
-    let edges = [...graph.enumerateEdges(), ...neighbors.map(nb => [node, nb] as [V,V])]
-    return makeFinGraphFromNodesEdges(nodes, edges)
 }
 
 // TODO: neighbors in set accessor

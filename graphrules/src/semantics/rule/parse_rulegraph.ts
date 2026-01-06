@@ -36,23 +36,6 @@ function parseBoxSubgraph<V>(graph: GraphWithParserAccess<V>, ruleInside: V, inn
     return graph.getContainerSubgraph({ outside: ruleInside, inside: patternRoot })
 }
 
-export const boxDirectedLayers = [
-    new Set([SYMBOL_BOX_ROOT]),
-    new Set([SYMBOL_BOX_INSIDE]),
-    new Set([SYMBOL_RULE_META, SYMBOL_RULE_PATTERN, SYMBOL_RULE_INSERTION, SYMBOL_RULE_NEGATIVE]),
-]
-
-function parsePatternSubgraph<V>(graph: GraphWithParserAccess<V>, ruleInside: V, globalRoot: V) {
-    let innerSymbol = SYMBOL_RULE_PATTERN
-    let diagnosticName = "pattern"
-    let patternRoot = expectExactlyOneNode(
-        graph.neighborsWithLabel(ruleInside, innerSymbol),
-        `Rule must have exactly one ${diagnosticName} child`,
-        [ruleInside]
-    )
-    return graph.getDirectedSubgraph(patternRoot, boxDirectedLayers, globalRoot)
-}
-
 function* parseNegativeEdges<V>(graph: GraphWithParserAccess<V>, ruleInside: V, patternSubgraph: FinGraph<V>): Generator<[V, V]> {
     let negativeSubgraph = parseBoxSubgraph(graph, ruleInside, SYMBOL_RULE_NEGATIVE, "negative edges")
     syntaxAssert(negativeSubgraph.countEdges() == 0, "Negative edge markers should not be connected", [...negativeSubgraph.allNodes()])
@@ -96,8 +79,7 @@ function parseFreeVars<V>(graph: GraphWithParserAccess<V>, ruleInside: V): Set<s
 
 export function parseRule<V>(graph: GraphWithParserAccess<V>, ruleInside: V): RuleGraph<V> {
     syntaxAssert(graph.label(ruleInside) === SYMBOL_BOX_INSIDE, "incorrect inside node of rule", [ruleInside])
-    let globalRoot = parseGlobalRoot(graph)
-    let pattern = parsePatternSubgraph(graph, ruleInside, globalRoot)
+    let pattern = parseBoxSubgraph(graph, ruleInside, SYMBOL_RULE_PATTERN, "insertion")
     let insertion = parseBoxSubgraph(graph, ruleInside, SYMBOL_RULE_INSERTION, "insertion")
     let connectingEdges = extractBetweenEdges(graph, pattern.allNodes(), insertion.allNodes())
     let negativeEdges = parseNegativeSubgraph(graph, ruleInside, pattern)

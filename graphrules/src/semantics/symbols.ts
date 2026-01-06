@@ -12,13 +12,15 @@ export const SYMBOL_OUT_STEP = "step" // ✔
 export const SYMBOL_OUT_EXHAUSTED = "ex" // ✗
 export const SYMBOL_ERROR = "ERR"
 
-export const SYMBOL_GLOBAL_ROOT = "GLOBAL_ROOT"
+export const SYMBOL_GLOBAL_ROOT = "GLOBAL_ROOT" // may only occur once in the graph
 export const SYMBOL_BOX_ROOT = "BOX_ROOT"
-export const SYMBOL_BOX_INSIDE = "BOX_INSIDE"
+export const SYMBOL_BOX_INSIDE = "BOX_INSIDE" // child of root, parent of the RULE_* connectors below
 export const SYMBOL_RULE_PATTERN = "RULE_PATTERN"
 export const SYMBOL_RULE_META = "RULE_META"
 export const SYMBOL_RULE_INSERTION = "RULE_INSERTION"
 export const SYMBOL_RULE_NEGATIVE = "RULE_NEGATIVE"
+
+export const SYMBOL_PATTERN_ROOT = "PATTERN_ROOT" // represents Global Root inside a pattern
 
 
 export const WILDCARD_SYMBOL = "_" // empty string matches everything
