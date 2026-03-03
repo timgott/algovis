@@ -1,6 +1,7 @@
-import { assert, assertExists, min, randInt, range } from "../../shared/utils.js"
+import { DefaultMap } from "../../shared/defaultmap.js"
+import { assert, assertExists, ensured, mapToIndex, max, maxSet, maxValue, min, minSet, minValue, randInt, randomChoice, range } from "../../shared/utils.js"
 import { Graph, GraphNode } from "./graph.js"
-import { Component, SearchState, bfs, bfsFoldUniform, collectNeighborhood, computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js"
+import { Component, SearchState, bfs, bfsFold, bfsFoldUniform, bfsSimple, collectNeighborhood, computeDistances, findConnectedComponents, getNodesByComponent } from "./graphalgos.js"
 import { DynamicLocal, OnlineAlgorithm, PartialGrid } from "./partialgrid.js"
 
 
@@ -988,5 +989,146 @@ export function antiCollisionColoring(radius: number): DynamicLocal<NodeColor> {
             }
             return coloring
         },
+    }
+}
+
+export function niceColoring(radius: number): DynamicLocal<NodeColor> {
+    let bValues = new Map<number, number>()
+    return {
+        locality: function (nodeCount: number): number {
+            return radius
+        },
+        step: function (graph: Graph<number>, pointOfChange: GraphNode<number>): Map<GraphNode<number>, number> {
+            let neighborhood = collectNeighborhood(pointOfChange, radius)
+            let coloring = new Map<Node, NodeColor>()
+            let remaining = new Set<Node>(neighborhood)
+            let ids = mapToIndex(graph.nodes)
+
+            // clear neighborhood
+            for (let v of neighborhood) {
+                bValues.delete(ensured(ids.get(v)))
+            }
+
+            // updated coloring (don't modify graph directly)
+            function getColor(node: Node) {
+                if (neighborhood.has(node)) {
+                    return coloring.get(node)
+                } else {
+                    return node.data
+                }
+            }
+
+            function setColor(node: Node, color: NodeColor, b: number) {
+                console.assert(remaining.has(node), `tried to color node twice, was ${coloring.get(node)}, now ${color}`)
+                coloring.set(node, color)
+                setBValue(node, b)
+                remaining.delete(node)
+                console.assert(isLocalColoring(node, coloring, remaining), `broke coloring at ${node.x},${node.y}`)
+            }
+
+            function setBValue(node: Node, b: number) {
+                bValues.set(ensured(ids.get(node)), b)
+            }
+
+            function getBValue(node: Node) {
+                return bValues.get(ensured(ids.get(node)))
+            }
+
+            let reachable = collectNeighborhood(pointOfChange, Infinity)
+
+            function expandBordersStep() {
+                // find boundary node with top b
+                let outside = reachable.difference(remaining)
+                let boundary = outside.filter(v => !v.neighbors.isDisjointFrom(remaining))
+                let b = maxValue(boundary, v => ensured(getBValue(v)))
+                if (b <= 0) { // -Inf if boundary is empty
+                    return false
+                }
+
+                let colorSteps: [color: number, border: number, deltaB: number][] = [[0, 1, 0], [1, 2, 0], [2, 0, -1]];
+                for (let [color, border, deltaB] of colorSteps) {
+                    for (let v of reachable.filter(v => getColor(v) === color && getBValue(v) === b)) {
+                        for (let nb of v.neighbors.intersection(remaining)) {
+                            setColor(nb, border, b + deltaB)
+                        }
+                    }
+                }
+                return true
+            }
+
+            // grow unfinished borders
+            while (expandBordersStep()) {}
+
+            // find connected components before point of change was inserted
+            let [componentCount, components] = findConnectedComponents(
+                reachable,
+                (node) => node === pointOfChange
+            )
+            let nodesByComponent = getNodesByComponent(components, components.keys())
+
+            // make parities match
+            let nodeParity = new Map<GraphNode<unknown>, boolean>()
+            bfs(pointOfChange, (v, dist) => {
+                let col = getColor(v)
+                if (col !== undefined) {
+                    nodeParity.set(v, dist % 2 === col % 2)
+                }
+                return SearchState.Continue
+            })
+
+            let componentParity = new Map<number, boolean>()
+            for (let [v, component] of components) {
+                if (getBValue(v) === 0) {
+                    let parity = ensured(nodeParity.get(v)) // must have parity because it has b value so it must have color
+                    assert(componentParity.get(component) === parity || !componentParity.has(component), `component ${component} is inconsistent`)
+                    componentParity.set(component, parity)
+                }
+            }
+
+            if (pointOfChange.neighbors.size === 0) {
+                // no neighbors
+                setColor(pointOfChange, 0, 0)
+                return coloring
+            }
+
+            // component that keeps boundary
+            let maxBComponents = maxSet(nodesByComponent, ([c, nodes]) => maxValue(nodes, v => getBValue(v) ?? 0), 0)
+            // ensured because there must be at least 1 component
+            let [maxBComponent, _] = ensured(min(maxBComponents, ([c, nodes]) => nodes.length))
+            console.log("chosen: ", maxBComponent, componentParity.get(maxBComponent))
+
+            // add new borders to match parity
+            let mainParity = componentParity.get(maxBComponent) ?? true // random parity if there is no component parity
+            for (let [component, parity] of componentParity) {
+                if (parity !== mainParity) {
+                    for (let v of ensured(nodesByComponent.get(component))) {
+                        let b = getBValue(v)
+                        if (b !== undefined) {
+                            setBValue(v, b + 1)
+                        }
+                    }
+                }
+            }
+
+            // build the borders
+            expandBordersStep()
+
+            // color remaining according to parity
+            // parity true => dist = color mod 2; i.e.: parity true means even is 0
+            bfs(pointOfChange, (v, dist) => {
+                if (remaining.has(v)) {
+                    let color = (mainParity === (dist % 2 === 0)) ? 0 : 1
+                    setColor(v, color, 0)
+                }
+                return SearchState.Continue
+            })
+
+            console.log("Max b", maxValue(bValues.values(), x => x))
+
+            if (!isLocalColoringAll(neighborhood, coloring)) {
+                console.error("Coloring incorrect")
+            }
+            return coloring
+        }
     }
 }
