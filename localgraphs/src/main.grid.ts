@@ -29,7 +29,12 @@ radiusCheckbox.addEventListener("input", (ev) => {
 })
 svgGrid.setBallVisible(radiusCheckbox.checked)
 
-let undoHistory: PartialGrid<NodeColor>[] = []
+type State<S=unknown> = {
+    grid: PartialGrid<NodeColor>,
+    algo: DynamicLocal<NodeColor,S>
+    algoState: S
+}
+let undoHistory: State<unknown>[] = []
 
 let adversary = randomAdversary
 
@@ -67,21 +72,29 @@ async function dynamicAlgorithmStepAnimated(grid: PartialGrid<NodeColor>, i: num
     console.assert(grid.get(i, j) !== undefined && grid.get(i, j) !== null)
 }
 
-function step(algo: DynamicLocal<number>, grid: PartialGrid<NodeColor>, i: number, j: number, delay: number = 0) {
-    undoHistory.push(grid.copy())
-
-    if (delay == 0) {
-        grid.dynamicAlgorithmStep(i, j, algo)
-        console.assert(isGlobalColoring(grid.getGraph()[0]), "correctness check failed")
-    } else {
-        dynamicAlgorithmStepAnimated(grid, i, j, algo, delay)
+function copyState(state: State) {
+    return {
+        grid: state.grid.copy(),
+        algo: state.algo,
+        algoState: structuredClone(state.algo.state),
     }
 }
 
-function putRectangle(algo: DynamicLocal<number>, grid: PartialGrid<NodeColor>, i: number, j: number, width: number, height: number) {
+function step(state: State, i: number, j: number, delay: number = 0) {
+    undoHistory.push(copyState(state))
+
+    if (delay == 0) {
+        state.grid.dynamicAlgorithmStep(i, j, state.algo)
+        console.assert(isGlobalColoring(state.grid.getGraph()[0]), "correctness check failed")
+    } else {
+        dynamicAlgorithmStepAnimated(state.grid, i, j, state.algo, delay)
+    }
+}
+
+function putRectangle(state: State, i: number, j: number, width: number, height: number) {
     for (let i2 = i; i2 < i + width; i2++) {
         for (let j2 = j; j2 < j + height; j2++) {
-            step(algo, grid, i2, j2, 0)
+            step(state, i2, j2, 0)
         }
     }
 }
@@ -90,7 +103,7 @@ function render(grid: PartialGrid<NodeColor>) {
     renderColoredGrid(grid, svgGrid, paritiesCheckbox.checked, borderSidesCheckbox.checked)
 }
 
-function makeAlgo(): DynamicLocal<number> {
+function makeAlgo(): DynamicLocal<number, unknown> {
     console.log("reinitializing algo")
     if (algorithmSelect.value == "greedy") {
         return neighborhoodGreedy(localityInput.valueAsNumber)
@@ -111,56 +124,67 @@ function makeAlgo(): DynamicLocal<number> {
     }
 }
 
-function run(): [PartialGrid<number>, DynamicLocal<number>] {
-    let grid = new PartialGrid<NodeColor>(rows, columns)
-    render(grid)
+function makeState(): State {
+    const algo = makeAlgo()
+    return {
+        grid: new PartialGrid<NodeColor>(rows, columns),
+        algo,
+        algoState: algo.state,
+    }
+}
 
-    let algo = makeAlgo()
+function run(): State {
+    let state = makeState()
+    render(state.grid)
+
     svgGrid.onClick = (i, j) => {
-        if (grid.get(i, j) == null) {
-            step(algo, grid, i, j, animateStepCheckbox.checked ? 200 : 0)
-            render(grid)
+        if (state.grid.get(i, j) == null) {
+            state.algo = makeAlgo()
+            state.algo.state = state.algoState
+            step(state, i, j, animateStepCheckbox.checked ? 200 : 0)
+            render(state.grid)
         }
     }
     undoButton.onclick = () => {
         let last = undoHistory.pop()
         if (last) {
-            grid = last
-            render(grid)
+            state = last
+            state.algo.state = state.algoState
+            render(state.grid)
         }
     }
     paritiesCheckbox.onchange = () => {
-        render(grid)
+        render(state.grid)
     }
     borderSidesCheckbox.onchange = () => {
-        render(grid)
+        render(state.grid)
     }
     buildBoxesButton.onclick = () => {
         let size = localityInput.valueAsNumber + 3
         let offset = 2
-        putRectangle(algo, grid, offset, offset, size, size)
-        putRectangle(algo, grid, offset + size + 2, offset, size, size)
-        putRectangle(algo, grid, offset, offset + size + 1, size, size)
-        putRectangle(algo, grid, offset + size + 2, offset + size + 1, size, size)
-        putRectangle(algo, grid, offset + size + 1, offset, offset - 1, size)
-        putRectangle(algo, grid, offset + size, offset + size + 1, offset - 1, size)
-        render(grid)
+        putRectangle(state, offset, offset, size, size)
+        putRectangle(state, offset + size + 2, offset, size, size)
+        putRectangle(state, offset, offset + size + 1, size, size)
+        putRectangle(state, offset + size + 2, offset + size + 1, size, size)
+        putRectangle(state, offset + size + 1, offset, offset - 1, size)
+        putRectangle(state, offset + size, offset + size + 1, offset - 1, size)
+        render(state.grid)
     }
-    return [grid, algo]
+    return state
 }
 
 async function runAutoAdversary() {
-    let [grid, algo] = run()
+    let state = run()
 
-    for (let t = 0; t < grid.rows * grid.columns; t++) {
-        let [i, j] = adversary(grid)
-        step(algo, grid, i, j)
+    for (let t = 0; t < state.grid.rows * state.grid.columns; t++) {
+        let [i, j] = adversary(state.grid)
+        step(state, i, j)
         if (animateAdvCheckbox.checked) {
             await sleep(1)
-            render(grid)
+            render(state.grid)
         }
     }
-    render(grid)
+    render(state.grid)
 }
 
 run()

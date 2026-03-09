@@ -3,9 +3,10 @@ import { Graph, GraphNode, createEdge, createEmptyGraph, createNode } from "./gr
 
 export type OnlineAlgorithm<T> = (graph: Graph<T>, pointOfChange: GraphNode<T>) => T
 export type GridAdversary<T> = (grid: PartialGrid<T>) => [number, number]
-export type DynamicLocal<T> = {
+export type DynamicLocal<T,S=unknown> = {
     locality: (nodeCount: number) => number,
     step: (graph: Graph<T>, pointOfChange: GraphNode<T>) => Map<GraphNode<T>, T>,
+    state: S
 }
 
 // partially colored grid

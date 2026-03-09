@@ -129,6 +129,7 @@ export function neighborhoodGreedy(distance: number): DynamicLocal<NodeColor> {
             }
             return coloring
         },
+        state: null
     }
 }
 
@@ -177,6 +178,7 @@ export function minimalGreedy(distance: number): DynamicLocal<NodeColor> {
             }
             return coloring
         },
+        state: null
     }
 }
 
@@ -220,6 +222,7 @@ export function randomColoring(distance: number): DynamicLocal<NodeColor> {
             }
             return coloring
         },
+        state: null
     }
 }
 
@@ -429,6 +432,7 @@ export function parityBorderColoring(radius: number): DynamicLocal<NodeColor> {
 
             return colorWithMajorityBorder(neighborhood, pointOfChange, borderColor, true)
         },
+        state: null
     }
 }
 
@@ -727,6 +731,7 @@ export function borderComponentColoring(radius: number): DynamicLocal<NodeColor>
 
             return coloring.finishColoring()
         },
+        state: null
     }
 }
 
@@ -989,14 +994,17 @@ export function antiCollisionColoring(radius: number): DynamicLocal<NodeColor> {
             }
             return coloring
         },
+        state: null,
     }
 }
 
-export function niceColoring(radius: number): DynamicLocal<NodeColor> {
-    let bValues = new Map<number, number>()
+export function niceColoring(radius: number): DynamicLocal<NodeColor, {bValues: Map<number, number>}> {
     return {
         locality: function (nodeCount: number): number {
             return radius
+        },
+        state: {
+            bValues: new Map<number, number>()
         },
         step: function (graph: Graph<number>, pointOfChange: GraphNode<number>): Map<GraphNode<number>, number> {
             let neighborhood = collectNeighborhood(pointOfChange, radius)
@@ -1005,6 +1013,7 @@ export function niceColoring(radius: number): DynamicLocal<NodeColor> {
             let ids = mapToIndex(graph.nodes)
 
             // clear neighborhood
+            let bValues = this.state.bValues
             for (let v of neighborhood) {
                 bValues.delete(ensured(ids.get(v)))
             }
@@ -1129,6 +1138,6 @@ export function niceColoring(radius: number): DynamicLocal<NodeColor> {
                 console.error("Coloring incorrect")
             }
             return coloring
-        }
+        },
     }
 }
