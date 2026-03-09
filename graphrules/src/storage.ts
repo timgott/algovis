@@ -1,5 +1,6 @@
 import { FlatGraph, flattenGraph, unflattenGraph } from "./graphjson";
-import { createClearedState, DataState, RuleBoxState, UiNodeData } from "./ui";
+import { DataState, RuleBoxState } from "./semantics/state";
+import { createClearedState } from "./ui";
 
 type StoredNodeData = string
 
