@@ -35,8 +35,8 @@ export function wrapSettleNewNodes<T>(state: DataState, action: (state: DataStat
     let nodesToMove = new Set(newNodes) //new Set(newNodes.filter(v => v.neighbors.intersection(oldNodes).size < 2))
     const settlePhysicsConfig = (t: number): LayoutPhysicsConfig => ({
         ...layoutStyle,
-        pushDistance: 1000 * t + layoutStyle.pushDistance,
-        dampening: t*10 + layoutStyle.dampening
+        pushDistance: 10 * t + layoutStyle.pushDistance,
+        dampening: (1-t)*10 + layoutStyle.dampening
     })
     settleNodes(state.graph, nodesToMove, settlePhysicsConfig, 1. / 60., 1000, []) // the arrow forces are unstable here (they really want to move other nodes)
 
