@@ -11,21 +11,21 @@ initFullscreenCanvas(canvas)
 const layoutStyle: TreeLayoutConfig = {
     targetOffsetX: 50,
     targetOffsetY: 30,
-    pushDistance: 10,
+    pushDistance: 20,
     rootY: 80,
     dampening: 2,
-    pushForce: 20,
+    pushForce: 500,
     verticalLayoutForce: 10,
     horizontalParentForce: 10,
     horizontalChildForce: 10,
-    boundaryForce: 20,
-    boundaryWidth: 40,
+    boundaryForce: 100,
+    boundaryWidth: 80,
     sleepVelocity: 0,
     depthLimit: 40,
 }
 const nodeRadius = 5;
 
-let graph = createRegularTree(5, 3)
+let graph = createRegularTree(8, 3)
 shuffleGraphPositions(graph, canvas.clientWidth, canvas.clientHeight)
 
 const physics = new TreeLayoutPhysics(layoutStyle)

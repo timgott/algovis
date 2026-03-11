@@ -39,7 +39,7 @@ export function createRegularTree(depth: number, degree: number): Graph<null> {
     while (depth > 0) {
         let newLayer: GraphNode<null>[] = []
         for (let parent of lastLayer) {
-            for (let i = 0; i < degree - 1; i++) {
+            while (parent.neighbors.size < degree) {
                 let child = createNode(graph, null)
                 createEdge(graph, parent, child)
                 newLayer.push(child)

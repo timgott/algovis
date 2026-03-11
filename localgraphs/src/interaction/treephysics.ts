@@ -1,6 +1,6 @@
 import { Rect } from "../../../shared/rectangle";
 import { Graph, GraphNode } from "../graph";
-import { bfsFold } from "../graphalgos";
+import { bfsFold, dfsFold } from "../graphalgos";
 import { applyVelocityStep, findActiveNodes, LayoutPhysics } from "./physics";
 
 type InferredTree<T> = {
@@ -15,7 +15,7 @@ function makeTree<T>(root: GraphNode<T>, visibilityLimit: number): InferredTree<
     let parents: Map<GraphNode<T>, GraphNode<T> | null> = new Map();
     let visible: Set<GraphNode<T>> = new Set();
     bfsFold<GraphNode<T>, [parent: GraphNode<T> | null, depth: number]>(
-        root, () => [null, 0],
+        [root], () => [null, 0],
         (current, [parent, depth]) => {
             if (levels.length <= depth) {
                 levels.push([]);
@@ -29,7 +29,6 @@ function makeTree<T>(root: GraphNode<T>, visibilityLimit: number): InferredTree<
                 return [];
             }
             let children = [...current.neighbors]; // parent filtered out by bfs
-            children.sort((a, b) => a.x - b.x);
             return children.map((n) => [n, [current, depth + 1]]);
         },
     );
@@ -116,6 +115,21 @@ function applyLayoutForces<T>(
     }
 }
 
+function sortNodePositions<T>(
+    tree: InferredTree<T>,
+) {
+    for (let depth = 0; depth < tree.levels.length; depth++) {
+        let siblings = tree.levels[depth];
+        let positions = siblings.map(v => v.x).toSorted((a,b) => a-b);
+        for (let i = 0; i < siblings.length; i++) {
+            if (siblings[i].x != positions[i]) {
+                siblings[i].x = positions[i];
+                siblings[i].vx = 0;
+            }
+        }
+    }
+}
+
 export class TreeLayoutPhysics implements LayoutPhysics<unknown> {
     private tree: InferredTree<unknown> | null = null;
 
@@ -130,6 +144,7 @@ export class TreeLayoutPhysics implements LayoutPhysics<unknown> {
         );
         let nodes = this.tree.parents.keys();
         applyVelocityStep(nodes, this.layoutStyle.dampening, dt);
+        sortNodePositions(this.tree);
         applyLayoutForces(
             this.tree,
             this.layoutStyle,

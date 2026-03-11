@@ -129,6 +129,7 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
     private painter: GraphPainter<T>
     public visibleFilter: null | ((node: GraphNode<T>) => boolean) = null
     public substeps = 1
+    public timeFactor = 1
 
     private interactionMode: (() => GraphInteraction<T>) | null = null
     private interactions: Map<PointerId, GraphInteraction<T>> = new Map()
@@ -167,6 +168,7 @@ export class GraphPhysicsSimulator<T> implements InteractiveSystem {
     update({dt, bounds, dragState}: AnimationFrame): SleepState {
         let visibleGraph = this.getVisibleGraph()
         let activeCount = 0
+        dt *= this.timeFactor;
         for (let step = 0; step < this.substeps; step++) {
           let subdt = dt / this.substeps;
           for (let [id, pointerState] of dragState) {

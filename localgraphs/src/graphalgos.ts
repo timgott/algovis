@@ -246,3 +246,25 @@ export function dfsWalkWithIncreasingOrder<T>(nodes: GraphNode<T>[], key: (node:
     assert(walk.length === nodes.length, "duplicate nodes in walk")
     return walk
 }
+
+export function dfsFold<S,T>(
+    seeds: S[],
+    initial: () => T,
+    callback: (node: S, parent: T) => Iterable<[child: S, value: T]> | SearchState.Terminate
+) {
+    let remainingSeeds = seeds.toReversed() // stack
+    let closed = new Set()
+    let stack: [S,T][] = []
+    while (remainingSeeds.length > 0 || stack.length > 0) {
+        let [node, parentValue] = stack.pop() ?? [remainingSeeds.pop()!, initial()]
+        if (!closed.has(node)) {
+            closed.add(node)
+            let children = callback(node, parentValue)
+            if (children === SearchState.Terminate) {
+                return
+            }
+            // append in reverse order such that top of stack is min neighbor
+            stack.push(...children)
+        }
+    }
+}
