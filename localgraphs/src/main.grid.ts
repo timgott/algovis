@@ -17,7 +17,7 @@ let buildBoxesButton = document.getElementById("build_boxes") as HTMLButtonEleme
 
 let rows = 30
 let columns = 30
-let svgGrid = new ColoredGridSvg(root, rows, columns, 30)
+let svgGrid = new ColoredGridSvg(root, rows, columns, 24)
 
 // locality path around cursor
 localityInput.addEventListener("input", () => {
@@ -94,7 +94,9 @@ function step(state: State, i: number, j: number, delay: number = 0) {
 function putRectangle(state: State, i: number, j: number, width: number, height: number) {
     for (let i2 = i; i2 < i + width; i2++) {
         for (let j2 = j; j2 < j + height; j2++) {
-            step(state, i2, j2, 0)
+            if (i2 < state.grid.rows && j2 < state.grid.columns) {
+                step(state, i2, j2, 0)
+            }
         }
     }
 }
@@ -161,13 +163,15 @@ function run(): State {
     }
     buildBoxesButton.onclick = () => {
         let size = localityInput.valueAsNumber + 3
-        let offset = 2
-        putRectangle(state, offset, offset, size, size)
-        putRectangle(state, offset + size + 2, offset, size, size)
-        putRectangle(state, offset, offset + size + 1, size, size)
-        putRectangle(state, offset + size + 2, offset + size + 1, size, size)
-        putRectangle(state, offset + size + 1, offset, offset - 1, size)
-        putRectangle(state, offset + size, offset + size + 1, offset - 1, size)
+        let stride = size + 1
+        let offset = 1
+        for (let i = 0; i < 5; i++) {
+            for (let j = 0; j < 5; j++) {
+                let i_parity = i % 2
+                let j_parity = j % 2
+                putRectangle(state, offset + stride * i + j_parity, offset + stride * j, size, size)
+            }
+        }
         render(state.grid)
     }
     return state

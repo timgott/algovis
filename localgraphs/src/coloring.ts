@@ -1013,7 +1013,7 @@ export function niceColoring(radius: number): DynamicLocal<NodeColor, {bValues: 
             let ids = mapToIndex(graph.nodes)
 
             // clear neighborhood
-            let bValues = this.state.bValues
+            let bValues = new Map(this.state.bValues)
             for (let v of neighborhood) {
                 bValues.delete(ensured(ids.get(v)))
             }
@@ -1089,7 +1089,7 @@ export function niceColoring(radius: number): DynamicLocal<NodeColor, {bValues: 
             for (let [v, component] of components) {
                 if (getBValue(v) === 0) {
                     let parity = ensured(nodeParity.get(v)) // must have parity because it has b value so it must have color
-                    assert(componentParity.get(component) === parity || !componentParity.has(component), `component ${component} is inconsistent`)
+                    console.assert(componentParity.get(component) === parity || !componentParity.has(component), `component ${component} is inconsistent`)
                     componentParity.set(component, parity)
                 }
             }
@@ -1103,7 +1103,7 @@ export function niceColoring(radius: number): DynamicLocal<NodeColor, {bValues: 
             // component that keeps boundary
             let maxBComponents = maxSet(nodesByComponent, ([c, nodes]) => maxValue(nodes, v => getBValue(v) ?? 0), 0)
             // ensured because there must be at least 1 component
-            let [maxBComponent, _] = ensured(min(maxBComponents, ([c, nodes]) => nodes.length))
+            let [maxBComponent, _] = ensured(max(maxBComponents, ([c, nodes]) => nodes.length))
             console.log("chosen: ", maxBComponent, componentParity.get(maxBComponent))
 
             // add new borders to match parity
@@ -1134,6 +1134,7 @@ export function niceColoring(radius: number): DynamicLocal<NodeColor, {bValues: 
 
             console.log("Max b", maxValue(bValues.values(), x => x))
 
+            this.state.bValues = bValues
             if (!isLocalColoringAll(neighborhood, coloring)) {
                 console.error("Coloring incorrect")
             }
