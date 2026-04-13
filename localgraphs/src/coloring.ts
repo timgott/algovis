@@ -1065,9 +1065,6 @@ export function niceColoring(radius: number): DynamicLocal<NodeColor, {bValues: 
                 return true
             }
 
-            // grow unfinished borders
-            while (expandBordersStep()) {}
-
             // find connected components before point of change was inserted
             let [componentCount, components] = findConnectedComponents(
                 reachable,
@@ -1119,8 +1116,8 @@ export function niceColoring(radius: number): DynamicLocal<NodeColor, {bValues: 
                 }
             }
 
-            // build the borders
-            expandBordersStep()
+            // grow unfinished borders
+            while (expandBordersStep()) {}
 
             // color remaining according to parity
             // parity true => dist = color mod 2; i.e.: parity true means even is 0
