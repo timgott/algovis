@@ -236,7 +236,7 @@
 
 (define wuziqi
   (game
-    (title "Wuziqi")
+    (title "Gomoku Infinite (五子棋)")
     (description "This is a variant of Gomoku: Players take turns placing stones. When a player gets a line of 5 stones, they can remove it and replace one enemy stone with their own.")
     (stones
       (w (circle (color white)))
@@ -277,6 +277,62 @@
             (and
               (row dir (x x x x x) (_ _ _ _ _))
               (row E (y) (x)))))))))
+
+(define gobang
+  (game
+    (title "Gobang")
+    (description "Another variant of Gomoku; here, a player can capture an enemy row of 2 by placing two stones of his color at the endpoints.")
+    (stones
+      (w (circle (color white)))
+      (b (circle (color black)))
+      (n (circle (color purple)))
+      (# (nothing)))
+    (initialBoard
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (# # # # # # # # # # # # # # # # # # # # #)
+      (P b # # # # # # # # # # # # # # # # # # #))
+    (players
+      (White (human) (color deepskyblue))
+      (Black (human) (color chocolate))
+      (Capturer (nature) (color purple))
+      (RoundFinisher (nature) (color purple)))
+    (rules
+      (for (player x y) ((White w b) (Black b w))
+        (player
+          (and
+            (row N (_) (n))
+            (row E (P x) (N x))))
+        (for dir (N S E W NE NW SE SW)
+          (Capturer
+            (and
+              (row E (N x) (N x))
+              (row dir (n y y x) (n _ _ x)))))
+        (RoundFinisher
+            (and
+              (row E (N x) (P y))
+              (row N (n) (x))))))))
+
+
+
+
+
 
 (define go
   (game
