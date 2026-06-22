@@ -14,6 +14,7 @@ let radiusCheckbox = document.getElementById("show_radius") as HTMLInputElement
 
 let undoButton = document.getElementById("undo") as HTMLButtonElement
 let buildBoxesButton = document.getElementById("build_boxes") as HTMLButtonElement
+let potentialsButton = document.getElementById("show_potential") as HTMLButtonElement
 
 let rows = 30
 let columns = 30
@@ -135,6 +136,18 @@ function makeState(): State {
     }
 }
 
+function computePotentialsGrid(state: State): PartialGrid<number> {
+    let algoState: any = state.algoState
+    if (!("bValues" in algoState)) throw "bValues not found in algoState"
+    let bValuesByIndex = algoState.bValues as Map<number, number>
+    let potentialGrid = new PartialGrid<number>(rows, columns)
+    for (let [i, b] of bValuesByIndex.entries()) {
+        let [x,y] = state.grid.insertionOrder[i]
+        potentialGrid.put(x, y, 3*b - state.grid.get(x, y)!)
+    }
+    return potentialGrid
+}
+
 function run(): State {
     let state = makeState()
     render(state.grid)
@@ -173,6 +186,9 @@ function run(): State {
             }
         }
         render(state.grid)
+    }
+    potentialsButton.onclick = () => {
+        render(computePotentialsGrid(state))
     }
     return state
 }
