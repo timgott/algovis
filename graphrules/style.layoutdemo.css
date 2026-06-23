@@ -1,0 +1,11 @@
+.preview_header {
+    opacity: 70%;
+    padding-left: 16px;
+}
+
+.preview_content div {
+    border: 2px solid blue;
+    margin: 20px;
+    min-height: 50px;
+    min-width: 50px;
+}

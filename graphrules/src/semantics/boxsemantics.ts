@@ -125,7 +125,7 @@ export const boxDirectedLayers = [
 
 // Returns all nodes that are connected to a global root or rule root.
 // Does not return the roots themselves unless they are rooted.
-function findRootedNodes<V>(graph: LabeledGraph<V, Label>) {
+function findRootedNodes<V>(graph: LabeledGraph<V, Label>): Set<V> {
     let roots = [...graph.nodesWithLabel(SYMBOL_GLOBAL_ROOT), ...graph.nodesWithLabel(SYMBOL_BOX_ROOT)]
     // first layer is already the root, so the next layer has to be the inside layer
     let cycle = [boxDirectedLayers[1], boxDirectedLayers[2], boxDirectedLayers[0]]

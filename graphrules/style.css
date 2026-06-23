@@ -55,6 +55,10 @@ body {
     border-left: 1px solid rgba(0,0,0,0.1);
     direction: rtl; /* hack to move resizable to the left */
 }
+.vline {
+    width: 1;
+    background-color: rgba(0,0,0,0.1);
+}
 .toolbox * {
     direction: ltr;
 }
