@@ -420,3 +420,26 @@
                   (and
                     (row N (_) (piece))
                     (row S (piece x) (piece x)))))))))
+(define chess
+  (game
+      (title "Minichess")
+      (description "Chess?")
+      (stones
+        (Q (circle (color red))))
+      (initialBoard
+        (_ _ _ _ _ _ _ _)
+        (_ _ _ _ _ _ _ _)
+        (_ _ _ _ _ _ _ _)
+        (_ _ _ _ R _ _ _)
+        (_ _ _ _ _ _ _ _)
+        (_ Q _ _ _ _ _ _)
+        (_ _ _ _ _ _ _ _)
+        (_ _ _ _ _ _ _ _))
+      (players
+        (White (human) (color lightblue)))
+      (for steps ((() (_) (_ _) (_ _ _) (_ _ _ _) (_ _ _ _ _) (_ _ _ _ _ _)))
+        (rules
+          (for step steps
+            (for dir (N W S E NW SW NE SE)
+              (White
+                (row dir (Q (for x step _) _) (_ (for x step _) Q)))))))))

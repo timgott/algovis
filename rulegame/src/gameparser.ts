@@ -31,7 +31,7 @@ export function expandFor(
 ): SExpr[] {
     if (expr.type === "list") {
         let args = expr.args.slice();
-        if (checkSymbol(shiftOrFail(args), "for")) {
+        if (args.length > 0 && checkSymbol(shiftOrFail(args), "for")) {
             let binder = shiftOrFail(args);
             if (binder.type == "symbol") {
                 let varName = binder.value;
