@@ -1,8 +1,8 @@
 import { describe, expect, test, jest } from '@jest/globals';
 import { createPathGraph, insertPathIntoGraph } from '../../../localgraphs/src/interaction/examplegraph';
 import { createEmptyGraph, Graph, GraphNode } from '../../../localgraphs/src/graph';
-import { defaultNodeData, RuleBoxState, UiNodeData } from './state';
-import { Label, OPERATOR_CONNECT, OPERATOR_NEW, SYMBOL_BOX_INSIDE, SYMBOL_GLOBAL_ROOT, SYMBOL_RULE_INSERTION, SYMBOL_RULE_META, SYMBOL_RULE_NEGATIVE, SYMBOL_RULE_PATTERN, SYMBOL_BOX_ROOT, SYMBOL_IN, SYMBOL_OUT_STEP, SYMBOL_OUT_EXHAUSTED, SYMBOL_PROGRAM_POINTER, OPERATOR_SET } from '../semantics/symbols';
+import { defaultNodeData, BoxState, UiNodeData } from './state';
+import { Label, OPERATOR_CONNECT, OPERATOR_NEW, SYMBOL_BOX_INSIDE, SYMBOL_GLOBAL_ROOT, SYMBOL_RULE_INSERTION, SYMBOL_RULE_ROOT, SYMBOL_RULE_NONEDGE, SYMBOL_RULE_PATTERN, SYMBOL_BOX_CENTER, SYMBOL_IN, SYMBOL_OUT_STEP, SYMBOL_OUT_EXHAUSTED, SYMBOL_PROGRAM_POINTER, OPERATOR_SET } from '../semantics/symbols';
 import { Rect } from '../../../shared/rectangle';
 import { makeVirtualGraphEmbedding, makeVirtualGraphToRealInserter, VirtualNode } from '../semantics/boxsemantics';
 import { ensured } from '../../../shared/utils';
@@ -18,7 +18,7 @@ function createPathGraphFromLabels(labels: Label[]): [Graph<UiNodeData>, GraphNo
 function insertPathFromLabels(graph: Graph<UiNodeData>, labels: Label[]): GraphNode<UiNodeData>[] {
     return insertPathIntoGraph(graph, labels.map(label => ({...defaultNodeData, label})))
 }
-function createTestBoxForGraph(nodes: Iterable<Positioned>): RuleBoxState {
+function createTestBoxForGraph(nodes: Iterable<Positioned>): BoxState {
     return {
         bounds: Rect.fromPoints(nodes),
         borderColor: "red",
@@ -26,7 +26,7 @@ function createTestBoxForGraph(nodes: Iterable<Positioned>): RuleBoxState {
     }
 }
 
-function moveOutsideBox(nodes: Iterable<Positioned>, box: RuleBoxState) {
+function moveOutsideBox(nodes: Iterable<Positioned>, box: BoxState) {
     for (let v of nodes) {
         v.x = box.bounds.left - 10
         v.y = box.bounds.top - 10
@@ -71,16 +71,16 @@ describe("test actions and control flow", () => {
         const pcVirtual = ensured(virtualEmb.nodeMapping.get(g.pcNode))
         const inVirtual = ensured(virtualEmb.nodeMapping.get(g.inNode))
         const boxVirtuals = ensured(virtualEmb.boxMapping.get(g.ruleBox))
-        const boxMeta = ensured(boxVirtuals.children.get(SYMBOL_RULE_META))
+        const boxMeta = ensured(boxVirtuals.children.get(SYMBOL_RULE_ROOT))
         const boxInside = ensured(boxVirtuals.inside)
-        const boxRoot = ensured(boxVirtuals.root)
+        const boxRoot = ensured(boxVirtuals.center)
         const vgraph = virtualEmb.virtualGraph
         expect(isControlInSymbol(vgraph.label(inVirtual))).toBe(true)
         expect(vgraph.neighborsWithLabel(pcVirtual, SYMBOL_IN)).toEqual(new Set([inVirtual]))
-        expect(vgraph.neighborsWithLabel(inVirtual, SYMBOL_RULE_META)).toEqual(new Set([boxMeta]))
-        expect(vgraph.neighborsWithLabel(boxMeta, SYMBOL_BOX_ROOT)).toEqual(new Set([]))
+        expect(vgraph.neighborsWithLabel(inVirtual, SYMBOL_RULE_ROOT)).toEqual(new Set([boxMeta]))
+        expect(vgraph.neighborsWithLabel(boxMeta, SYMBOL_BOX_CENTER)).toEqual(new Set([]))
         expect(vgraph.neighborsWithLabel(boxMeta, SYMBOL_BOX_INSIDE)).toEqual(new Set([boxInside]))
-        expect(vgraph.neighborsWithLabel(boxInside, SYMBOL_BOX_ROOT)).toEqual(new Set([boxRoot]))
+        expect(vgraph.neighborsWithLabel(boxInside, SYMBOL_BOX_CENTER)).toEqual(new Set([boxRoot]))
     })
 
     test("iterPointedRules", () => {

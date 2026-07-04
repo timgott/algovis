@@ -1,13 +1,13 @@
 import { createEdge, createNode, deleteEdge, Graph, GraphNode } from "../../../localgraphs/src/graph"
 import { assert, randomChoice } from "../../../shared/utils"
-import { applyRuleOnGraph, getRealForVirtualNormal, VirtualGraphEmbedding, VirtualNode, VirtualNodeNormal } from "./boxsemantics"
-import { RuleBoxState, RuleMatch, UiNodeData } from "./state"
+import { applyRuleOnGraph, VirtualGraphEmbedding, VirtualNode, VirtualNodeNormal } from "./boxsemantics"
+import { BoxState, RuleMatch, UiNodeData } from "./state"
 import { placeInCenterOf } from "./placement"
 import { applyExhaustiveReduction } from "./reductionapply"
 import { GraphWithParserAccess, parseRule, RuleSyntaxError } from "./rule/parse_rulegraph"
 import { findRuleMatches } from "./rule/patternmatching"
 import { RuleGraph } from "./rule/rulegraph"
-import { controlOutSymbols, Label, SYMBOL_ERROR, SYMBOL_IN, SYMBOL_OUT_EXHAUSTED, SYMBOL_OUT_STEP, SYMBOL_PROGRAM_POINTER, SYMBOL_RULE_META, SYMBOL_BOX_ROOT, SYMBOL_BOX_INSIDE } from "./symbols"
+import { controlOutSymbols, Label, SYMBOL_ERROR, SYMBOL_IN, SYMBOL_OUT_EXHAUSTED, SYMBOL_OUT_STEP, SYMBOL_PROGRAM_POINTER, SYMBOL_RULE_ROOT } from "./symbols"
 
 export function isControlInSymbol(s: string): boolean {
     return s === SYMBOL_IN
@@ -17,7 +17,7 @@ export function isControlOutSymbol(s: string): boolean {
     return controlOutSymbols.has(s)
 }
 
-function putError(graph: Graph<UiNodeData>, connectedNodes: Iterable<GraphNode<UiNodeData>>, message: string) {
+export function putError(graph: Graph<UiNodeData>, connectedNodes: Iterable<GraphNode<UiNodeData>>, message: string) {
     let errorNode = createNode(graph, { label: SYMBOL_ERROR })
     let messageNode = createNode(graph, { label: message })
     placeInCenterOf(errorNode, connectedNodes)
@@ -38,8 +38,8 @@ export class ControlSyntaxError {
     }
 }
 
-export function advanceControlFlow<V>(graph: Graph<UiNodeData>): boolean {
-    // do not use immutable graph views because this mutates the graph heavily
+export function advanceControlFlow(graph: Graph<UiNodeData>): boolean {
+    // does not use immutable graph views because this mutates the graph heavily
     // move all pc nodes from an out-node to an in-node.
     let doneSomething = false
     let pcNodes = graph.nodes.filter(n => n.data.label === SYMBOL_PROGRAM_POINTER)
@@ -137,13 +137,12 @@ function normalNeighborsWithLabel(graph: GraphWithParserAccess<VirtualNode>, nod
     return filterNormalNodes(graph.neighborsWithLabel(node, label))
 }
 
-type PointedRuleMetadata = { inNode: VirtualNodeNormal, metaNode: VirtualNode, ruleRoot: VirtualNode }
+type PointedRuleMetadata = { inNode: VirtualNodeNormal, controlRootNode: VirtualNode, ruleRoot: VirtualNode }
 export function* iterPointedRules(graph: GraphWithParserAccess<VirtualNode>, pointer: VirtualNode): Generator<PointedRuleMetadata> {
     for (let inNode of filterNormalNodes(graph.neighbors(pointer)).filter(n => isControlInSymbol(graph.label(n)))) {
-        for (let metaNode of graph.neighborsWithLabel(inNode, SYMBOL_RULE_META)) {
-            for (let ruleRoot of graph.neighborsWithLabel(metaNode, SYMBOL_BOX_INSIDE)) {
-                yield { inNode, metaNode, ruleRoot }
-            }
+        for (let ruleRoot of graph.neighborsWithLabel(inNode, SYMBOL_RULE_ROOT)) {
+            // in current semantics, control flow nodes are direct children of rule root for simplicity
+            yield { inNode, controlRootNode: ruleRoot, ruleRoot }
         }
     }
 }
@@ -156,10 +155,10 @@ export function findPossibleActions(graph: GraphWithParserAccess<VirtualNode>): 
     let actions: RuleActionToken[] = []
     let pcNodes = normalAllNodesWithLabel(graph, SYMBOL_PROGRAM_POINTER)
     for (let pc of pcNodes) {
-        for (let {inNode, metaNode, ruleRoot} of iterPointedRules(graph, pc)) {
+        for (let {inNode, controlRootNode, ruleRoot} of iterPointedRules(graph, pc)) {
             let rule = parseRule(graph, ruleRoot)
             let matches = [...findRuleMatches(rule, graph)]
-            let action = makeActionToken(matches, rule, graph, pc, inNode, metaNode)
+            let action = makeActionToken(matches, rule, graph, pc, inNode, controlRootNode)
             if (action !== null) {
                 actions.push(action)
             }
@@ -187,7 +186,7 @@ export function executeActionExhausted(action: RuleActionTokenExhausted, graph: 
     executePointerControl(graph, action.control)
 }
 
-export function executeActionStep(action: RuleActionTokenStep, match: RuleMatch, graph: Graph<UiNodeData>, ruleBoxes: RuleBoxState[], virtualEmb: VirtualGraphEmbedding) {
+export function executeActionStep(action: RuleActionTokenStep, match: RuleMatch, graph: Graph<UiNodeData>, ruleBoxes: BoxState[], virtualEmb: VirtualGraphEmbedding) {
     applyRuleOnGraph(action.rule, match, virtualEmb, graph)
     applyExhaustiveReduction(graph, ruleBoxes)
     executePointerControl(graph, action.control)

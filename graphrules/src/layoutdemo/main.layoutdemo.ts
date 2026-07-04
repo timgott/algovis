@@ -2,17 +2,16 @@ import { AnimationFrame, InteractionController, UiStack } from "../../../localgr
 import { GraphLayoutPhysics, LayoutConfig as GraphLayoutConfig } from "../../../localgraphs/src/interaction/physics";
 import { UndoHistory } from "../../../localgraphs/src/interaction/undo";
 import { initRepaintOnResize } from "../../../shared/canvas";
-import { ensured, mapFromFunction, randomUniform, requireHtmlElement } from "../../../shared/utils";
+import { ensured, randomUniform, requireHtmlElement } from "../../../shared/utils";
 import { mapTool, MouseInteraction, MultiClickDetector, multiplexTool, nestedGraphTool, noopTool, OnlyGraphPhysicsSimulator, PaintingSystem, StatePainter, stealToolClick, ToolController, withToolClick, wrapActionAfterRelease, wrapToolWithHistory } from "../interaction";
-import { isDistanceLess, vec, Vector } from "../../../shared/vector";
+import { isDistanceLess, vec } from "../../../shared/vector";
 import { createEdge, createEmptyGraph, createNode, deleteEdge, deleteNode, extractSubgraph, Graph, GraphEdge, GraphNode } from "../../../localgraphs/src/graph";
 import { DefaultMap } from "../../../shared/defaultmap";
-import { DragNodeInteraction, findClosestNode, GraphInteraction, moveSlightly, offsetNodes, shuffleGraphPositions } from "../../../localgraphs/src/interaction/graphsim";
+import { DragNodeInteraction, findClosestNode, GraphInteraction, offsetNodes, shuffleGraphPositions } from "../../../localgraphs/src/interaction/graphsim";
 import { collectNeighborhood } from "../../../localgraphs/src/graphalgos";
-import { Rect } from "../../../shared/rectangle";
 import { BuildGraphInteraction, DeleteInteraction, MoveComponentInteraction, ShiftNodeInteraction } from "../../../localgraphs/src/interaction/tools";
 import { abstractifyGraph, makeLabeledNeighborAccessor } from "../graphviewimpl";
-import { LABEL_DOM_CHILD, LABEL_DOM_ORDER_AFTER, LABEL_DOM_ORDER_BEFORE, LABEL_DOM_PARENT, LABEL_DOM_ROOT, parseDomElement, parseDomElementList } from "./domparser";
+import { LABEL_DOM_CHILD, LABEL_DOM_ORDER_AFTER, LABEL_DOM_ORDER_BEFORE, LABEL_DOM_PARENT, LABEL_DOM_ROOT, parseDomElementList } from "./domparser";
 import { flattenGraph, unflattenGraph } from "../graphjson";
 import JSURL from "jsurl"
 

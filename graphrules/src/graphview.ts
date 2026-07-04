@@ -21,6 +21,10 @@ interface LabeledGraph<V,L> extends FinGraph<V>, Labeling<V,L> {
 
 // Specialized Accessors
 
+interface InducedSubgraphAccessor<V, G> {
+    inducedSubgraph(nodes: ReadonlySet<V>): G
+}
+
 type ContainerEdge<V> = {
     outside: V,
     inside: V

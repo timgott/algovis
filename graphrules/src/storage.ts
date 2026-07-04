@@ -1,12 +1,12 @@
 import { FlatGraph, flattenGraph, unflattenGraph } from "./graphjson";
-import { DataState, RuleBoxState } from "./semantics/state";
+import { DataState, BoxState } from "./semantics/state";
 import { createClearedState } from "./ui";
 
 type StoredNodeData = string
 
 type StorableDataState = {
     graph: FlatGraph<StoredNodeData>,
-    ruleBoxes: RuleBoxState[],
+    ruleBoxes: BoxState[],
 }
 
 export function flattenState(state: DataState): StorableDataState {

@@ -1,13 +1,13 @@
 import { allDistinctPairs, assert, mapFromFunction } from "../../../../shared/utils";
 import { extractBetweenEdges, makeFinGraphFromNodesEdges } from "../../graphviewimpl";
-import { Label, SYMBOL_RULE_INSERTION, SYMBOL_RULE_META, SYMBOL_RULE_NEGATIVE, SYMBOL_BOX_ROOT, SYMBOL_RULE_PATTERN, SYMBOL_BOX_INSIDE, SYMBOL_GLOBAL_ROOT, SYMBOL_FORALL } from "../symbols";
+import { parsePath } from "../parse_path";
+import { Label, SYMBOL_RULE_INSERTION, SYMBOL_RULE_ROOT, SYMBOL_RULE_NONEDGE, SYMBOL_BOX_CENTER, SYMBOL_RULE_PATTERN, SYMBOL_BOX_INSIDE, SYMBOL_GLOBAL_ROOT, SYMBOL_FORALL, SYMBOL_RULE_VARS } from "../symbols";
 import { RuleGraph } from "./rulegraph";
 
 export type GraphWithParserAccess<V,L=Label> =
     LabeledGraph<V,L>
-    & ContainerSubgraphAccessor<V, LabeledGraph<V,L>>
+    & InducedSubgraphAccessor<V, LabeledGraph<V,L>>
     & LabeledNeighborAccessor<V, L>
-    & DirectedSubgraphAccessor<V, L, LabeledGraph<V,L>>
 
 // can be thrown anywhere for semantic issues
 export class RuleSyntaxError<V> {
@@ -21,23 +21,13 @@ function syntaxAssert<V>(condition: boolean, message: string, locations: V[]): a
     }
 }
 
-function expectExactlyOneNode<V>(nodes: ReadonlySet<V>, errorMessage: string, extraErrorNodes: V[]): V {
-    syntaxAssert(nodes.size === 1, errorMessage, [...extraErrorNodes, ...nodes])
-    let [node] = nodes
-    return node
+function parseSubgraphAtChild<V>(graph: GraphWithParserAccess<V>, ruleRoot: V, childLabel: Label) {
+    let nodes = new Set(parsePath([childLabel, null], graph, ruleRoot))
+    return graph.inducedSubgraph(nodes)
 }
 
-function parseBoxSubgraph<V>(graph: GraphWithParserAccess<V>, ruleInside: V, innerSymbol: Label, diagnosticName: string) {
-    let patternRoot = expectExactlyOneNode(
-        graph.neighborsWithLabel(ruleInside, innerSymbol),
-        `Rule must have exactly one ${diagnosticName} child`,
-        [ruleInside]
-    )
-    return graph.getContainerSubgraph({ outside: ruleInside, inside: patternRoot })
-}
-
-function* parseNegativeEdges<V>(graph: GraphWithParserAccess<V>, ruleInside: V, patternSubgraph: FinGraph<V>): Generator<[V, V]> {
-    let negativeSubgraph = parseBoxSubgraph(graph, ruleInside, SYMBOL_RULE_NEGATIVE, "negative edges")
+function* parseNegativeEdges<V>(graph: GraphWithParserAccess<V>, ruleRoot: V, patternSubgraph: FinGraph<V>): Generator<[V, V]> {
+    let negativeSubgraph = parseSubgraphAtChild(graph, ruleRoot, SYMBOL_RULE_NONEDGE)
     syntaxAssert(negativeSubgraph.countEdges() == 0, "Negative edge markers should not be connected", [...negativeSubgraph.allNodes()])
     for (let [x, nodes] of extractBetweenEdges(graph, negativeSubgraph.allNodes(), patternSubgraph.allNodes())) {
         yield* allDistinctPairs([...nodes]);
@@ -49,38 +39,18 @@ function parseNegativeSubgraph<V>(graph: GraphWithParserAccess<V>, ruleInside: V
     return makeFinGraphFromNodesEdges(patternSubgraph.allNodes(), edges)
 }
 
-function parseGlobalRoot<V>(graph: GraphWithParserAccess<V>): V {
-    return expectExactlyOneNode(
-        graph.nodesWithLabel(SYMBOL_GLOBAL_ROOT),
-        "There must be exactly one global root",
-        []
+function parseFreeVars<V>(graph: GraphWithParserAccess<V>, ruleRoot: V): Set<string> {
+    return new Set<Label>(
+        parsePath([SYMBOL_RULE_VARS, null], graph, ruleRoot)
+            .map(v => graph.label(v))
     )
-}
-
-function parseFreeVars<V>(graph: GraphWithParserAccess<V>, ruleInside: V): Set<string> {
-    let metaRoot = expectExactlyOneNode(
-        graph.neighborsWithLabel(ruleInside, SYMBOL_RULE_META),
-        `Rule must have exactly one meta child`,
-        [ruleInside]
-    )
-    let vars = new Set<Label>()
-    for (let quantifierNode of graph.neighborsWithLabel(metaRoot, SYMBOL_FORALL)) {
-        for (let neighbor of graph.neighbors(quantifierNode)) {
-            let label = graph.label(neighbor)
-            if (neighbor !== metaRoot) {
-                syntaxAssert(label !== SYMBOL_GLOBAL_ROOT, "global root should not be connected to a quantifier", [quantifierNode])
-                vars.add(label)
-            }
-        }
-    }
-    return vars
 }
 
 
 export function parseRule<V>(graph: GraphWithParserAccess<V>, ruleInside: V): RuleGraph<V> {
-    syntaxAssert(graph.label(ruleInside) === SYMBOL_BOX_INSIDE, "incorrect inside node of rule", [ruleInside])
-    let pattern = parseBoxSubgraph(graph, ruleInside, SYMBOL_RULE_PATTERN, "insertion")
-    let insertion = parseBoxSubgraph(graph, ruleInside, SYMBOL_RULE_INSERTION, "insertion")
+    syntaxAssert(graph.label(ruleInside) === SYMBOL_RULE_ROOT, "incorrect inside node of rule", [ruleInside])
+    let pattern = parseSubgraphAtChild(graph, ruleInside, SYMBOL_RULE_PATTERN)
+    let insertion = parseSubgraphAtChild(graph, ruleInside, SYMBOL_RULE_INSERTION)
     let connectingEdges = extractBetweenEdges(graph, pattern.allNodes(), insertion.allNodes())
     let negativeEdges = parseNegativeSubgraph(graph, ruleInside, pattern)
     let vars = parseFreeVars(graph, ruleInside)

@@ -1,3 +1,5 @@
+import { parseLinkedList, parsePath } from "../semantics/parse_path"
+
 export const LABEL_DOM_ROOT = "ROOT"
 
 export const LABEL_DOM_PARENT = "parent"
@@ -11,25 +13,6 @@ export const listLabelOrder = [LABEL_DOM_ORDER_BEFORE, LABEL_DOM_ORDER_AFTER, nu
 
 export const LABEL_DOM_ORDER_THEN = "then"
 export const listLabelOrderSimple = [LABEL_DOM_ORDER_THEN, null]
-
-function* parsePath<V,L>(path: (L | null)[], graph: BasicGraph<V> & LabeledNeighborAccessor<V, L>, root: V, previous?: V): Generator<V> {
-    if (path.length === 0) { yield root }
-    let candidates = path[0] === null ? graph.neighbors(root) : graph.neighborsWithLabel(root, path[0])
-    const remainingPath = path.slice(1)
-    for (let next of candidates) {
-        if (next !== previous && next !== root) {
-            yield* parsePath(remainingPath, graph, next, root)
-        }
-    }
-}
-
-function* parseLinkedList<V, L>(path: (L | null)[], graph: BasicGraph<V> & LabeledNeighborAccessor<V, L>, root: V, previous?: V): Generator<V> {
-    yield root
-    for (let next of parsePath(path, graph, root)) {
-        if (next !== previous)
-        yield* parseLinkedList(path, graph, next, root)
-    }
-}
 
 export function* parseDomElementList<V>(graph: LabeledGraph<V,string> & LabeledNeighborAccessor<V, string>, root: V): Generator<Element> {
     yield* parseLinkedList(listLabelOrder, graph, root).map(v => parseDomElement(graph, v))

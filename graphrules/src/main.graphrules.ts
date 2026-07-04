@@ -13,7 +13,7 @@ import JSURL from "jsurl"
 import { PanZoomController } from "./zooming";
 import { Vector } from "../../shared/vector";
 import { LibraryController } from "./library";
-import { OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, SYMBOL_FORALL, SYMBOL_IN, SYMBOL_OUT_EXHAUSTED, SYMBOL_OUT_STEP, SYMBOL_PROGRAM_POINTER, WILDCARD_SYMBOL } from "./semantics/symbols";
+import { OPERATOR_CONNECT, OPERATOR_DEL, OPERATOR_DISCONNECT, OPERATOR_NEW, OPERATOR_SET, SYMBOL_FORALL, SYMBOL_IN, SYMBOL_OUT_EXHAUSTED, SYMBOL_OUT_STEP, SYMBOL_PROGRAM_POINTER, SYMBOL_RULE_INSERTION, SYMBOL_RULE_NONEDGE, SYMBOL_RULE_PATTERN, SYMBOL_RULE_ROOT, WILDCARD_SYMBOL } from "./semantics/symbols";
 import { DataState, MainState, UiNodeData } from "./semantics/state";
 import { applyExhaustiveReduction, applyReductionOnceRandomly, ruleCounters, ruleTimers } from "./semantics/reductionapply";
 import { makeVirtualGraphEmbedding } from "./semantics/boxsemantics";
@@ -139,6 +139,11 @@ operatorButton("btn_op_right", SYMBOL_ARROW_RIGHT);
 operatorButton("btn_op_up", SYMBOL_ARROW_UP);
 operatorButton("btn_op_down", SYMBOL_ARROW_DOWN);
 operatorButton("btn_op_wildcard", WILDCARD_SYMBOL);
+
+operatorButton("btn_op_rule", SYMBOL_RULE_ROOT);
+operatorButton("btn_op_pattern", SYMBOL_RULE_PATTERN)
+operatorButton("btn_op_INSERTION", SYMBOL_RULE_INSERTION)
+operatorButton("btn_op_NONEDGE", SYMBOL_RULE_NONEDGE)
 
 
 // node labeling by keyboard

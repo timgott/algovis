@@ -115,10 +115,23 @@ export class MainPainter implements StatePainter<DataState> {
         ctx.restore();
     }
 
+    drawNodeRoundRect(ctx: CanvasRenderingContext2D, x: number, y: number, labelWidth: number, pad?: number) {
+        let r = this.nodeRadius
+        let w = Math.max(labelWidth + r, 2*r)
+        let h = 2*r
+        pad = pad || 0
+        ctx.roundRect(x - w / 2 - pad, y - h / 2 - pad, w + 2*pad, h + 2*pad, r+pad)
+    }
+
     drawNode(ctx: CanvasRenderingContext2D, node: GraphNode<UiNodeData>, selected: boolean, operator: boolean, controlFlow: boolean) {
         // no special treatment for operator, because it must maintain contrast. Only edge is modified
         // circle
         ctx.save();
+
+        const fontWeight = "normal";
+        const fontSize = "12pt";
+        ctx.font = `${fontWeight} ${fontSize} sans-serif`;
+        let labelWidth = ctx.measureText(node.data.label).width;
 
         ctx.beginPath();
         let color = this.labelColors.get(node.data.label);
@@ -127,7 +140,7 @@ export class MainPainter implements StatePainter<DataState> {
         ctx.fillStyle = color;
         ctx.strokeStyle = black;
         ctx.lineWidth = lineWidth;
-        ctx.circle(node.x, node.y, this.nodeRadius);
+        this.drawNodeRoundRect(ctx, node.x, node.y, labelWidth);
         ctx.fill();
         if (!controlFlow) {
             ctx.stroke();
@@ -139,29 +152,19 @@ export class MainPainter implements StatePainter<DataState> {
             ctx.lineWidth = 2;
             ctx.strokeStyle = "blue";
             ctx.setLineDash([5, 5]);
-            ctx.circle(node.x, node.y, this.nodeRadius * 1.5);
+            this.drawNodeRoundRect(ctx, node.x, node.y, labelWidth, this.nodeRadius*0.5);
             ctx.stroke();
             ctx.setLineDash([]);
         }
 
-        if (node.data.label) {
-            this.drawLabel(ctx, node, node.data.label, black);
-        }
-
-        ctx.restore();
-    }
-
-    drawLabel(ctx: CanvasRenderingContext2D, node: GraphNode<unknown>, text: string, color: string) {
         // label
-        //ctx.strokeStyle = color
         ctx.beginPath();
-        ctx.fillStyle = color; // text in same color as outline
+        ctx.fillStyle = black; // text in same color as outline
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        const fontWeight = "normal";
-        const fontSize = "12pt";
-        ctx.font = `${fontWeight} ${fontSize} sans-serif`;
-        ctx.fillText(text, node.x, node.y);
+        ctx.fillText(node.data.label, node.x, node.y);
+
+        ctx.restore();
     }
 
     drawMatches(ctx: CanvasRenderingContext2D, state: ActionStatePlayer, graph: Graph<UiNodeData>) {

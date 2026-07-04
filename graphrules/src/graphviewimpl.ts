@@ -70,6 +70,12 @@ function insertNodeLabeled<V,L>(graph: LabeledGraph<V,L>, node: V, neighbors: V[
     return makeLabeledGraphFromFingraph(insertNode(graph, node, neighbors), graph.label)
 }
 
+export function makeInducedSubgraphAccessor<V, L>(graph: LabeledGraph<V, L>): InducedSubgraphAccessor<V, LabeledGraph<V, L>> {
+    return {
+        inducedSubgraph: (nodes) => inducedSubgraphLabeled(nodes, graph)
+    }
+}
+
 export function makeContainerGraphAccessor<V,L>(graph: LabeledGraph<V,L>): ContainerSubgraphAccessor<V, LabeledGraph<V,L>> {
     return {
         getContainerSubgraph(container: ContainerEdge<V>): LabeledGraph<V,L> {
@@ -136,14 +142,12 @@ export function makeDirectedSubgraphAccessor<V,L>(graph: LabeledGraph<V,L>): Dir
 }
 
 export function makeParserGraphAccessor<V,L>(graph: LabeledGraph<V,L>): GraphWithParserAccess<V,L> {
-    let cg = makeContainerGraphAccessor(graph)
     let ln = makeLabeledNeighborAccessor(graph)
-    let ds = makeDirectedSubgraphAccessor(graph)
+    let is = makeInducedSubgraphAccessor(graph)
     return {
         ...graph,
         ...ln,
-        ...cg,
-        ...ds
+        ...is,
     }
 }
 

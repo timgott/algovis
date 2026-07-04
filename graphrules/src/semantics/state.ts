@@ -10,13 +10,13 @@ export type UiNodeData = {
     label: string,
 }
 
-export type RuleBoxState = WindowBounds
+export type BoxState = WindowBounds
 
 // for now, no "macro" rules (rules that apply inside other rules)
 export type DataState = {
     graph: Graph<UiNodeData>,
-    ruleBoxes: RuleBoxState[],
-    selectedRule: RuleBoxState | null,
+    ruleBoxes: BoxState[],
+    selectedRule: BoxState | null,
     selectedNodes: Set<GraphNode<UiNodeData>>,
     action: ActionState
 }

@@ -4,10 +4,10 @@ import { LayoutConfig as LayoutPhysicsConfig, separateNodes, settleNodes } from 
 import { Rect } from "../../shared/rectangle"
 import { ensured, randomChoice } from "../../shared/utils"
 import { findRuleMatches } from "./semantics/rule/patternmatching"
-import { parseRule } from "./semantics/rule/parse_rulegraph"
-import { makeVirtualGraphEmbedding, applyRuleOnGraph } from "./semantics/boxsemantics"
-import { DataState, MainState, RuleBoxState, UiNodeData } from "./semantics/state"
-import { advanceControlFlow, executeActionExhausted, executeActionStep, findPossibleActions } from "./semantics/controlflow"
+import { parseRule, RuleSyntaxError } from "./semantics/rule/parse_rulegraph"
+import { makeVirtualGraphEmbedding, applyRuleOnGraph, VirtualNode } from "./semantics/boxsemantics"
+import { DataState, MainState, BoxState, UiNodeData } from "./semantics/state"
+import { advanceControlFlow, ControlSyntaxError, executeActionExhausted, executeActionStep, filterNormalNodes, findPossibleActions, putError } from "./semantics/controlflow"
 import { computeMatchesByNode, getControllingPlayer } from "./player"
 
 export function setLabelOnSelected(state: MainState, label: string) {
@@ -20,7 +20,7 @@ export function pushToHistory(state: MainState) {
     state.undoHistory.push(state.data)
 }
 
-export function selectRule(state: DataState, ruleBox: RuleBoxState) {
+export function selectRule(state: DataState, ruleBox: BoxState) {
     state.selectedRule = ruleBox
 }
 
@@ -116,7 +116,22 @@ export class RuleRunner implements InteractiveSystem {
                 let vgraph = virtualEmb.virtualGraph
 
                 // find rule matches
-                let actions = findPossibleActions(vgraph)
+                let actions
+                try {
+                    actions = findPossibleActions(vgraph)
+                } catch (error) {
+                    if (error instanceof RuleSyntaxError) {
+                        let locations: VirtualNode[] = error.locations
+                        let realLocations = filterNormalNodes(locations).map(v => v.sourceNode)
+                        putError(state.graph, realLocations, error.message)
+                    } else if (error instanceof ControlSyntaxError) {
+                        putError(state.graph, error.locations, error.message)
+                    } else {
+                        throw error
+                    }
+                    state.action = null
+                    return "Sleeping"
+                }
                 if (actions.length === 0) {
                     state.action = null
                     return "Sleeping" // nothing to do left

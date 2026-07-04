@@ -1,9 +1,8 @@
 import { Graph, GraphNode } from "../../../localgraphs/src/graph"
-import { randomChoice } from "../../../shared/utils"
-import { abstractifyGraphSimple } from "../graphviewimpl"
-import { getRealForVirtualNormal, makeVirtualGraphEmbedding, VirtualGraphEmbedding, VirtualNode } from "./boxsemantics"
-import { DataState, RuleBoxState, UiNodeData } from "./state"
-import { makeDefaultReductionRules, ReductionRule } from "./reductions"
+import { randomChoice, unreachable } from "../../../shared/utils"
+import { getRealForVirtualNormal, makeVirtualGraphEmbedding, VirtualNode } from "./boxsemantics"
+import { BoxState, UiNodeData } from "./state"
+import { makeDefaultReductionRules } from "./reductions"
 import { findRuleMatches } from "./rule/patternmatching"
 
 export const ruleTimers = [
@@ -18,16 +17,16 @@ function decodeVirtualReductionMatch<V>(graph: Graph<UiNodeData>, match: Map<V, 
     let entriesMapped = match.entries().map(([a, mapped]) => {
         if (mapped.kind === "normal") {
             return [a, getRealForVirtualNormal(mapped, graph)] satisfies [V, GraphNode<UiNodeData>]
-        } else if (mapped.kind === "root") {
-            return null
-        } else {
+        } else if (mapped.kind === "box") {
             throw new Error("box reductions unsupported")
+        } else {
+            unreachable(mapped)
         }
     })
     return new Map(entriesMapped.filter(e => e != null))
 }
 
-export function applyExhaustiveReduction(graph: Graph<UiNodeData>, ruleBoxes: RuleBoxState[]) {
+export function applyExhaustiveReduction(graph: Graph<UiNodeData>, ruleBoxes: BoxState[]) {
     let rules = makeDefaultReductionRules()
     let changed: boolean
     do {
@@ -57,7 +56,7 @@ export function applyExhaustiveReduction(graph: Graph<UiNodeData>, ruleBoxes: Ru
     // implementation of the reduction rules anyways.
 }
 
-export function applyReductionOnceRandomly(graph: Graph<UiNodeData>, ruleBoxes: RuleBoxState[]): boolean {
+export function applyReductionOnceRandomly(graph: Graph<UiNodeData>, ruleBoxes: BoxState[]): boolean {
     let rules = makeDefaultReductionRules()
     for (let rule of rules) {
         // use vgraph so that e.g. it is possible to match nodes only outside rule boxes
