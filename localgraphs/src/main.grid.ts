@@ -1,6 +1,6 @@
-import { sleep } from "../../shared/utils.js";
-import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring, niceColoring } from "./coloring.js";
-import { DynamicLocal, PartialGrid, randomAdversary } from "./partialgrid.js";
+import { ensured, sleep } from "../../shared/utils.js";
+import { NodeColor, minimalGreedy, neighborhoodGreedy, parityBorderColoring, borderComponentColoring, randomColoring, isGlobalColoring, antiCollisionColoring, niceColoring, computeConnectedPhiValues, computePhiValues } from "./coloring.js";
+import { clusteredAdversary, DynamicLocal, GridAdversary, PartialGrid, randomAdversary } from "./partialgrid.js";
 import { ColoredGridSvg, renderColoredGrid } from "./svggrid.js";
 
 let root = document.getElementById("grid_root")!
@@ -11,10 +11,10 @@ let animateStepCheckbox = document.getElementById("animate_step") as HTMLInputEl
 let paritiesCheckbox = document.getElementById("show_parities") as HTMLInputElement
 let borderSidesCheckbox = document.getElementById("show_border_side") as HTMLInputElement
 let radiusCheckbox = document.getElementById("show_radius") as HTMLInputElement
+let potentialsCheckbox = document.getElementById("show_potential") as HTMLInputElement
 
 let undoButton = document.getElementById("undo") as HTMLButtonElement
 let buildBoxesButton = document.getElementById("build_boxes") as HTMLButtonElement
-let potentialsButton = document.getElementById("show_potential") as HTMLButtonElement
 
 let rows = 30
 let columns = 30
@@ -37,7 +37,7 @@ type State<S=unknown> = {
 }
 let undoHistory: State<unknown>[] = []
 
-let adversary = randomAdversary
+let adversary: GridAdversary<number> = clusteredAdversary(0.8)
 
 async function dynamicAlgorithmStepAnimated(grid: PartialGrid<NodeColor>, i: number, j: number, algo: DynamicLocal<NodeColor>, delay: number = 0) {
     let [graph, nodeGrid] = grid.getGraph([i, j])
@@ -103,7 +103,11 @@ function putRectangle(state: State, i: number, j: number, width: number, height:
 }
 
 function render(grid: PartialGrid<NodeColor>) {
-    renderColoredGrid(grid, svgGrid, paritiesCheckbox.checked, borderSidesCheckbox.checked)
+    if (potentialsCheckbox.checked) {
+        renderColoredGrid(computePotentialsGrid(grid), svgGrid, paritiesCheckbox.checked, borderSidesCheckbox.checked)
+    } else {
+        renderColoredGrid(grid, svgGrid, paritiesCheckbox.checked, borderSidesCheckbox.checked)
+    }
 }
 
 function makeAlgo(): DynamicLocal<number, unknown> {
@@ -136,15 +140,13 @@ function makeState(): State {
     }
 }
 
-function computePotentialsGrid(state: State): PartialGrid<number> {
-    let algoState: any = state.algoState
-    if (!("bValues" in algoState)) throw "bValues not found in algoState"
-    let bValuesByIndex = algoState.bValues as Map<number, number>
+function computePotentialsGrid(grid: PartialGrid<number>): PartialGrid<number> {
+    let [graph, nodeGrid] = grid.getGraph()
     let potentialGrid = new PartialGrid<number>(rows, columns)
-    for (let [i, b] of bValuesByIndex.entries()) {
-        let [x,y] = state.grid.insertionOrder[i]
-        potentialGrid.put(x, y, 3*b - state.grid.get(x, y)!)
-    }
+    let bValuesByNode = computePhiValues(graph.nodes, v => v.data < 0)
+    nodeGrid.forNonEmpty((i, j, node) => {
+        potentialGrid.put(i, j, bValuesByNode.get(node) ?? -1)
+    })
     return potentialGrid
 }
 
@@ -152,8 +154,14 @@ function run(): State {
     let state = makeState()
     render(state.grid)
 
-    svgGrid.onClick = (i, j) => {
-        if (state.grid.get(i, j) == null) {
+    svgGrid.onClick = (i, j, ev) => {
+        if (ev.ctrlKey) {
+            // delete step
+            state.grid.delete(i, j)
+            console.log("DELETE")
+            render(state.grid)
+        } else if (state.grid.get(i, j) == null) {
+            // algo step
             state.algo = makeAlgo()
             state.algo.state = state.algoState
             step(state, i, j, animateStepCheckbox.checked ? 200 : 0)
@@ -174,6 +182,9 @@ function run(): State {
     borderSidesCheckbox.onchange = () => {
         render(state.grid)
     }
+    potentialsCheckbox.onchange = () => {
+        render(state.grid)
+    }
     buildBoxesButton.onclick = () => {
         let size = localityInput.valueAsNumber + 3
         let stride = size + 1
@@ -187,21 +198,21 @@ function run(): State {
         }
         render(state.grid)
     }
-    potentialsButton.onclick = () => {
-        render(computePotentialsGrid(state))
-    }
     return state
 }
 
 async function runAutoAdversary() {
     let state = run()
 
-    for (let t = 0; t < state.grid.rows * state.grid.columns; t++) {
+    const percentage = 1
+    let animationRequest: number | null = null
+    for (let t = 0; t < percentage * state.grid.rows * state.grid.columns; t++) {
         let [i, j] = adversary(state.grid)
         step(state, i, j)
         if (animateAdvCheckbox.checked) {
-            await sleep(1)
-            render(state.grid)
+            if (animationRequest !== null) cancelAnimationFrame(animationRequest)
+            animationRequest = requestAnimationFrame(() => render(state.grid))
+            await(sleep(0))
         }
     }
     render(state.grid)

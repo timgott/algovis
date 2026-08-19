@@ -1,7 +1,13 @@
-import { createEmptyGrid, createGrid } from "../../shared/utils.js"
+import { createGrid } from "../../shared/utils.js"
 import { PartialGrid } from "./partialgrid.js"
 import { NodeColor } from "./coloring.js"
 import { createSvgNode } from "../../shared/svg.js"
+
+function setAttrIfNeeded(attr: Attr, value: string) {
+    if (attr.value !== value) {
+        attr.value = value
+    }
+}
 
 export class ColoredGridSvg {
     neutralColor = "#dddddd"
@@ -11,13 +17,13 @@ export class ColoredGridSvg {
 
     svg: SVGSVGElement
     cells: ({
-        rect: SVGRectElement,
-        border: SVGRectElement,
+        rectFill: Attr,
+        borderFill: Attr,
         back: SVGRectElement,
         label: SVGTextElement
     })[][]
     cellSize: number
-    onClick?: (i: number, j: number) => any
+    onClick?: (i: number, j: number, event: MouseEvent) => any
 
     ballPathParent: SVGGElement
     ballVisible: boolean = false
@@ -117,7 +123,7 @@ export class ColoredGridSvg {
             })
             let clickListener = (event: MouseEvent) => {
                 if (event.buttons == 1 && this.onClick) {
-                    this.onClick(i, j)
+                    this.onClick(i, j, event)
                 }
             }
             rect.addEventListener("mousemove", clickListener)
@@ -136,9 +142,9 @@ export class ColoredGridSvg {
                 "font-family": "sans-serif",
             })
             return {
-                rect: rect,
+                rectFill: rect.getAttributeNode("fill"),
                 label: label,
-                border: border,
+                borderFill: border.getAttributeNode("fill"),
                 back: back,
             }
         })
@@ -161,15 +167,17 @@ export class ColoredGridSvg {
     }
 
     cellColor(x: number, y: number, color: string) {
-        this.cells[x][y].rect.setAttribute("fill", color)
+        setAttrIfNeeded(this.cells[x][y].rectFill, color)
     }
 
     cellBorder(x: number, y: number, color: string) {
-        this.cells[x][y].border.setAttribute("fill", color)
+        setAttrIfNeeded(this.cells[x][y].borderFill, color)
     }
 
     cellLabel(x: number, y: number, text: string) {
-        this.cells[x][y].label.textContent = text
+        if (this.cells[x][y].label.textContent !== text) {
+            this.cells[x][y].label.textContent = text
+        }
     }
 
 

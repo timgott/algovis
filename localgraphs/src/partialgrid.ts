@@ -1,4 +1,4 @@
-import { createEmptyGrid } from "../../shared/utils.js";
+import { createEmptyGrid, randomChoice, randomUniform } from "../../shared/utils.js";
 import { Graph, GraphNode, createEdge, createEmptyGraph, createNode } from "./graph.js";
 
 export type OnlineAlgorithm<T> = (graph: Graph<T>, pointOfChange: GraphNode<T>) => T
@@ -41,6 +41,11 @@ export class PartialGrid<T> {
             this.insertionOrder.push([x, y])
         }
         this.cells[x][y] = value
+    }
+
+    delete(x: number, y: number) {
+        this.insertionOrder = this.insertionOrder.filter(([i,j]) => !(i == x && j == y))
+        this.cells[x][y] = null
     }
 
     forEach(callback: (i: number, j: number, value: T | null) => any) {
@@ -179,4 +184,19 @@ export class PartialGrid<T> {
 export let randomAdversary: GridAdversary<any> = (grid) => {
     let emptyCells = grid.emptyCells()
     return emptyCells[Math.floor(Math.random() * emptyCells.length)]
+}
+
+export let clusteredAdversary = <T>(p: number): GridAdversary<T> => (grid) => {
+    let emptyCells = grid.emptyCells()
+    let neighbors = emptyCells.flatMap(
+        ([i, j]) => {
+            let count = grid.neighborValues(i, j).length
+            return Array(count).fill([i, j])
+        }
+    )
+    let neighborPick: [number, number] | null = null
+    if (Math.random() < p && neighbors.length > 0) {
+        neighborPick = randomChoice(neighbors)
+    }
+    return neighborPick !== null ? neighborPick : randomAdversary(grid)
 }

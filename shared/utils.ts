@@ -400,3 +400,7 @@ export function edgesFromSymmNeighborMap<T>(neighborMap: Map<T, Iterable<T>>): [
 }
 
 export type ValueOf<T> = T[keyof T]
+
+export function mod(a: number, m: number): number {
+    return ((a % m) + m) % m
+}

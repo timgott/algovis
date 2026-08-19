@@ -13,8 +13,14 @@ export function bfs<T>(start: GraphNode<T> | GraphNode<T>[], callback: (node: Gr
         () => 0,
         node => node.neighbors,
         (node, distance) => {
-            return [callback(node, distance), distance + 1]
-        })
+            let state = callback(node, distance)
+            if (state === SearchState.Continue) {
+                return [state, distance + 1]
+            } else {
+                return state
+            }
+        }
+    )
 }
 
 // Visits each node at most once, in BFS order.
@@ -39,7 +45,7 @@ export function bfsFold<S, T>(
 
                 let continuation = callback(node, value)
 
-                if (continuation == SearchState.Terminate) {
+                if (continuation === SearchState.Terminate) {
                     return
                 }
                 for (let [child, value] of continuation) {
@@ -71,7 +77,7 @@ export function bfsSimple<S>(
 
                 let continuation = callback(node)
 
-                if (continuation == SearchState.Terminate) {
+                if (continuation === SearchState.Terminate) {
                     return
                 }
                 for (let child of continuation) {
@@ -90,15 +96,16 @@ export function bfsFoldUniform<S, T>(
   start: S | S[],
   initial: (node: S) => T,
   children: (node: S) => Iterable<S>,
-  callback: (node: S, value: T) => [SearchState, T]
+  callback: (node: S, value: T) => [SearchState.Continue, T] | SearchState.Skip | SearchState.Terminate
 ) {
     bfsFold<S, T>(start, initial, (node, parent) => {
-        let [state, value] = callback(node, parent)
-        if (state == SearchState.Terminate) {
+        let state = callback(node, parent)
+        if (state === SearchState.Terminate) {
             return SearchState.Terminate
-        } else if (state == SearchState.Skip) {
+        } else if (state === SearchState.Skip) {
             return []
         } else {
+            let [_, value] = state
             return [...children(node)].map(child => [child, value])
         }
     })
