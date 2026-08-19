@@ -1,4 +1,4 @@
-import { createGrid } from "../../shared/utils.js"
+import { createGrid, ensured } from "../../shared/utils.js"
 import { PartialGrid } from "./partialgrid.js"
 import { NodeColor } from "./coloring.js"
 import { createSvgNode } from "../../shared/svg.js"
@@ -142,9 +142,9 @@ export class ColoredGridSvg {
                 "font-family": "sans-serif",
             })
             return {
-                rectFill: rect.getAttributeNode("fill"),
+                rectFill: ensured(rect.getAttributeNode("fill")),
                 label: label,
-                borderFill: border.getAttributeNode("fill"),
+                borderFill: ensured(border.getAttributeNode("fill")),
                 back: back,
             }
         })

@@ -1192,9 +1192,10 @@ export function antiCollisionColoring(radius: number): DynamicLocal<NodeColor> {
 }
 
 export function computeConnectedPhiValues(
-    seed: GraphNode<number>, skip: (node: GraphNode<number>) => boolean,
+    seed: GraphNode<number>,
+    skip: (node: GraphNode<number>) => boolean,
 ): Map<GraphNode<number>, number> {
-    assertExists(seed.data, "seed must be colored")
+    assertExists(seed.data, "seed must be colored");
     let potentials = new Map<GraphNode<number>, number>();
     potentials.set(seed, seed.data);
     bfsFoldUniform(
@@ -1203,11 +1204,11 @@ export function computeConnectedPhiValues(
         (v) => v.neighbors,
         (v, phiParent: number | null) => {
             if (skip(v)) {
-                return SearchState.Skip
+                return SearchState.Skip;
             }
             let phi: number;
             if (phiParent === null) {
-                phi = v.data
+                phi = v.data;
             } else if (mod(phiParent + 1, 3) === v.data) {
                 phi = phiParent + 1;
             } else if (mod(phiParent - 1, 3) === v.data) {
@@ -1219,24 +1220,27 @@ export function computeConnectedPhiValues(
             return [SearchState.Continue, phi];
         },
     );
-    let minimumOffset = Math.floor(min(potentials.values(), (x) => x)! / 3)*3;
-    return new Map(potentials.entries().map(([node, phi]) => [node, phi-minimumOffset]));
+    let minimumOffset = Math.floor(min(potentials.values(), (x) => x)! / 3) * 3;
+    return new Map(
+        potentials.entries().map(([node, phi]) => [node, phi - minimumOffset]),
+    );
 }
 
-export function computePhiValues(seeds: Iterable<GraphNode<number>>, skip: (node: GraphNode<number>) => boolean = () => false): Map<GraphNode<number>, number> {
-    let result = new Map<GraphNode<number>, number>()
+export function computePhiValues(
+    seeds: Iterable<GraphNode<number>>,
+    skip: (node: GraphNode<number>) => boolean = () => false,
+): Map<GraphNode<number>, number> {
+    let result = new Map<GraphNode<number>, number>();
     for (let node of seeds) {
         if (!result.has(node) && !skip(node)) {
-            let phiValues = computeConnectedPhiValues(node, skip)
-            phiValues.forEach((phi,node) => result.set(node,phi))
+            let phiValues = computeConnectedPhiValues(node, skip);
+            phiValues.forEach((phi, node) => result.set(node, phi));
         }
     }
-    return result
+    return result;
 }
 
-export function niceColoring(
-    radius: number,
-): DynamicLocal<NodeColor, null> {
+export function niceColoring(radius: number): DynamicLocal<NodeColor, null> {
     return {
         locality: function (nodeCount: number): number {
             return radius;
@@ -1251,10 +1255,11 @@ export function niceColoring(
             let reachable = collectNeighborhood(pointOfChange, Infinity);
 
             // neighborhood is cleared
-            //let phiValues = computePhiValues(reachable, v => remaining.has(v))
-            let phiValues = computePhiValues(reachable, v => v === pointOfChange)
+            const skipFilter = (v: GraphNode<number>) => v === pointOfChange;
+            //const skipFilter = (v: GraphNode<number>) => remaining.has(v); // problem: can break potential-separation
+            let phiValues = computePhiValues(reachable, skipFilter);
             for (let v of neighborhood) {
-                phiValues.delete(v)
+                phiValues.delete(v);
             }
 
             function setPhi(node: Node, phi: number) {
@@ -1267,16 +1272,18 @@ export function niceColoring(
             }
 
             function makeOutputColoring(): Map<Node, number> {
-                return new Map(phiValues.entries()
-                    .filter(([node, phi]) => neighborhood.has(node))
-                    .map(([node, phi]) => [node, phi % 3]))
+                return new Map(
+                    phiValues
+                        .entries()
+                        .filter(([node, phi]) => neighborhood.has(node))
+                        .map(([node, phi]) => [node, phi % 3]),
+                );
             }
-
 
             // find connected components before point of change was inserted
             let [componentCount, components] = findConnectedComponents(
                 reachable,
-                (node) => node === pointOfChange,
+                skipFilter,
             );
             let nodesByComponent = getNodesByComponent(
                 components,
@@ -1306,26 +1313,32 @@ export function niceColoring(
                 }
             }
 
-            if (pointOfChange.neighbors.size === 0) {
-                // no neighbors
-                setPhi(pointOfChange, 0);
-                return makeOutputColoring();
-            }
+            // if (pointOfChange.neighbors.size === 0) {
+            //     // no neighbors
+            //     setPhi(pointOfChange, 0);
+            //     return makeOutputColoring();
+            // }
             // from now on there is at least one component
 
             // component that keeps boundary
             let maxPhiComponents = maxSet(
-                nodesByComponent,
+                nodesByComponent.filter((c, _) => componentParity.has(c)),
                 ([c, nodes]) => maxValue(nodes, (v) => getPhi(v) ?? 0),
                 0,
             );
-            // ensured because there must be at least 1 component
-            let [maxPhiComponent, _] = ensured(
-                max(maxPhiComponents, ([c, nodes]) => nodes.length),
-            );
+
+            // default to random parity, if no neighboring components define a parity
+            let mainParity: boolean = true;
+
+            if (maxPhiComponents.length > 0) {
+                // ensured because there must be at least 1 component with defined parity
+                let [maxPhiComponent, _] = ensured(
+                    max(maxPhiComponents, ([c, nodes]) => nodes.length),
+                );
+                mainParity = ensured(componentParity.get(maxPhiComponent));
+            }
 
             // add new borders to match parity
-            let mainParity = componentParity.get(maxPhiComponent) ?? true; // random parity if there is no component parity
             for (let [component, parity] of componentParity) {
                 if (parity !== mainParity) {
                     for (let v of ensured(nodesByComponent.get(component))) {
@@ -1370,7 +1383,7 @@ export function niceColoring(
                 return SearchState.Continue;
             });
 
-            let coloring = makeOutputColoring()
+            let coloring = makeOutputColoring();
             if (!isLocalColoringAll(neighborhood, coloring)) {
                 console.error("Coloring incorrect");
             }

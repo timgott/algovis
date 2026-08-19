@@ -37,7 +37,7 @@ type State<S=unknown> = {
 }
 let undoHistory: State<unknown>[] = []
 
-let adversary: GridAdversary<number> = clusteredAdversary(0.8)
+let adversary: GridAdversary<number> = clusteredAdversary(0.0)
 
 async function dynamicAlgorithmStepAnimated(grid: PartialGrid<NodeColor>, i: number, j: number, algo: DynamicLocal<NodeColor>, delay: number = 0) {
     let [graph, nodeGrid] = grid.getGraph([i, j])
@@ -156,10 +156,13 @@ function run(): State {
 
     svgGrid.onClick = (i, j, ev) => {
         if (ev.ctrlKey) {
-            // delete step
-            state.grid.delete(i, j)
-            console.log("DELETE")
-            render(state.grid)
+            if (state.grid.get(i, j) !== null) {
+                // delete step
+                undoHistory.push(copyState(state))
+                state.grid.delete(i, j)
+                console.log("DELETE")
+                render(state.grid)
+            }
         } else if (state.grid.get(i, j) == null) {
             // algo step
             state.algo = makeAlgo()
