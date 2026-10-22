@@ -8,7 +8,7 @@ import { Vector, vecdir } from "../../shared/vector";
 import { StatePainter } from "./interaction";
 import { computeChangingSet, computeIndexedStepSet } from "./player";
 import { isControlInSymbol, isControlOutSymbol } from "./semantics/controlflow";
-import { WILDCARD_SYMBOL, ruleMetaSymbols, SYMBOL_PROGRAM_POINTER, controlPortSymbols } from "./semantics/symbols";
+import { WILDCARD_SYMBOL, ruleMetaSymbols, SYMBOL_PROGRAM_POINTER, controlPortSymbols, operatorSymbols, operatorsWithArgSymbols } from "./semantics/symbols";
 import { getRealForVirtualNormal } from "./semantics/boxsemantics";
 import { ActionStatePlayer, DataState, UiNodeData } from "./semantics/state";
 
@@ -52,7 +52,7 @@ export class MainPainter implements StatePainter<DataState> {
 
     drawGraph(ctx: CanvasRenderingContext2D, graph: Graph<UiNodeData>, selected: Set<GraphNode<UiNodeData>>): void {
         // TODO: fix detecting operators (use virtual graph!!!)
-        let operators = new Set(); //findOperatorsAndOperandsSet(graph)
+        let operators = findOperatorsAndOperandsSet(graph)
         for (let edge of graph.edges) {
             let hasOperator = operators.has(edge.a) || operators.has(edge.b);
             if (isControlInSymbol(edge.a.data.label) && isControlOutSymbol(edge.b.data.label)) {
@@ -210,3 +210,11 @@ export class MainPainter implements StatePainter<DataState> {
         ctx.restore();
     }
 }
+
+function findOperatorsAndOperandsSet(graph: Graph<UiNodeData>): Set<GraphNode<UiNodeData>> {
+    const operatorNodes = graph.nodes.filter(node => operatorSymbols.has(node.data.label))
+    const operatorNodesWithArgs = operatorNodes.filter(node => operatorsWithArgSymbols.has(node.data.label))
+    const operandNodes = operatorNodesWithArgs.flatMap(node => [...node.neighbors])
+    return new Set([...operatorNodes, ...operandNodes])
+}
+
