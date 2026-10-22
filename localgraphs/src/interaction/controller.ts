@@ -115,7 +115,11 @@ export class InteractionController {
             const [x, y] = getCursorPosition(canvas, ev)
             this.onMouseMoved(x, y, ev.pointerId)
         })
-        canvas.addEventListener("lostpointercapture", (ev) => {
+        canvas.addEventListener("pointerup", (ev) => {
+            const [x, y] = getCursorPosition(canvas, ev)
+            this.onMouseUp(x, y, ev.pointerId)
+        })
+        canvas.addEventListener("pointercancel", (ev) => {
             const [x, y] = getCursorPosition(canvas, ev)
             this.onMouseUp(x, y, ev.pointerId)
         })

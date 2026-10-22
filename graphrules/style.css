@@ -81,10 +81,10 @@ select {
     background: rgba(0,0,0,0.05);
 }
 
-.canvas_container {
+.tmpl_canvas_container {
     overflow: hidden;
 }
 
-.toolbox .canvas_container {
+.toolbox .tmpl_canvas_container {
     aspect-ratio: 1;
 }

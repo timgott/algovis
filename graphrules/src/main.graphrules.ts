@@ -1,7 +1,7 @@
 import { InteractionController, UiStack } from "../../localgraphs/src/interaction/controller";
 import { GraphLayoutPhysics } from "../../localgraphs/src/interaction/physics";
 import { UndoHistory } from "../../localgraphs/src/interaction/undo";
-import { initRepaintOnResize } from "../../shared/canvas";
+import { initFullscreenCanvas, initRepaintOnResize } from "../../shared/canvas";
 import { ensured, mapFromFunction, requireHtmlElement } from "../../shared/utils";
 import { OnlyGraphPhysicsSimulator, PaintingSystem, ToolController, wrapActionAfterRelease } from "./interaction";
 import { flattenState, unflattenState } from "./storage";

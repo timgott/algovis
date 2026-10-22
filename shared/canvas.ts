@@ -35,6 +35,7 @@ export function initRepaintOnResize(canvas: HTMLCanvasElement, container: Elemen
         const w = container.clientWidth;
         const h = container.clientHeight;
         setCanvasInternalSize(canvas, w, h)
+        setCanvasCssSize(canvas, w, h)
         repaint?.()
     }
     const observer = new ResizeObserver((entries) => {
